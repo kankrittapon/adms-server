@@ -1,0 +1,3 @@
+psycopg2-binary==2.9.9
+pyzk==0.9
+paho-mqtt==2.1.0

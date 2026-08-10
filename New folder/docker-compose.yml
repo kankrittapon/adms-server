@@ -1,0 +1,55 @@
+services:
+  adms-postgres:
+    image: postgres:16-alpine
+    container_name: adms_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-adms}
+      POSTGRES_USER: ${POSTGRES_USER:-adms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - adms_postgres_data:/var/lib/postgresql/data
+      - ./sql/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: adms_mqtt
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1883:1883"
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - adms_mqtt_data:/mosquitto/data
+      - adms_mqtt_log:/mosquitto/log
+
+  listener:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: adms_zkteco_listener
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-adms}:${POSTGRES_PASSWORD}@adms-postgres:5432/${POSTGRES_DB:-adms}
+      ZK_DEVICE_IP: ${ZK_DEVICE_IP:?set ZK_DEVICE_IP in .env}
+      ZK_DEVICE_PORT: ${ZK_DEVICE_PORT:-4370}
+      ZK_DEVICE_PASSWORD: ${ZK_DEVICE_PASSWORD:-600}
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+      MQTT_TOPIC: ${MQTT_TOPIC:-attendance/events}
+      ON_TIME_START: ${ON_TIME_START:-05:00:00}
+      ON_TIME_END: ${ON_TIME_END:-10:00:00}
+    depends_on:
+      adms-postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+
+volumes:
+  adms_postgres_data:
+  adms_mqtt_data:
+  adms_mqtt_log:
