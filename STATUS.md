@@ -20,10 +20,11 @@
 The project SHALL follow this order:
 
 1. **`ADMS-Docs-Categorize-002`**: Documentation reorganization (**COMPLETE**).
-2. **`ADMS-Data-ExcelImport-002`**: Human Master Excel Import (**COMPLETE** — Utility `app/import_excel_human_master.py` created, dry-run verified, recovery backup `adms_pre_excel_import_20260811_120503.dump` generated, 120 personnel records profiled, 33 unit tests passed).
-3. **`ADMS-Checkpoint-PostExcelImport-001`**: Post-import checkpoint (**COMPLETE — THIS PROMPT** — Verified 120 `human_employees` & 120 `human_employee_sources` records, 0 mappings created, 6/6 attendance logs preserved, recovery backup `adms_post_excel_import_20260811_121449.dump` generated).
-4. **`ADMS-Data-HumanDeviceMapping-001`**: Human ↔ Device Mapping Workflow (**NEXT AUTHORIZED PHASE — PLAN ONLY** — Explicit administrator-reviewed mapping: `human_employees.employee_id` $\leftrightarrow$ `device_users(device_id, device_user_id)`).
-5. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
+2. **`ADMS-Data-ExcelImport-002`**: Human Master Excel Import (**COMPLETE**).
+3. **`ADMS-Checkpoint-PostExcelImport-001`**: Post-import checkpoint (**COMPLETE**).
+4. **`ADMS-Data-HumanDeviceMapping-001`**: Human ↔ Device Mapping Workflow Plan (**COMPLETE — THIS PROMPT** — Designed explicit administrator-reviewed mapping workflow, evidence hierarchy, controlled test-scan protocol, schema gap analysis. Reconfirmed prohibited row-number mapping. Identified critical schema gaps in auditability & temporal identity).
+5. **`ADMS-Data-HumanDeviceMappingSchema-001`**: Human ↔ Device Mapping Schema Enhancement (**NEXT AUTHORIZED PHASE — PLAN ONLY** — Additive DDL design for `verified_by`, `verification_method`, `verification_note`, `valid_from`, `valid_to`).
+6. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
 
 ---
 
@@ -37,9 +38,11 @@ The project SHALL follow this order:
 * **Human Master Schema Foundation**: COMPLETE (`sql/004_human_master_schema.sql`: `branch`, `category`, `human_employee_sources` applied)
 * **Documentation Categorization**: COMPLETE (`ADMS-Docs-Categorize-002`: 20 canonical docs moved to category directories, relative Markdown links active)
 * **Human Master Excel Data Import**: COMPLETE (`human_employees` 120 records, `human_employee_sources` 120 records, dry-run verified 0 NEW / 120 UNCHANGED)
-* **Human ↔ Device Mapping**: NOT STARTED (`employee_device_mappings` 0 records)
+* **Human ↔ Device Mapping Plan**: COMPLETE (`ADMS-Data-HumanDeviceMapping-001` — PLAN ONLY)
+* **Human ↔ Device VERIFIED Mappings**: 0 records (UNMAPPED)
 * **Automatic Sequential user_id Mapping**: PROHIBITED (Excel row 1 != ZKTeco user_id 1)
 * **ZKTeco Terminal Writes from Human Import**: NONE (0 terminal socket calls)
+* **Remote Fingerprint Enrollment**: UNSUPPORTED / NOT USED
 * **Native ADMS Push E2E**: NOT STARTED (EXPERIMENTAL / DEFERRED)
 * **Real PostgreSQL Post-Import Recovery Backup**: VERIFIED (`adms_post_excel_import_20260811_121449.dump`, SHA256 `d621f280...`)
 * **Backup Format**: `pg_dump` Custom Format (PGDMP_V1)
@@ -89,7 +92,22 @@ The project SHALL follow this order:
 | `ADMS-Docs-Categorize-001` | 2026-08-11 | Docs Categorization Plan | COMPLETE | Inventoried 55 documentation files, classified 20 canonical root docs into 6 domain categories (`architecture/`, `device/`, `collector/`, `data/`, `database/`, `operations/`), mapped flat reports retention, designed `docs/README.md` navigation map. |
 | `ADMS-Docs-Categorize-002` | 2026-08-11 | Docs Categorization Execution | COMPLETE | Reorganized 20 canonical docs into 6 domain subdirectories using `git mv`, separated AI-Brain docs under `docs/external/ai-brain/`, created top-level `docs/README.md` navigation map using relative Markdown links, updated project cross-references. |
 | `ADMS-Data-ExcelImport-002` | 2026-08-11 | Excel Import Execution | COMPLETE | Implemented import utility `app/import_excel_human_master.py`, verified dry-run (120 records, 4 categories), generated pre-import recovery backup `adms_pre_excel_import_20260811_120503.dump`, added test suite (33/33 passed 100%), verified zero terminal access. |
-| `ADMS-Checkpoint-PostExcelImport-001` | 2026-08-11 | Post-Import Checkpoint | COMPLETE (Latest Checkpoint) | Verified 120 `human_employees` & 120 `human_employee_sources` records, 0 mappings created, 6/6 attendance logs preserved, generated post-import recovery backup `adms_post_excel_import_20260811_121449.dump`, verified archive via `pg_restore -l`. |
+| `ADMS-Checkpoint-PostExcelImport-001` | 2026-08-11 | Post-Import Checkpoint | COMPLETE | Verified 120 `human_employees` & 120 `human_employee_sources` records, 0 mappings created, 6/6 attendance logs preserved, generated post-import recovery backup `adms_post_excel_import_20260811_121449.dump`, verified archive via `pg_restore -l`. |
+| `ADMS-Data-HumanDeviceMapping-001` | 2026-08-11 | Human Device Mapping Plan | COMPLETE (Latest Task) | Designed Human ↔ Device mapping architecture, evidence hierarchy, controlled test-scan workflow, schema gap analysis. Identified missing auditability & temporal identity. Selected Route B: `ADMS-Data-HumanDeviceMappingSchema-001`. |
+
+---
+
+## Pending & Upcoming Work
+
+1. **Human ↔ Device Mapping Schema Enhancement** (Next Authorized Phase):
+   - `# PromptID: ADMS-Data-HumanDeviceMappingSchema-001` (PLAN ONLY): Additive DDL design for `verified_by`, `verification_method`, `verification_note`, `valid_from`, `valid_to`.
+
+2. **Human ↔ Device Mapping Execution**:
+   - `# PromptID: ADMS-Data-HumanDeviceMapping-002` (WRITE mode, pending explicit user approval after schema enhancement).
+
+3. **Native ADMS Push E2E** (Locked Step 5):
+   - Experimental track only. Deferred until identity workflow foundation is complete.
+covery backup `adms_post_excel_import_20260811_121449.dump`, verified archive via `pg_restore -l`. |
 
 ---
 
