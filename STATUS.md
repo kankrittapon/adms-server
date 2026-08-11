@@ -26,9 +26,15 @@ The project SHALL follow this order:
 5. **`ADMS-Data-HumanDeviceMappingSchema-001`**: Human ↔ Device Mapping Schema Enhancement (**COMPLETE** — Designed DDL migration `sql/005_human_device_mapping_schema.sql`).
 6. **`ADMS-Data-DeviceUserLifecycle-001`**: Device User Lifecycle / Account Incarnation Audit (**COMPLETE** — Verified `ensure_device_user()` identity reuse, recycling risks, selected Decision B).
 7. **`ADMS-Data-HumanDeviceMappingSchema-002`**: Human ↔ Device Mapping Schema Migration Execution (**COMPLETE** — Created migration DDL `sql/005_human_device_mapping_schema.sql`).
-8. **`ADMS-Checkpoint-PostMappingSchema-001`**: Post Mapping Schema Recovery Checkpoint (**COMPLETE — THIS PROMPT** — Resolved backup metadata conflict for `adms_post_excel_import_20260811_121449.dump` 7,389 bytes SHA256 `d621f280...`, verified 33/33 tests pass, locked next phase).
-9. **`ADMS-Collector-TemporalIdentity-001`**: Collector Temporal Identity Resolver & Lifecycle Integration (**NEXT REQUIRED PHASE — PLAN ONLY** — Design `scan_time`-aware mapping resolution and roster sync integration).
-10. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
+8. **`ADMS-Checkpoint-PostMappingSchema-001`**: Post Mapping Schema Recovery Checkpoint (**COMPLETE** — Resolved backup metadata conflict, verified 33/33 tests pass, locked next phase).
+9. **`ADMS-Server-DatabaseRebuild-001`**: Server Database Rebuild (**COMPLETE** — 3 Docker fixes, Collector operational, 7 attendance backfilled, authoritative backup verified).
+10. **`ADMS-Checkpoint-PostServerRebuild-001`**: Post-Rebuild Checkpoint (**COMPLETE** — READ-ONLY validation PASS, all 3 nodes synced at `a240061`).
+11. **`ADMS-Collector-TemporalIdentity-001`**: Collector Temporal Identity Audit & Plan (**COMPLETE — PLAN ONLY** — Audited current timeless resolver, designed temporal `[valid_from, valid_to)` contract, identified TIMEZONE BLOCKER).
+12. **`ADMS-Collector-TimestampTimezone-001`**: Timestamp Timezone Fix (**NEXT REQUIRED PHASE — BLOCKER** — pyzk naive Bangkok local timestamps stored as UTC, +7h offset, must fix before temporal identity implementation).
+13. **`ADMS-Collector-AttendanceParseTime-001`**: Parse_Time Bug Fix (**RECOMMENDED — NON-BLOCKING** — `parse_time()` fails on `HH:MM:SS` format, only affects `status` field).
+14. **`ADMS-Collector-TemporalIdentity-002`**: Temporal Identity Implementation (**BLOCKED** — Requires timezone fix first).
+15. **`ADMS-Collector-TemporalIdentity-003`**: Temporal Identity Live Verification Checkpoint (**FUTURE**).
+16. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
 
 ---
 
@@ -62,6 +68,12 @@ The project SHALL follow this order:
 * **Collector Docker Package Fix**: COMPLETE (3 fixes: Dockerfile `COPY app/ ./app/` + `CMD python -m app.main`, `iputils-ping`, DB env vars in docker-compose.yml)
 * **Authoritative Reconstructed Backup**: VERIFIED (`adms_reconstructed_authoritative_20260811_153725.dump`, 44980 bytes, SHA256 `5386681d...`, `pg_restore -l` VERIFIED 79 TOC entries)
 * **Backup Archive Readability**: VERIFIED via `pg_restore -l`
+* **Temporal Identity Audit**: COMPLETE (`ADMS-Collector-TemporalIdentity-001` — PLAN ONLY — current resolver is TIMELESS, temporal contract designed `[valid_from, valid_to)`)
+* **Timezone Blocker**: IDENTIFIED (pyzk returns naive Bangkok local UTC+7 timestamps, psycopg2 stores as TIMESTAMPTZ interpreted as UTC → +7h offset. Must fix before temporal identity implementation)
+* **Parse_Time Bug**: IDENTIFIED (NON-BLOCKING — `parse_time()` fails on `HH:MM:SS`, only affects `status` field, `scan_time` unaffected)
+* **Temporal Resolver**: PLANNED (NOT IMPLEMENTED — `resolve_verified_employee_mapping()` will accept `scan_time` parameter in future `ADMS-Collector-TemporalIdentity-002`)
+* **Historical Reconciliation**: PLANNED (NOT IMPLEMENTED — future unmapped-only retroactive resolution)
+* **Device UID Role**: DIAGNOSTIC ONLY (not canonical identity, not tracked by current ingestion)
 
 ---
 
@@ -114,17 +126,27 @@ The project SHALL follow this order:
 | `ADMS-Data-DeviceUserLifecycle-001` | 2026-08-11 | Lifecycle Audit | COMPLETE | Verified `ensure_device_user()` identity reuse, recycling risks, selected Decision B (roster lifecycle columns). |
 | `ADMS-Checkpoint-PostMappingSchema-001` | 2026-08-11 | Post-Schema Checkpoint | COMPLETE | Resolved backup metadata conflict, verified 33/33 tests pass, locked next phase. |
 | `ADMS-Server-DatabaseRebuild-001` | 2026-08-11 | Server Rebuild | COMPLETE | Reconstructed ADMS deployment: 3 Docker build fixes (package layout, iputils-ping, DB env vars), Collector fully operational (LIVE state, 7 attendance records backfilled from live terminal), 33 tests passed, authoritative backup created and verified. |
-| `ADMS-Checkpoint-PostServerRebuild-001` | 2026-08-11 | Post-Rebuild Checkpoint | COMPLETE (Latest Task) | READ-ONLY validation of reconstructed deployment. Verified git sync (TELEPHONE=origin=ai-brain=`d590d6a`), 3 ADMS containers running 0 restarts, DB row counts match (human_employees=120, attendance_logs=7, mappings=0), schema 005 constraints present, Collector LIVE+HEALTHY, ZKTeco connected, backup 44980 bytes SHA256 `5386681d...` verified 79 TOC entries, 33 tests passed. |
+| `ADMS-Checkpoint-PostServerRebuild-001` | 2026-08-11 | Post-Rebuild Checkpoint | COMPLETE | READ-ONLY validation of reconstructed deployment. Verified git sync (TELEPHONE=origin=ai-brain=`a240061`), 3 ADMS containers running 0 restarts, DB row counts match (human_employees=120, attendance_logs=7, mappings=0), schema 005 constraints present, Collector LIVE+HEALTHY, ZKTeco connected, backup 44980 bytes SHA256 `5386681d...` verified 79 TOC entries, 33 tests passed. |
+| `ADMS-Collector-TemporalIdentity-001` | 2026-08-11 | Temporal Identity Audit & Plan | COMPLETE (Latest Task) | PLAN ONLY — Audited current timeless resolver (`resolve_verified_employee_mapping`), designed temporal `[valid_from, valid_to)` contract, traced realtime & backfill ingestion paths, identified TIMEZONE BLOCKER (pyzk naive Bangkok local UTC+7 stored as TIMESTAMPTZ interpreted as UTC → +7h offset), classified parse_time bug as NON-BLOCKING, verified Schema 005 & existing indexes sufficient, produced implementation plan for `ADMS-Collector-TemporalIdentity-002`. |
 
 ---
 
 ## Pending & Upcoming Work
 
-1. **Human ↔ Device Mapping Schema Migration Execution**:
-   - `# PromptID: ADMS-Data-HumanDeviceMappingSchema-002` (WRITE mode — Execute fresh `pg_dump` backup, apply `sql/005_human_device_mapping_schema.sql`, verify constraints).
+1. **Timestamp Timezone Fix (BLOCKER)**:
+   - `# PromptID: ADMS-Collector-TimestampTimezone-001` (WRITE mode — Fix pyzk naive Bangkok local timestamps by attaching Asia/Bangkok tzinfo before TIMESTAMPTZ insertion, correct existing 7 attendance_logs records by subtracting 7 hours, verify temporal comparisons).
 
-2. **Human ↔ Device Mapping Execution**:
-   - `# PromptID: ADMS-Data-HumanDeviceMapping-002` (WRITE mode, pending explicit user authorization after schema enhancement).
+2. **Parse_Time Bug Fix (NON-BLOCKING, recommended)**:
+   - `# PromptID: ADMS-Collector-AttendanceParseTime-001` (WRITE mode — Fix `parse_time()` to handle `HH:MM:SS` format, restore correct `status` field computation).
 
-3. **Native ADMS Push E2E** (Locked Step 5):
+3. **Temporal Identity Implementation (BLOCKED by timezone fix)**:
+   - `# PromptID: ADMS-Collector-TemporalIdentity-002` (WRITE mode — Implement `scan_time`-aware resolver, per-record backfill resolution, ambiguity defense, 17 planned tests).
+
+4. **Temporal Identity Live Verification Checkpoint**:
+   - `# PromptID: ADMS-Collector-TemporalIdentity-003` (READ-ONLY — Verify temporal resolver against live terminal, boundary behavior, backfill correctness).
+
+5. **Human ↔ Device Mapping Execution**:
+   - `# PromptID: ADMS-Data-HumanDeviceMapping-002` (WRITE mode, pending explicit user authorization after temporal identity foundation is complete).
+
+6. **Native ADMS Push E2E** (Locked Step):
    - Experimental track only. Deferred until identity workflow foundation is complete.
