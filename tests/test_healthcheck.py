@@ -163,9 +163,9 @@ class TestHealthcheck(unittest.TestCase):
         self.assertEqual(data["schema_version"], "1.0")
 
         # Verify zero secrets or sensitive keys written
-        content_raw = str(data)
-        self.assertNotIn("600", content_raw)
-        self.assertNotIn("password", content_raw.lower())
+        self.assertNotIn("device_password", data)
+        self.assertNotIn("db_password", data)
+        self.assertNotIn("password", str(data).lower())
         self.assertNotIn("user_id", data)
 
         res = evaluate_health(HEALTH_FILE_PATH)

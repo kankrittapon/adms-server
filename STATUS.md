@@ -9,7 +9,7 @@
 * **Backfill System**: Hybrid Reconciliation (`BACKFILLING` -> `LIVE`)
 * **Healthcheck System**: Atomic Ephemeral State File (`/tmp/collector_health.json`) + Non-Invasive CLI (`app/healthcheck.py`)
 * **Identity Architecture**: Human Master (`human_employees`) & Device Identity (`device_users`) Strict Separation
-* **SQL Identity Foundation**: Additive Schema Migration `sql/002_identity_foundation.sql` Applied
+* **SQL Identity Foundation**: Additive Schema Migration `sql/002_identity_foundation.sql` & Constraint Migration `sql/003_legacy_identity_constraint.sql` Applied
 
 ---
 
@@ -37,14 +37,16 @@
 | `ADMS-Data-IdentitySchema-001` | 2026-08-11 | Identity Schema Plan | COMPLETE | Detailed DDL migration design (`sql/002_identity_foundation.sql`), additive zero-data-loss architecture (`devices`, `device_users`, `human_employees`, `employee_device_mappings`), seed queries for physical terminal (`3392113170057`), and 5-stage migration path. |
 | `ADMS-Checkpoint-PreIdentitySchema-001` | 2026-08-11 | Pre-Schema Checkpoint | COMPLETE | Established clean, verified repository checkpoint baseline prior to executing the first additive database schema migration (`sql/002_identity_foundation.sql`). |
 | `ADMS-Data-IdentitySchema-002` | 2026-08-11 | Identity Schema Execution | COMPLETE | Applied additive SQL identity schema migration (`sql/002_identity_foundation.sql`), registered physical terminal `3392113170057`, created `device_users` foundation, verified 100% attendance log preservation (6/6 records), and verified collector & healthcheck compatibility. |
-| `ADMS-Collector-IdentityTransition-001` | 2026-08-11 | Identity Transition Plan + Git Hygiene | COMPLETE (Latest Checkpoint) | Detailed design for Collector identity transition (`ensure_device_user`), identified legacy FK constraint blocker (`attendance_logs_user_id_fkey`), updated `.gitignore`, and untracked local AI rules/prompt history from Git index while preserving local files. |
+| `ADMS-Collector-IdentityTransition-001` | 2026-08-11 | Identity Transition Plan + Git Hygiene | COMPLETE | Detailed design for Collector identity transition (`ensure_device_user`), identified legacy FK constraint blocker (`attendance_logs_user_id_fkey`), updated `.gitignore`, and untracked local AI rules/prompt history from Git index while preserving local files. |
+| `ADMS-Data-LegacyIdentityConstraint-001` | 2026-08-11 | Constraint Transition Plan | COMPLETE | Detailed design for dropping `attendance_logs_user_id_fkey` constraint while preserving `user_id` string column and `UNIQUE (user_id, device_ip, scan_time)` constraint, unblocking Collector transition away from `ensure_employee_stub()`. |
+| `ADMS-Data-LegacyIdentityConstraint-002` | 2026-08-11 | Constraint Transition Execution | COMPLETE (Latest Checkpoint) | Applied SQL migration `sql/003_legacy_identity_constraint.sql` dropping `attendance_logs_user_id_fkey` constraint, preserved raw `user_id` column & `UNIQUE (user_id, device_ip, scan_time)` dedupe constraint, verified 100% attendance preservation (6/6 records), and unblocked Collector transition (`ADMS-Collector-IdentityTransition-002`). |
 
 ---
 
 ## Pending & Upcoming Work
 
-1. **Legacy Identity Constraint Drop Plan** (Pending):
-   - `# PromptID: ADMS-Data-LegacyIdentityConstraint-001` (Plan ONLY): Design DDL script to drop legacy `attendance_logs_user_id_fkey` constraint while preserving raw `user_id` string column, unblocking Collector transition away from `ensure_employee_stub()`.
+1. **Collector Identity Transition Execution** (Pending):
+   - `# PromptID: ADMS-Collector-IdentityTransition-002` (WRITE Mode): Update `app/db.py` to replace `ensure_employee_stub()` with `ensure_device_user()`, populating additive identity references cleanly.
 
 2. **Human Master Excel SQL Import** (Pending):
    - `# PromptID: ADMS-Data-ExcelImport-001` (Plan ONLY): Design dry-run normalization and import script for populating `human_employees` from Excel (`120` records).

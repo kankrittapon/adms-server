@@ -2,10 +2,10 @@
 
 ## Document Status
 
-* **Status**: Approved Identity Mapping Architecture Plan
-* **Source PromptID**: `ADMS-Data-IdentityMapping-001`
+* **Status**: Approved Identity Mapping Architecture Specification
+* **Source PromptIDs**: `ADMS-Data-IdentityMapping-001` / `ADMS-Data-LegacyIdentityConstraint-001`
 * **Target Environment**: ADMS Server PostgreSQL & SONIC ZEM560_TFT Hardware Roster
-* **Implementation Target Phase**: `ADMS-Data-IdentitySchema-001` (Plan) / `ADMS-Data-IdentitySchema-002` (Write)
+* **Implementation Target Phase**: `ADMS-Data-LegacyIdentityConstraint-002` (Constraint Removal) $\to$ `ADMS-Collector-IdentityTransition-002` (Collector Integration)
 
 ---
 
@@ -13,7 +13,7 @@
 
 The **ADMS Identity Mapping Architecture** enforces a strict separation between **Human Master Data** and **Device-Local Identities**:
 
-1. **Human Master Data (`employees`)**: Represents physical personnel from HR / Excel workbooks.
+1. **Human Master Data (`human_employees`)**: Represents physical personnel from HR / Excel workbooks.
 2. **Device-Local Identity (`device_users`)**: Represents local user slots on physical ZKTeco biometric terminals.
 3. **Separation Invariant**: A ZKTeco terminal `user_id` is **NOT** the canonical human employee ID. Excel import must **NEVER** automatically create terminal users or assign fingerprint slots.
 4. **Local Enrollment Only**: Fingerprint enrollment is performed physically on terminal keypads (`ADMS-Device-RemoteEnrollmentCapability-001`). Device users enter ADMS only after physical creation on the terminal.
@@ -25,7 +25,7 @@ The **ADMS Identity Mapping Architecture** enforces a strict separation between 
 ```text
 +-----------------------+              +-----------------------+
 | Human Master Domain   |              | Device User Domain    |
-| (employees)           |              | (device_users)        |
+| (human_employees)     |              | (device_users)        |
 |                       |              |                       |
 | - employee_id (UUID)  |              | - device_id (Serial)  |
 | - personnel_id        |              | - device_user_id      |
@@ -58,9 +58,9 @@ The **ADMS Identity Mapping Architecture** enforces a strict separation between 
 
 ## 3. Recommended Normalized Schema Model
 
-### A. `employees` (Human Master Data)
+### A. `human_employees` (Human Master Data)
 ```sql
-CREATE TABLE employees (
+CREATE TABLE human_employees (
   employee_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   personnel_id TEXT UNIQUE, -- Optional official organization ID
   display_name TEXT NOT NULL,
@@ -102,7 +102,7 @@ CREATE TABLE device_users (
 ```sql
 CREATE TABLE employee_device_mappings (
   mapping_id BIGSERIAL PRIMARY KEY,
-  employee_id UUID NOT NULL REFERENCES employees(employee_id),
+  employee_id UUID NOT NULL REFERENCES human_employees(employee_id),
   device_user_pk BIGINT NOT NULL REFERENCES device_users(device_user_pk) UNIQUE,
   mapping_status TEXT NOT NULL CHECK (mapping_status IN ('VERIFIED', 'PROBABLE', 'LEGACY')),
   verified_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -131,4 +131,4 @@ Attendance Log Persisted cleanly to PostgreSQL
 
 * **Zero Scan Rejection**: Attendance ingestion NEVER fails or drops records because an employee mapping is missing.
 * **Multi-Device Isolation**: User `'1'` on Device A (`SONIC-01`) and User `'1'` on Device B (`SONIC-02`) map independently to different employees without key collisions.
-* **Stub Compatibility Migration**: `ensure_employee_stub()` will be replaced by automatic `device_users` registration, eliminating auto-generated fake employee rows.
+* **Legacy Constraint Decoupling**: Dropping `attendance_logs_user_id_fkey` (`ADMS-Data-LegacyIdentityConstraint-002`) allows the Collector to stop auto-generating legacy employee stub rows.
