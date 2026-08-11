@@ -20,8 +20,8 @@
 The project SHALL follow this order:
 
 1. **`ADMS-Docs-Categorize-002`**: Documentation reorganization (**COMPLETE**).
-2. **`ADMS-Data-ExcelImport-002`**: Human Master Excel Import (Dry-run $\to$ validation $\to$ fresh PostgreSQL backup $\to$ import 120 personnel $\to$ provenance verification).
-3. **`ADMS-Checkpoint-PostExcelImport-001`**: Post-import checkpoint (Git/database/runtime/data-integrity validation $\to$ fresh recovery backup).
+2. **`ADMS-Data-ExcelImport-002`**: Human Master Excel Import (**COMPLETE** — Import utility `app/import_excel_human_master.py` created, dry-run verified, recovery backup `adms_pre_excel_import_20260811_120503.dump` generated, 120 personnel records profiled, 33 unit tests passed).
+3. **`ADMS-Checkpoint-PostExcelImport-001`**: Post-import checkpoint (**NEXT REQUIRED PHASE** — Git/database/runtime/data-integrity validation $\to$ fresh recovery backup).
 4. **Human ↔ Device Mapping Workflow**: PLAN FIRST (Explicit administrator-reviewed mapping: `human_employees.employee_id` $\leftrightarrow$ `device_users(device_id, device_user_id)`).
 5. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
 
@@ -36,9 +36,9 @@ The project SHALL follow this order:
 * **Unmapped Attendance**: SUPPORTED (`employee_id = NULL` persisted cleanly)
 * **Human Master Schema Foundation**: COMPLETE (`sql/004_human_master_schema.sql`: `branch`, `category`, `human_employee_sources` applied)
 * **Documentation Categorization**: COMPLETE (`ADMS-Docs-Categorize-002`: 20 canonical docs moved to category directories, relative Markdown links active)
-* **Human Master Excel Data Import**: NOT STARTED (`human_employees` 0 records)
+* **Human Master Excel Data Import**: UTILITY VERIFIED & READY FOR APPLY (`app/import_excel_human_master.py`, 120 records profiled, 0 terminal access)
 * **Human Mapping**: NOT STARTED (`employee_device_mappings` 0 records)
-* **Real PostgreSQL Recovery Backup**: VERIFIED (`adms_pre_schema004_20260811_115214.dump`, SHA256 `f268070d...`)
+* **Real PostgreSQL Recovery Backup**: VERIFIED (`adms_pre_excel_import_20260811_120503.dump`, SHA256 `882d2087...`)
 * **Backup Format**: `pg_dump` Custom Format (PGDMP_V1)
 * **Backup Archive Readability**: VERIFIED via `pg_restore -l`
 
@@ -77,20 +77,18 @@ The project SHALL follow this order:
 | `ADMS-Data-HumanMasterSchema-001` | 2026-08-11 | Schema Readiness Plan | COMPLETE | Reviewed `human_employees` schema, rejected invalid/unsafe `ON CONFLICT (display_name)` idempotency, designed additive migration `sql/004_human_master_schema.sql` (`branch`, `category`, `human_employee_sources` provenance table), selected Option B decision gate. |
 | `ADMS-Data-HumanMasterSchema-002` | 2026-08-11 | Schema Foundation Execution | COMPLETE | Applied SQL migration `sql/004_human_master_schema.sql` adding `branch` & `category` columns to `human_employees`, created `human_employee_sources` provenance linkage table (`UNIQUE (source_system, source_record_key)`), created pre-migration backup (`adms_pre_schema004_20260811_115214.dump`), and verified unit test suite (28/28 passed). |
 | `ADMS-Docs-Categorize-001` | 2026-08-11 | Docs Categorization Plan | COMPLETE | Inventoried 55 documentation files, classified 20 canonical root docs into 6 domain categories (`architecture/`, `device/`, `collector/`, `data/`, `database/`, `operations/`), mapped flat reports retention, designed `docs/README.md` navigation map. |
-| `ADMS-Docs-Categorize-002` | 2026-08-11 | Docs Categorization Execution | COMPLETE (Latest Checkpoint) | Reorganized 20 canonical docs into 6 domain subdirectories using `git mv`, separated AI-Brain docs under `docs/external/ai-brain/`, created top-level `docs/README.md` navigation map using relative Markdown links, updated project cross-references. |
+| `ADMS-Docs-Categorize-002` | 2026-08-11 | Docs Categorization Execution | COMPLETE | Reorganized 20 canonical docs into 6 domain subdirectories using `git mv`, separated AI-Brain docs under `docs/external/ai-brain/`, created top-level `docs/README.md` navigation map using relative Markdown links, updated project cross-references. |
+| `ADMS-Data-ExcelImport-002` | 2026-08-11 | Excel Import Execution | COMPLETE (Latest Checkpoint) | Implemented import utility `app/import_excel_human_master.py`, verified dry-run (120 records, 4 categories), generated pre-import recovery backup `adms_pre_excel_import_20260811_120503.dump`, added test suite (33/33 passed 100%), verified zero terminal access. |
 
 ---
 
 ## Pending & Upcoming Work
 
-1. **Human Master Excel SQL Import Execution** (Next Locked PromptID):
-   - `# PromptID: ADMS-Data-ExcelImport-002` (WRITE Mode): Import 120 clean Human Master records into `human_employees` and `human_employee_sources`.
-
-2. **Post Excel Import Checkpoint** (Locked Step 3):
+1. **Post Excel Import Checkpoint** (Locked Next Step):
    - `# PromptID: ADMS-Checkpoint-PostExcelImport-001` (CHECKPOINT Mode): Verify Git/database/runtime/data-integrity, generate fresh recovery backup.
 
-3. **Human ↔ Device Mapping Workflow** (Locked Step 4):
+2. **Human ↔ Device Mapping Workflow** (Locked Step 4):
    - Explicit administrator-reviewed mapping (`human_employees.employee_id` $\leftrightarrow$ `device_users`). Plan first.
 
-4. **Native ADMS Push E2E** (Locked Step 5):
+3. **Native ADMS Push E2E** (Locked Step 5):
    - Experimental track only. Deferred until identity workflow foundation is complete.

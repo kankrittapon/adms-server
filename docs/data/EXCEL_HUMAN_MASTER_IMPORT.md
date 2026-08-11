@@ -3,10 +3,11 @@
 ## Document Status
 
 * **Status**: Approved Excel Import Architecture Specification & Contract
-* **Source PromptIDs**: `ADMS-Data-ExcelImport-001` / `ADMS-Data-HumanMasterSchema-001`
+* **Source PromptIDs**: `ADMS-Data-ExcelImport-001` / `ADMS-Data-HumanMasterSchema-001` / `ADMS-Data-ExcelImport-002`
 * **Dataset File**: `excel/files/รายละเอียด กพ.พัน.สอล.ฯ ก.พ.69.xlsx`
 * **Sheet Name**: `ยอด ม.ค.69`
 * **Target Table**: `human_employees` & `human_employee_sources` ONLY
+* **Import Utility**: `app/import_excel_human_master.py`
 
 ---
 
@@ -54,7 +55,7 @@
 | Category Header | `category` | `human_employees.category` (TEXT) | Category title (e.g. `นายทหาร`, `พันจ่า`, `จ่า`, `พลทหาร`) |
 | Column 3 (`เหล่า`) | `branch` | `human_employees.branch` (TEXT) | Service branch / Intake batch (e.g. `สส.`, `นว.ก.`, `2/66`) |
 | Column 4 (`หมายเหตุ`) | `notes` | `human_employees.notes` (TEXT) | Remarks string (e.g. `ป่วย`, `ศปก.ทร.`) |
-| Record Metadata | `source_record_key` | `human_employee_sources.source_record_key` | Deterministic import key (`EXCEL_FEB69_ROW_XXX`) |
+| Record Metadata | `source_record_key` | `human_employee_sources.source_record_key` | Deterministic import key (`EXCEL_FEB69_CAT_X_ROW_YYY`) |
 
 ---
 
@@ -79,9 +80,14 @@ CREATE TABLE human_employee_sources (
 
 ---
 
-## 5. Staged Execution Plan
+## 5. Execution Utility Usage (`app/import_excel_human_master.py`)
 
-1. **`ADMS-Data-ExcelImport-001` (Plan ONLY)**: Normalization, architecture contract, dry-run design $\to$ **COMPLETE**.
-2. **`ADMS-Data-HumanMasterSchema-001` (Plan ONLY)**: Provenance architecture design $\to$ **COMPLETE**.
-3. **`ADMS-Data-HumanMasterSchema-002` (WRITE Mode)**: Apply `sql/004_human_master_schema.sql` additive schema migration.
-4. **`ADMS-Data-ExcelImport-002` (WRITE Mode)**: Dry-run script execution, SQL commit, database verification (`human_employees` = 120 records).
+### Dry-Run Validation (Default / Safe):
+```bash
+python -m app.import_excel_human_master --dry-run
+```
+
+### Atomic Database Import:
+```bash
+python -m app.import_excel_human_master --apply
+```
