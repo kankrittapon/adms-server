@@ -9,7 +9,7 @@
 * **Backfill System**: Hybrid Reconciliation (`BACKFILLING` -> `LIVE`)
 * **Healthcheck System**: Atomic Ephemeral State File (`/tmp/collector_health.json`) + Non-Invasive CLI (`app/healthcheck.py`)
 * **Identity Architecture**: Human Master (`human_employees`) & Device Identity (`device_users`) Strict Separation
-* **SQL Identity Foundation**: Additive Schema Migration `sql/002_identity_foundation.sql` & Constraint Migration `sql/003_legacy_identity_constraint.sql` Applied
+* **SQL Identity Foundation**: Additive Migration `sql/002_identity_foundation.sql`, Constraint Migration `sql/003_legacy_identity_constraint.sql` & Provenance Schema `sql/004_human_master_schema.sql` Applied
 * **Collector Ingestion Pipeline**: Upgraded to Device Identity First (`ensure_device_user()`). Legacy stub creation (`ensure_employee_stub()`) **REMOVED**.
 
 ---
@@ -21,10 +21,10 @@
 * **Human Master Auto-Creation**: DISABLED (Collector NEVER auto-creates Human rows)
 * **Legacy Stub Creation**: DISABLED (0 new stubs created)
 * **Unmapped Attendance**: SUPPORTED (`employee_id = NULL` persisted cleanly)
-* **Human Master Schema Plan**: COMPLETE (`ADMS-Data-HumanMasterSchema-001`: Name-based identity rejected, `human_employee_sources` designed)
+* **Human Master Schema Foundation**: COMPLETE (`sql/004_human_master_schema.sql`: `branch`, `category`, `human_employee_sources` applied)
 * **Human Master Excel Data Import**: NOT STARTED (`human_employees` 0 records)
 * **Human Mapping**: NOT STARTED (`employee_device_mappings` 0 records)
-* **Real PostgreSQL Recovery Backup**: VERIFIED (`adms_post_identity_20260811_113944.dump`, SHA256 `77b9d987...`)
+* **Real PostgreSQL Recovery Backup**: VERIFIED (`adms_pre_schema004_20260811_115214.dump`, SHA256 `f268070d...`)
 * **Backup Format**: `pg_dump` Custom Format (PGDMP_V1)
 * **Backup Archive Readability**: VERIFIED via `pg_restore -l`
 
@@ -60,20 +60,18 @@
 | `ADMS-Collector-IdentityTransition-002` | 2026-08-11 | Identity Transition Execution | COMPLETE | Implemented Collector database layer identity transition (`app/db.py`), removed `ensure_employee_stub()`, added `get_or_create_device()`, `ensure_device_user()`, and `resolve_verified_employee_mapping()`, added test suite (28/28 passed 100%), verified live against physical terminal `192.168.1.201` (0 new stubs created, unmapped scans stored cleanly with `employee_id = NULL`). |
 | `ADMS-Checkpoint-PostIdentityTransition-001` | 2026-08-11 | Post-Identity Checkpoint | COMPLETE | Formal recovery checkpoint post-identity transition. Verified `human_employees` 0 records, verified 0 new legacy stubs created, generated real PostgreSQL custom-format backup archive (`adms_post_identity_20260811_113944.dump`), and verified archive listing via `pg_restore -l`. |
 | `ADMS-Data-ExcelImport-001` | 2026-08-11 | Excel Import Plan | COMPLETE | Profiled 120 clean Human Master records across 4 categories (`นายทหาร` 20, `พันจ่า` 58, `จ่า` 6, `พลทหาร` 36), verified 0 duplicates, established mapping contract for `human_employees`, rejected 1..120 row mapping assumption. |
-| `ADMS-Data-HumanMasterSchema-001` | 2026-08-11 | Schema Readiness Plan | COMPLETE (Latest Checkpoint) | Reviewed `human_employees` schema, rejected invalid/unsafe `ON CONFLICT (display_name)` idempotency, designed additive migration `sql/004_human_master_schema.sql` (`branch`, `category`, `human_employee_sources` provenance table), selected Option B decision gate. |
+| `ADMS-Data-HumanMasterSchema-001` | 2026-08-11 | Schema Readiness Plan | COMPLETE | Reviewed `human_employees` schema, rejected invalid/unsafe `ON CONFLICT (display_name)` idempotency, designed additive migration `sql/004_human_master_schema.sql` (`branch`, `category`, `human_employee_sources` provenance table), selected Option B decision gate. |
+| `ADMS-Data-HumanMasterSchema-002` | 2026-08-11 | Schema Foundation Execution | COMPLETE (Latest Checkpoint) | Applied SQL migration `sql/004_human_master_schema.sql` adding `branch` & `category` columns to `human_employees`, created `human_employee_sources` provenance linkage table (`UNIQUE (source_system, source_record_key)`), created pre-migration backup (`adms_pre_schema004_20260811_115214.dump`), and verified unit test suite (28/28 passed). |
 
 ---
 
 ## Pending & Upcoming Work
 
-1. **Human Master Additive Schema Migration** (Pending):
-   - `# PromptID: ADMS-Data-HumanMasterSchema-002` (WRITE Mode): Apply additive SQL migration `sql/004_human_master_schema.sql` adding `branch`, `category` to `human_employees` and creating `human_employee_sources` provenance linkage table.
-
-2. **Human Master Excel SQL Import Execution** (Pending):
+1. **Human Master Excel SQL Import Execution** (Pending):
    - `# PromptID: ADMS-Data-ExcelImport-002` (WRITE Mode): Import 120 clean Human Master records into `human_employees` and `human_employee_sources`.
 
-3. **RTC Synchronization Policy** (Pending):
+2. **RTC Synchronization Policy** (Pending):
    - Define controlled automatic clock adjustment policy for terminal RTC drift (-25.39s observed).
 
-4. **Large-History Physical-Device Benchmark** (Pending):
+3. **Large-History Physical-Device Benchmark** (Pending):
    - Physical terminal currently contains 6 logs (100k synthetic benchmark passed in 0.0040s filtering). Benchmark physical 100k transfer when large history accumulates.
