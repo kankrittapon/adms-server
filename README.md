@@ -5,9 +5,11 @@ agents working with AI-Brain infrastructure.
 
 Start with `AGENTS.md`.
 
-For a Gemini Gem, paste `docs/GEM_RESPONSE_STYLE.md` into the Gem custom
+For a Gemini Gem, paste `docs/operations/GEM_RESPONSE_STYLE.md` into the Gem custom
 instructions. Keep the repository files as the operational authority
 when the Gem is used on this project.
+
+See [Documentation Index](docs/README.md) for full project documentation.
 
 ## Adminer Access
 
