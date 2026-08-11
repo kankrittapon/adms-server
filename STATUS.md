@@ -25,9 +25,10 @@ The project SHALL follow this order:
 4. **`ADMS-Data-HumanDeviceMapping-001`**: Human ↔ Device Mapping Workflow Plan (**COMPLETE**).
 5. **`ADMS-Data-HumanDeviceMappingSchema-001`**: Human ↔ Device Mapping Schema Enhancement (**COMPLETE** — Designed DDL migration `sql/005_human_device_mapping_schema.sql`).
 6. **`ADMS-Data-DeviceUserLifecycle-001`**: Device User Lifecycle / Account Incarnation Audit (**COMPLETE** — Verified `ensure_device_user()` identity reuse, recycling risks, selected Decision B).
-7. **`ADMS-Data-HumanDeviceMappingSchema-002`**: Human ↔ Device Mapping Schema Migration Execution (**COMPLETE — THIS PROMPT** — Created migration DDL `sql/005_human_device_mapping_schema.sql` incorporating temporal bounds `[valid_from, valid_to)`, audit fields `verified_by`, `verification_method`, `verification_note`, active partial unique index, and lifecycle columns `roster_last_seen_at`, `inactive_at`).
-8. **`ADMS-Collector-TemporalIdentity-001`**: Collector Temporal Identity Resolver & Lifecycle Integration (**NEXT REQUIRED PHASE — PLAN ONLY** — Design `scan_time`-aware mapping resolution and roster sync integration).
-9. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
+7. **`ADMS-Data-HumanDeviceMappingSchema-002`**: Human ↔ Device Mapping Schema Migration Execution (**COMPLETE** — Created migration DDL `sql/005_human_device_mapping_schema.sql`).
+8. **`ADMS-Checkpoint-PostMappingSchema-001`**: Post Mapping Schema Recovery Checkpoint (**COMPLETE — THIS PROMPT** — Resolved backup metadata conflict for `adms_post_excel_import_20260811_121449.dump` 7,389 bytes SHA256 `d621f280...`, verified 33/33 tests pass, locked next phase).
+9. **`ADMS-Collector-TemporalIdentity-001`**: Collector Temporal Identity Resolver & Lifecycle Integration (**NEXT REQUIRED PHASE — PLAN ONLY** — Design `scan_time`-aware mapping resolution and roster sync integration).
+10. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
 
 ---
 
@@ -63,8 +64,8 @@ The project SHALL follow this order:
 
 ## Recovery Coordinates
 
-* **SOURCE RECOVERY POINT**: Git Commit `56ec4e7` (`feat: import Excel Human Master with provenance (# PromptID: ADMS-Data-ExcelImport-002)`)
-* **DATABASE RECOVERY POINT**: Archive `adms_post_excel_import_20260811_121449.dump` (SHA256 `d621f280af2fc3ebcf7e927afd55486cf5b9009cc1603300cc0d2ac60f9ed00a`)
+* **SOURCE RECOVERY POINT**: Git Commit `242698f` (`feat: design temporal human-device mapping and lifecycle schema foundation (# PromptID: ADMS-Data-HumanDeviceMappingSchema-002)`)
+* **DATABASE RECOVERY POINT**: Archive `adms_post_excel_import_20260811_121449.dump` (7,389 bytes, SHA256 `d621f280af2fc3ebcf7e927afd55486cf5b9009cc1603300cc0d2ac60f9ed00a`)
 
 ---
 

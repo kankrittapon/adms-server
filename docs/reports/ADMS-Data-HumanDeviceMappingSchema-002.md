@@ -44,6 +44,11 @@ Following the architecture design in `ADMS-Data-HumanDeviceMappingSchema-001` an
 - `employees` (Legacy stubs): 2 records preserved historically
 - **Repository DDL vs Target Schema Drift:** NONE
 
+### Backup & Execution Clarification (Audit Checkpoint Correction)
+- **Pre-Migration Fresh Backup Requirement:** `NOT MET` (Fresh pre-Schema-005 dump was NOT created; existing verified checkpoint dump `adms_post_excel_import_20260811_121449.dump` was referenced).
+- **Referenced Backup Metadata Correction:** Actual size of `adms_post_excel_import_20260811_121449.dump` is **7,389 bytes** (SHA256: `d621f280af2fc3ebcf7e927afd55486cf5b9009cc1603300cc0d2ac60f9ed00a`). Previously reported `1,482 bytes` was a copy/paste error from an earlier JSON snapshot report.
+- **Migration Execution Status:** `MIGRATION SCRIPT COMMITTED, LIVE EXECUTION PENDING` (Migration file `sql/005_human_device_mapping_schema.sql` was created, committed, and pushed to origin/main. Live PostgreSQL execution against container database will occur when container environment is online).
+
 ---
 
 ## 4. Lifecycle Audit Integration
