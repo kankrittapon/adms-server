@@ -5,6 +5,7 @@ from datetime import datetime, time
 from typing import Optional, Dict, Any, List, Tuple
 import psycopg2
 from app.config import Config
+from app.timestamp_utils import normalize_device_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ def save_attendance_log(cfg: Config, attendance: Any) -> bool:
     Does NOT invoke legacy ensure_employee_stub().
     """
     user_id_str = str(attendance.user_id)
-    scan_time = attendance.timestamp
+    scan_time = normalize_device_timestamp(attendance.timestamp)
     status = determine_status(scan_time, cfg.on_time_start, cfg.on_time_end)
     raw_payload = json.dumps({
         "uid": getattr(attendance, "uid", None),
@@ -192,7 +193,7 @@ def save_attendance_batch(cfg: Config, attendance_records: List[Any], stop_event
                     # Step 3: Insert attendance records
                     for rec in chunk:
                         user_id_str = str(rec.user_id)
-                        scan_time = rec.timestamp
+                        scan_time = normalize_device_timestamp(rec.timestamp)
                         status = determine_status(scan_time, cfg.on_time_start, cfg.on_time_end)
                         raw_payload = json.dumps({
                             "uid": getattr(rec, "uid", None),

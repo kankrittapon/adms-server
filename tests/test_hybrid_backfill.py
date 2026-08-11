@@ -1,6 +1,6 @@
 import unittest
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from app.config import Config
@@ -49,13 +49,13 @@ class TestHybridBackfill(unittest.TestCase):
         engine = CollectorStateEngine(cfg)
         engine.state = State.BACKFILLING
 
-        mock_watermark.return_value = datetime(2026, 8, 11, 10, 0, 0)
+        mock_watermark.return_value = datetime(2026, 8, 11, 10, 0, 0, tzinfo=timezone.utc)
         mock_batch.return_value = (2, 0)
 
         mock_conn = MagicMock()
         mock_conn.get_attendance.return_value = [
-            MockAttendance("1", datetime(2026, 8, 11, 9, 58, 0)),
-            MockAttendance("2", datetime(2026, 8, 11, 10, 2, 0)),
+            MockAttendance("1", datetime(2026, 8, 11, 16, 58, 0)),  # Bangkok 16:58 → UTC 09:58 ≥ boundary 09:55
+            MockAttendance("2", datetime(2026, 8, 11, 17, 2, 0)),   # Bangkok 17:02 → UTC 10:02 ≥ boundary 09:55
         ]
         engine.connection = mock_conn
         engine.mqtt_service = MagicMock()

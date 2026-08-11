@@ -19,6 +19,7 @@ from app.db import (
     log_sync_event
 )
 from app.mqtt_client import MQTTService
+from app.timestamp_utils import normalize_device_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -210,7 +211,8 @@ class CollectorStateEngine:
                 if not hasattr(rec, 'user_id') or not hasattr(rec, 'timestamp') or not rec.timestamp:
                     malformed_count += 1
                     continue
-                if boundary is None or rec.timestamp >= boundary:
+                normalized_ts = normalize_device_timestamp(rec.timestamp)
+                if boundary is None or normalized_ts >= boundary:
                     candidates.append(rec)
 
             self.malformed_records_count = malformed_count

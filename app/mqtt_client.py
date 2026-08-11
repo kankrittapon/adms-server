@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Optional
 import paho.mqtt.client as mqtt
 from app.config import Config
+from app.timestamp_utils import normalize_device_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -51,10 +52,11 @@ class MQTTService:
             log.warning("MQTT not connected; skipping event publish for user %s", attendance.user_id)
             return False
         try:
+            scan_time = normalize_device_timestamp(attendance.timestamp)
             payload = json.dumps({
                 "user_id": str(attendance.user_id),
                 "device_ip": self.cfg.device_ip,
-                "scan_time": attendance.timestamp.isoformat(),
+                "scan_time": scan_time.isoformat(),
                 "punch_type": str(getattr(attendance, "punch", "")),
                 "status": status,
                 "event_type": "ATTENDANCE_SCAN"
