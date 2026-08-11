@@ -32,9 +32,9 @@ The project SHALL follow this order:
 11. **`ADMS-Collector-TemporalIdentity-001`**: Collector Temporal Identity Audit & Plan (**COMPLETE — PLAN ONLY** — Audited current timeless resolver, designed temporal `[valid_from, valid_to)` contract, identified TIMEZONE BLOCKER).
 12. **`ADMS-Collector-TimestampTimezone-001`**: Timestamp Timezone Audit & Plan (**COMPLETE — PLAN ONLY** — Verified +7h offset on all 7 rows, designed `normalize_device_timestamp()` with `ZoneInfo("Asia/Bangkok")`, deterministic historical correction strategy, 17 planned tests).
 13. **`ADMS-Collector-TimestampTimezone-002`**: Timestamp Timezone Implementation (**COMPLETE** — Implemented `normalize_device_timestamp()` with `ZoneInfo("Asia/Bangkok")`, corrected 7 existing rows -7h, rebuilt collector, verified runtime deduplication, 54/54 tests pass).
-14. **`ADMS-Collector-TimestampTimezone-003`**: Timestamp Timezone Live Verification Checkpoint (**NEXT**).
+14. **`ADMS-Collector-TimestampTimezone-003`**: Timestamp Timezone Live Verification Checkpoint (**COMPLETE** — READ-ONLY checkpoint PASS, all 7 rows round-trip verified, 0 duplicates, 54/54 tests pass, backups verified, TemporalIdentity-002 UNBLOCKED).
 15. **`ADMS-Collector-AttendanceParseTime-001`**: Parse_Time Bug Fix (**RECOMMENDED — NON-BLOCKING** — `parse_time()` fails on `HH:MM:SS` format, only affects `status` field).
-16. **`ADMS-Collector-TemporalIdentity-002`**: Temporal Identity Implementation (**BLOCKED** — Requires timezone fix first).
+16. **`ADMS-Collector-TemporalIdentity-002`**: Temporal Identity Implementation (**UNBLOCKED** — Timezone fix verified, safe to proceed).
 17. **`ADMS-Collector-TemporalIdentity-003`**: Temporal Identity Live Verification Checkpoint (**FUTURE**).
 18. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
 
@@ -131,26 +131,24 @@ The project SHALL follow this order:
 | `ADMS-Checkpoint-PostServerRebuild-001` | 2026-08-11 | Post-Rebuild Checkpoint | COMPLETE | READ-ONLY validation of reconstructed deployment. Verified git sync (TELEPHONE=origin=ai-brain=`a240061`), 3 ADMS containers running 0 restarts, DB row counts match (human_employees=120, attendance_logs=7, mappings=0), schema 005 constraints present, Collector LIVE+HEALTHY, ZKTeco connected, backup 44980 bytes SHA256 `5386681d...` verified 79 TOC entries, 33 tests passed. |
 | `ADMS-Collector-TemporalIdentity-001` | 2026-08-11 | Temporal Identity Audit & Plan | COMPLETE | PLAN ONLY — Audited current timeless resolver (`resolve_verified_employee_mapping`), designed temporal `[valid_from, valid_to)` contract, traced realtime & backfill ingestion paths, identified TIMEZONE BLOCKER (pyzk naive Bangkok local UTC+7 stored as TIMESTAMPTZ interpreted as UTC → +7h offset), classified parse_time bug as NON-BLOCKING, verified Schema 005 & existing indexes sufficient, produced implementation plan for `ADMS-Collector-TemporalIdentity-002`. |
 | `ADMS-Collector-TimestampTimezone-001` | 2026-08-11 | Timestamp Timezone Audit & Plan | COMPLETE | PLAN ONLY — Independently verified +7h offset on all 7 attendance rows (raw_payload + terminal data confirm), designed `normalize_device_timestamp()` with `ZoneInfo("Asia/Bangkok")` (Python 3.12 zoneinfo available), deterministic Strategy A correction (-7h UPDATE), 17 planned tests, identified latent watermark comparison bug (naive vs aware TypeError), confirmed no PostgreSQL/container TZ change needed. |
-| `ADMS-Collector-TimestampTimezone-002` | 2026-08-11 | Timestamp Timezone Implementation | COMPLETE (Latest Task) | Implemented `normalize_device_timestamp()` in `app/timestamp_utils.py`, updated `app/db.py` (realtime + backfill), `app/collector.py` (watermark comparison), `app/mqtt_client.py` (MQTT payload), corrected 7 historical rows -7h in single transaction, 21 new tests (54/54 total pass), rebuilt collector, runtime verified (0 duplicates, backfill idempotent, LIVE+HEALTHY), pre/post backups verified, all 3 nodes synced at `44202d4`. |
+| `ADMS-Collector-TimestampTimezone-002` | 2026-08-11 | Timestamp Timezone Implementation | COMPLETE | Implemented `normalize_device_timestamp()` in `app/timestamp_utils.py`, updated `app/db.py` (realtime + backfill), `app/collector.py` (watermark comparison), `app/mqtt_client.py` (MQTT payload), corrected 7 historical rows -7h in single transaction, 21 new tests (54/54 total pass), rebuilt collector, runtime verified (0 duplicates, backfill idempotent, LIVE+HEALTHY), pre/post backups verified, all 3 nodes synced at `44202d4`. |
+| `ADMS-Collector-TimestampTimezone-003` | 2026-08-11 | Timestamp Timezone Live Verification Checkpoint | COMPLETE (Latest Task) | READ-ONLY checkpoint. Verified git sync (all 3 nodes at `5adae55`), runtime healthy (3 containers, collector LIVE), DB integrity (all counts match), 7/7 attendance rows round-trip PASS (0 remaining +7h errors), 0 duplicates (UNIQUE constraint intact), `normalize_device_timestamp()` present in all 4 code paths, 54/54 tests pass, pre/post backups verified (`pg_restore -l` PASS), ZKTeco connected (no writes), parse_time defect NON-BLOCKING, TemporalIdentity-002 UNBLOCKED. |
 
 ---
 
 ## Pending & Upcoming Work
 
-1. **Timestamp Timezone Live Verification Checkpoint**:
-   - `# PromptID: ADMS-Collector-TimestampTimezone-003` (READ-ONLY — Verify timestamp round-trip, existing attendance correctness, new attendance correctness, dedupe, Collector, Hybrid Backfill, Healthcheck, tests, backup).
-
-2. **Parse_Time Bug Fix (NON-BLOCKING, recommended)**:
+1. **Parse_Time Bug Fix (NON-BLOCKING, recommended)**:
    - `# PromptID: ADMS-Collector-AttendanceParseTime-001` (WRITE mode — Fix `parse_time()` to handle `HH:MM:SS` format, restore correct `status` field computation).
 
-3. **Temporal Identity Implementation (UNBLOCKED)**:
+2. **Temporal Identity Implementation (UNBLOCKED)**:
    - `# PromptID: ADMS-Collector-TemporalIdentity-002` (WRITE mode — Implement `scan_time`-aware resolver, per-record backfill resolution, ambiguity defense, 17 planned tests).
 
-4. **Temporal Identity Live Verification Checkpoint**:
+3. **Temporal Identity Live Verification Checkpoint**:
    - `# PromptID: ADMS-Collector-TemporalIdentity-003` (READ-ONLY — Verify temporal resolver against live terminal, boundary behavior, backfill correctness).
 
-5. **Human ↔ Device Mapping Execution**:
+4. **Human ↔ Device Mapping Execution**:
    - `# PromptID: ADMS-Data-HumanDeviceMapping-002` (WRITE mode, pending explicit user authorization after temporal identity foundation is complete).
 
-6. **Native ADMS Push E2E** (Locked Step):
+5. **Native ADMS Push E2E** (Locked Step):
    - Experimental track only. Deferred until identity workflow foundation is complete.
