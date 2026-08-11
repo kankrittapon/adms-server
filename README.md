@@ -1,23 +1,33 @@
-# ADMS Server
+# AI-Brain Agent Pack
 
-Standalone Docker service for collecting attendance events from a ZKTeco ZEM560 device.
+Portable instructions for Claude Code, Gemini CLI/Gem, Codex, and other
+agents working with AI-Brain infrastructure.
 
-The device firmware does not provide ADMS HTTP push, so the listener connects to the device using ZK Socket Protocol on TCP port 4370. New events are stored in PostgreSQL and published to MQTT topic `attendance/events`.
+Start with `AGENTS.md`.
 
-## Run
+For a Gemini Gem, paste `docs/GEM_RESPONSE_STYLE.md` into the Gem custom
+instructions. Keep the repository files as the operational authority
+when the Gem is used on this project.
 
-1. Copy `.env.example` to `.env` and set the real PostgreSQL password and device IP.
-2. Confirm the server can reach the device on TCP `4370`.
-3. Start the stack:
+## Adminer Access
 
-```bash
-docker compose up -d --build
-docker compose ps
-docker compose logs -f listener
+After network hardening (Checkpoint: `AIBRAIN-Infra-HardenNetwork-002`), Adminer is intentionally bound strictly to host loopback:
+
+`127.0.0.1:8080`
+
+To access Adminer securely from an authorized management workstation, open an SSH port forwarding tunnel:
+
+```powershell
+ssh -L 8080:127.0.0.1:8080 kanfullbuster@192.168.1.248
 ```
 
-The MQTT broker is bound to localhost only. n8n can consume the database directly or subscribe through a separate integration service.
+Then open the following URL in your web browser:
 
-## Data
+`http://localhost:8080`
 
-Employee master data belongs in `employees`. Attendance events belong in `attendance_logs`. The `UNIQUE` constraint prevents the listener from inserting the same user/device/timestamp twice.
+### Operational Notes:
+- The SSH terminal session must remain active while using Adminer.
+- Adminer is intentionally NOT published to external LAN (`192.168.1.248`) or Tailscale (`100.68.88.63`) host interfaces.
+- PostgreSQL main database port `5432` is not published on host interfaces.
+- Adminer connects to PostgreSQL databases (`n8n_zort_postgres`, `private_postgres`, `player_postgres`) over the Docker internal network (`n8n-zort_default`) using container service names (`postgres:5432`, `private-postgres:5432`, `player-postgres:5432`).
+

@@ -43,6 +43,12 @@ services:
       MQTT_TOPIC: ${MQTT_TOPIC:-attendance/events}
       ON_TIME_START: ${ON_TIME_START:-05:00:00}
       ON_TIME_END: ${ON_TIME_END:-10:00:00}
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       adms-postgres:
         condition: service_healthy
