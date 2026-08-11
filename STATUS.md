@@ -58,6 +58,9 @@ The project SHALL follow this order:
 * **Native ADMS Push E2E**: NOT STARTED (EXPERIMENTAL / DEFERRED)
 * **Real PostgreSQL Post-Import Recovery Backup**: VERIFIED (`adms_post_excel_import_20260811_121449.dump`, SHA256 `d621f280...`)
 * **Backup Format**: `pg_dump` Custom Format (PGDMP_V1)
+* **Database Rebuild**: COMPLETE (`ADMS-Server-DatabaseRebuild-001` — database reconstructed from canonical sources: migrations 001-005, Excel Human Master 120 records, live ZKTeco terminal 7 attendance records, 2 device users)
+* **Collector Docker Package Fix**: COMPLETE (3 fixes: Dockerfile `COPY app/ ./app/` + `CMD python -m app.main`, `iputils-ping`, DB env vars in docker-compose.yml)
+* **Authoritative Reconstructed Backup**: VERIFIED (`adms_reconstructed_authoritative_20260811_153725.dump`, 44980 bytes, SHA256 `5386681d...`, `pg_restore -l` VERIFIED 79 TOC entries)
 * **Backup Archive Readability**: VERIFIED via `pg_restore -l`
 
 ---
