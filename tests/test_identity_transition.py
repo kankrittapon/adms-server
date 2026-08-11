@@ -42,15 +42,15 @@ class TestIdentityTransition(unittest.TestCase):
 
     def test_resolve_verified_employee_mapping_unmapped(self):
         mock_cur = MagicMock()
-        mock_cur.fetchone.return_value = None
-        emp_id = resolve_verified_employee_mapping(mock_cur, device_user_pk=10)
+        mock_cur.fetchall.return_value = []
+        emp_id = resolve_verified_employee_mapping(mock_cur, device_user_pk=10, scan_time=datetime(2026, 8, 11, 10, 0, 0, tzinfo=timezone.utc))
         self.assertIsNone(emp_id)
 
     def test_resolve_verified_employee_mapping_verified(self):
         mock_cur = MagicMock()
         uuid_str = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
-        mock_cur.fetchone.return_value = [uuid_str]
-        emp_id = resolve_verified_employee_mapping(mock_cur, device_user_pk=10)
+        mock_cur.fetchall.return_value = [(uuid_str,)]
+        emp_id = resolve_verified_employee_mapping(mock_cur, device_user_pk=10, scan_time=datetime(2026, 8, 11, 10, 0, 0, tzinfo=timezone.utc))
         self.assertEqual(emp_id, uuid_str)
 
     @patch("app.db.get_db_connection")

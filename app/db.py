@@ -79,19 +79,51 @@ def ensure_device_user(cur: Any, device_id: int, device_user_id: str, display_na
     res = cur.fetchone()
     return res[0] if res else 1
 
-def resolve_verified_employee_mapping(cur: Any, device_user_pk: int) -> Optional[str]:
+def resolve_verified_employee_mapping(
+    cur: Any,
+    device_user_pk: int,
+    scan_time: datetime,
+) -> Optional[str]:
     """
-    Looks up active VERIFIED employee mapping for device_user_pk.
-    Returns employee_id UUID string or None if unmapped.
+    Temporally resolves a VERIFIED Human identity for a device user at a
+    given canonical scan_time.
+
+    Uses the interval [valid_from, valid_to):
+      - valid_from is inclusive
+      - valid_to is exclusive (NULL means open-ended)
+
+    Only mapping_status = 'VERIFIED' is considered.
+
+    Returns:
+      - employee_id UUID string if exactly one VERIFIED temporal mapping matches
+      - None if zero matches (unmapped)
+      - None if >1 matches (ambiguous — integrity condition logged, no Human assigned)
+
+    scan_time MUST be an already-normalized timezone-aware datetime from
+    normalize_device_timestamp().
     """
     sql = """
-        SELECT employee_id 
-        FROM employee_device_mappings 
-        WHERE device_user_pk = %s AND mapping_status = 'VERIFIED';
+        SELECT employee_id
+        FROM employee_device_mappings
+        WHERE device_user_pk = %s
+          AND mapping_status = 'VERIFIED'
+          AND valid_from <= %s
+          AND (valid_to IS NULL OR %s < valid_to)
+        LIMIT 2;
     """
-    cur.execute(sql, (device_user_pk,))
-    row = cur.fetchone()
-    return str(row[0]) if row else None
+    cur.execute(sql, (device_user_pk, scan_time, scan_time))
+    rows = cur.fetchall()
+    if len(rows) == 0:
+        return None
+    if len(rows) == 1:
+        return str(rows[0][0])
+    # Ambiguity: >1 matching VERIFIED temporal intervals for same device_user_pk + scan_time
+    log.error(
+        "AMBIGUOUS MAPPING: device_user_pk=%s scan_time=%s matched %d VERIFIED intervals — "
+        "employee_id set to NULL for safety. Investigate mapping data integrity.",
+        device_user_pk, scan_time.isoformat(), len(rows),
+    )
+    return None
 
 def get_device_watermark(cfg: Config, device_ip: str) -> Optional[datetime]:
     """
@@ -136,7 +168,7 @@ def save_attendance_log(cfg: Config, attendance: Any) -> bool:
         with conn.cursor() as cur:
             device_id = get_or_create_device(cur, device_ip=cfg.device_ip)
             device_user_pk = ensure_device_user(cur, device_id, user_id_str)
-            employee_id = resolve_verified_employee_mapping(cur, device_user_pk)
+            employee_id = resolve_verified_employee_mapping(cur, device_user_pk, scan_time)
 
             cur.execute(sql, (
                 user_id_str,
@@ -181,16 +213,14 @@ def save_attendance_batch(cfg: Config, attendance_records: List[Any], stop_event
                     # Step 1: Resolve physical device
                     device_id = get_or_create_device(cur, device_ip=cfg.device_ip)
 
-                    # Step 2: Ensure device_users and resolve employee mappings
+                    # Step 2: Ensure device_users for all unique users
                     unique_users = {str(rec.user_id) for rec in chunk if hasattr(rec, 'user_id')}
                     user_pk_map = {}
-                    employee_map = {}
                     for uid in unique_users:
                         dpk = ensure_device_user(cur, device_id, uid)
                         user_pk_map[uid] = dpk
-                        employee_map[uid] = resolve_verified_employee_mapping(cur, dpk)
 
-                    # Step 3: Insert attendance records
+                    # Step 3: Insert attendance records (temporal resolution per-record)
                     for rec in chunk:
                         user_id_str = str(rec.user_id)
                         scan_time = normalize_device_timestamp(rec.timestamp)
@@ -205,7 +235,7 @@ def save_attendance_batch(cfg: Config, attendance_records: List[Any], stop_event
                         })
 
                         dpk = user_pk_map.get(user_id_str)
-                        emp_id = employee_map.get(user_id_str)
+                        emp_id = resolve_verified_employee_mapping(cur, dpk, scan_time)
 
                         sql = """
                             INSERT INTO attendance_logs (user_id, device_ip, scan_time, punch_type, status, raw_payload, device_id, device_user_pk, employee_id)
