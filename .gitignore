@@ -1,6 +1,33 @@
+# Environment & Credentials
 .env
+.env.local
+.env.*.local
+
+# Python & Caches
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# AI Agent Local Instructions & Working State
+AGENTS.md
+CLAUDE.md
+CODEX.md
+GEMINI.md
+.kob/
+promptID/
+
+# Database Snapshots & Local Backups
+*.dump
+*.backup
+*.bak
+*.bak_*
+pre_migration_backup*
+backups/
+
+# Raw Data Imports
 data/raw/
 data/imports/
 archive/
+excel/uploads/

@@ -36,17 +36,21 @@
 | `ADMS-Data-IdentityMapping-001` | 2026-08-11 | Identity Mapping Plan | COMPLETE | Detailed design for strict separation of Human Master Data (`employees`) and Device-Local Identity (`device_users`), multi-device mapping schema (`devices`, `device_users`, `employee_device_mappings`), rejection of Excel row-number mapping assumption, and unmapped attendance ingestion policy. |
 | `ADMS-Data-IdentitySchema-001` | 2026-08-11 | Identity Schema Plan | COMPLETE | Detailed DDL migration design (`sql/002_identity_foundation.sql`), additive zero-data-loss architecture (`devices`, `device_users`, `human_employees`, `employee_device_mappings`), seed queries for physical terminal (`3392113170057`), and 5-stage migration path. |
 | `ADMS-Checkpoint-PreIdentitySchema-001` | 2026-08-11 | Pre-Schema Checkpoint | COMPLETE | Established clean, verified repository checkpoint baseline prior to executing the first additive database schema migration (`sql/002_identity_foundation.sql`). |
-| `ADMS-Data-IdentitySchema-002` | 2026-08-11 | Identity Schema Execution | COMPLETE (Latest Checkpoint) | Applied additive SQL identity schema migration (`sql/002_identity_foundation.sql`), registered physical terminal `3392113170057`, created `device_users` foundation, verified 100% attendance log preservation (6/6 records), and verified collector & healthcheck compatibility. |
+| `ADMS-Data-IdentitySchema-002` | 2026-08-11 | Identity Schema Execution | COMPLETE | Applied additive SQL identity schema migration (`sql/002_identity_foundation.sql`), registered physical terminal `3392113170057`, created `device_users` foundation, verified 100% attendance log preservation (6/6 records), and verified collector & healthcheck compatibility. |
+| `ADMS-Collector-IdentityTransition-001` | 2026-08-11 | Identity Transition Plan + Git Hygiene | COMPLETE (Latest Checkpoint) | Detailed design for Collector identity transition (`ensure_device_user`), identified legacy FK constraint blocker (`attendance_logs_user_id_fkey`), updated `.gitignore`, and untracked local AI rules/prompt history from Git index while preserving local files. |
 
 ---
 
 ## Pending & Upcoming Work
 
-1. **Human Master Excel SQL Import** (Pending):
+1. **Legacy Identity Constraint Drop Plan** (Pending):
+   - `# PromptID: ADMS-Data-LegacyIdentityConstraint-001` (Plan ONLY): Design DDL script to drop legacy `attendance_logs_user_id_fkey` constraint while preserving raw `user_id` string column, unblocking Collector transition away from `ensure_employee_stub()`.
+
+2. **Human Master Excel SQL Import** (Pending):
    - `# PromptID: ADMS-Data-ExcelImport-001` (Plan ONLY): Design dry-run normalization and import script for populating `human_employees` from Excel (`120` records).
 
-2. **RTC Synchronization Policy** (Pending):
+3. **RTC Synchronization Policy** (Pending):
    - Define controlled automatic clock adjustment policy for terminal RTC drift (-25.39s observed).
 
-3. **Large-History Physical-Device Benchmark** (Pending):
+4. **Large-History Physical-Device Benchmark** (Pending):
    - Physical terminal currently contains 6 logs (100k synthetic benchmark passed in 0.0040s filtering). Benchmark physical 100k transfer when large history accumulates.
