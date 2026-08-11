@@ -39,17 +39,58 @@ def determine_status(scan_time: datetime, on_time_start: str, on_time_end: str) 
         log.warning("failed to determine attendance status: %s", e)
         return "UNKNOWN"
 
-def ensure_employee_stub(cur: Any, user_id: str):
+def get_or_create_device(cur: Any, serial_number: str = "3392113170057", device_ip: str = "192.168.1.201", device_name: str = "SONIC ZEM560 #1") -> int:
     """
-    Ensures a minimal employee stub row exists in 'employees' table for user_id.
-    Satisfies foreign key constraint without depending on Excel master data import.
+    Resolves device_id from physical serial_number. Upserts device record idempotently.
     """
     sql = """
-        INSERT INTO employees (user_id, display_name)
-        VALUES (%s, %s)
-        ON CONFLICT (user_id) DO NOTHING;
+        INSERT INTO devices (serial_number, device_name, device_ip, platform, firmware_version, last_seen_at)
+        VALUES (%s, %s, %s, 'ZEM560_TFT', 'Ver 6.60 Aug 26 2011', now())
+        ON CONFLICT (serial_number) 
+        DO UPDATE SET device_ip = EXCLUDED.device_ip, last_seen_at = now()
+        RETURNING device_id;
     """
-    cur.execute(sql, (user_id, f"User {user_id}"))
+    cur.execute(sql, (serial_number, device_name, device_ip))
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    cur.execute("SELECT device_id FROM devices WHERE serial_number = %s;", (serial_number,))
+    res = cur.fetchone()
+    return res[0] if res else 1
+
+def ensure_device_user(cur: Any, device_id: int, device_user_id: str, display_name: Optional[str] = None) -> int:
+    """
+    Ensures a device_users record exists for (device_id, device_user_id).
+    Returns device_user_pk. Does NOT create human_employees rows.
+    """
+    sql = """
+        INSERT INTO device_users (device_id, device_user_id, device_display_name, last_seen_at)
+        VALUES (%s, %s, %s, now())
+        ON CONFLICT (device_id, device_user_id) 
+        DO UPDATE SET last_seen_at = now()
+        RETURNING device_user_pk;
+    """
+    cur.execute(sql, (device_id, device_user_id, display_name or f"Device User {device_user_id}"))
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    cur.execute("SELECT device_user_pk FROM device_users WHERE device_id = %s AND device_user_id = %s;", (device_id, device_user_id))
+    res = cur.fetchone()
+    return res[0] if res else 1
+
+def resolve_verified_employee_mapping(cur: Any, device_user_pk: int) -> Optional[str]:
+    """
+    Looks up active VERIFIED employee mapping for device_user_pk.
+    Returns employee_id UUID string or None if unmapped.
+    """
+    sql = """
+        SELECT employee_id 
+        FROM employee_device_mappings 
+        WHERE device_user_pk = %s AND mapping_status = 'VERIFIED';
+    """
+    cur.execute(sql, (device_user_pk,))
+    row = cur.fetchone()
+    return str(row[0]) if row else None
 
 def get_device_watermark(cfg: Config, device_ip: str) -> Optional[datetime]:
     """
@@ -68,7 +109,8 @@ def get_device_watermark(cfg: Config, device_ip: str) -> Optional[datetime]:
 def save_attendance_log(cfg: Config, attendance: Any) -> bool:
     """
     Persists a single real-time attendance record into PostgreSQL.
-    Returns True if inserted, False if skipped due to UNIQUE constraint collision.
+    Populates device_id, device_user_pk, and optional employee_id.
+    Does NOT invoke legacy ensure_employee_stub().
     """
     user_id_str = str(attendance.user_id)
     scan_time = attendance.timestamp
@@ -83,22 +125,28 @@ def save_attendance_log(cfg: Config, attendance: Any) -> bool:
     })
 
     sql = """
-        INSERT INTO attendance_logs (user_id, device_ip, scan_time, punch_type, status, raw_payload)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO attendance_logs (user_id, device_ip, scan_time, punch_type, status, raw_payload, device_id, device_user_pk, employee_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (user_id, device_ip, scan_time) DO NOTHING
         RETURNING id;
     """
 
     with get_db_connection(cfg) as conn:
         with conn.cursor() as cur:
-            ensure_employee_stub(cur, user_id_str)
+            device_id = get_or_create_device(cur, device_ip=cfg.device_ip)
+            device_user_pk = ensure_device_user(cur, device_id, user_id_str)
+            employee_id = resolve_verified_employee_mapping(cur, device_user_pk)
+
             cur.execute(sql, (
                 user_id_str,
                 cfg.device_ip,
                 scan_time,
                 str(getattr(attendance, "punch", "")),
                 status,
-                raw_payload
+                raw_payload,
+                device_id,
+                device_user_pk,
+                employee_id
             ))
             row = cur.fetchone()
             conn.commit()
@@ -107,8 +155,8 @@ def save_attendance_log(cfg: Config, attendance: Any) -> bool:
 def save_attendance_batch(cfg: Config, attendance_records: List[Any], stop_event: Optional[Any] = None) -> Tuple[int, int]:
     """
     Persists a list of historical attendance records into PostgreSQL in chunks of cfg.backfill_batch_size.
-    Returns Tuple[inserted_count, skipped_count].
-    Rolls back uncommitted active batch if database error or stop signal occurs.
+    Populates device_id, device_user_pk, and optional employee_id.
+    Does NOT invoke legacy ensure_employee_stub().
     """
     if not attendance_records:
         return 0, 0
@@ -129,12 +177,19 @@ def save_attendance_batch(cfg: Config, attendance_records: List[Any], stop_event
 
             try:
                 with conn.cursor() as cur:
-                    # Step 1: Ensure employee stubs exist for all unique user_ids in chunk
-                    unique_users = {str(rec.user_id) for rec in chunk if hasattr(rec, 'user_id')}
-                    for uid in unique_users:
-                        ensure_employee_stub(cur, uid)
+                    # Step 1: Resolve physical device
+                    device_id = get_or_create_device(cur, device_ip=cfg.device_ip)
 
-                    # Step 2: Insert attendance records
+                    # Step 2: Ensure device_users and resolve employee mappings
+                    unique_users = {str(rec.user_id) for rec in chunk if hasattr(rec, 'user_id')}
+                    user_pk_map = {}
+                    employee_map = {}
+                    for uid in unique_users:
+                        dpk = ensure_device_user(cur, device_id, uid)
+                        user_pk_map[uid] = dpk
+                        employee_map[uid] = resolve_verified_employee_mapping(cur, dpk)
+
+                    # Step 3: Insert attendance records
                     for rec in chunk:
                         user_id_str = str(rec.user_id)
                         scan_time = rec.timestamp
@@ -148,9 +203,12 @@ def save_attendance_batch(cfg: Config, attendance_records: List[Any], stop_event
                             "device_ip": cfg.device_ip
                         })
 
+                        dpk = user_pk_map.get(user_id_str)
+                        emp_id = employee_map.get(user_id_str)
+
                         sql = """
-                            INSERT INTO attendance_logs (user_id, device_ip, scan_time, punch_type, status, raw_payload)
-                            VALUES (%s, %s, %s, %s, %s, %s)
+                            INSERT INTO attendance_logs (user_id, device_ip, scan_time, punch_type, status, raw_payload, device_id, device_user_pk, employee_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (user_id, device_ip, scan_time) DO NOTHING
                             RETURNING id;
                         """
@@ -160,7 +218,10 @@ def save_attendance_batch(cfg: Config, attendance_records: List[Any], stop_event
                             scan_time,
                             str(getattr(rec, "punch", "")),
                             status,
-                            raw_payload
+                            raw_payload,
+                            device_id,
+                            dpk,
+                            emp_id
                         ))
                         row = cur.fetchone()
                         if row is not None:

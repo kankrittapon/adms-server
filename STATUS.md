@@ -10,6 +10,7 @@
 * **Healthcheck System**: Atomic Ephemeral State File (`/tmp/collector_health.json`) + Non-Invasive CLI (`app/healthcheck.py`)
 * **Identity Architecture**: Human Master (`human_employees`) & Device Identity (`device_users`) Strict Separation
 * **SQL Identity Foundation**: Additive Schema Migration `sql/002_identity_foundation.sql` & Constraint Migration `sql/003_legacy_identity_constraint.sql` Applied
+* **Collector Ingestion Pipeline**: Upgraded to Device Identity First (`ensure_device_user()`). Legacy stub creation (`ensure_employee_stub()`) **REMOVED**.
 
 ---
 
@@ -39,20 +40,18 @@
 | `ADMS-Data-IdentitySchema-002` | 2026-08-11 | Identity Schema Execution | COMPLETE | Applied additive SQL identity schema migration (`sql/002_identity_foundation.sql`), registered physical terminal `3392113170057`, created `device_users` foundation, verified 100% attendance log preservation (6/6 records), and verified collector & healthcheck compatibility. |
 | `ADMS-Collector-IdentityTransition-001` | 2026-08-11 | Identity Transition Plan + Git Hygiene | COMPLETE | Detailed design for Collector identity transition (`ensure_device_user`), identified legacy FK constraint blocker (`attendance_logs_user_id_fkey`), updated `.gitignore`, and untracked local AI rules/prompt history from Git index while preserving local files. |
 | `ADMS-Data-LegacyIdentityConstraint-001` | 2026-08-11 | Constraint Transition Plan | COMPLETE | Detailed design for dropping `attendance_logs_user_id_fkey` constraint while preserving `user_id` string column and `UNIQUE (user_id, device_ip, scan_time)` constraint, unblocking Collector transition away from `ensure_employee_stub()`. |
-| `ADMS-Data-LegacyIdentityConstraint-002` | 2026-08-11 | Constraint Transition Execution | COMPLETE (Latest Checkpoint) | Applied SQL migration `sql/003_legacy_identity_constraint.sql` dropping `attendance_logs_user_id_fkey` constraint, preserved raw `user_id` column & `UNIQUE (user_id, device_ip, scan_time)` dedupe constraint, verified 100% attendance preservation (6/6 records), and unblocked Collector transition (`ADMS-Collector-IdentityTransition-002`). |
+| `ADMS-Data-LegacyIdentityConstraint-002` | 2026-08-11 | Constraint Transition Execution | COMPLETE | Applied SQL migration `sql/003_legacy_identity_constraint.sql` dropping `attendance_logs_user_id_fkey` constraint, preserved raw `user_id` column & `UNIQUE (user_id, device_ip, scan_time)` dedupe constraint, verified 100% attendance preservation (6/6 records), and unblocked Collector transition (`ADMS-Collector-IdentityTransition-002`). |
+| `ADMS-Collector-IdentityTransition-002` | 2026-08-11 | Identity Transition Execution | COMPLETE (Latest Checkpoint) | Implemented Collector database layer identity transition (`app/db.py`), removed `ensure_employee_stub()`, added `get_or_create_device()`, `ensure_device_user()`, and `resolve_verified_employee_mapping()`, added test suite (28/28 passed 100%), verified live against physical terminal `192.168.1.201` (0 new stubs created, unmapped scans stored cleanly with `employee_id = NULL`). |
 
 ---
 
 ## Pending & Upcoming Work
 
-1. **Collector Identity Transition Execution** (Pending):
-   - `# PromptID: ADMS-Collector-IdentityTransition-002` (WRITE Mode): Update `app/db.py` to replace `ensure_employee_stub()` with `ensure_device_user()`, populating additive identity references cleanly.
-
-2. **Human Master Excel SQL Import** (Pending):
+1. **Human Master Excel SQL Import** (Pending):
    - `# PromptID: ADMS-Data-ExcelImport-001` (Plan ONLY): Design dry-run normalization and import script for populating `human_employees` from Excel (`120` records).
 
-3. **RTC Synchronization Policy** (Pending):
+2. **RTC Synchronization Policy** (Pending):
    - Define controlled automatic clock adjustment policy for terminal RTC drift (-25.39s observed).
 
-4. **Large-History Physical-Device Benchmark** (Pending):
+3. **Large-History Physical-Device Benchmark** (Pending):
    - Physical terminal currently contains 6 logs (100k synthetic benchmark passed in 0.0040s filtering). Benchmark physical 100k transfer when large history accumulates.
