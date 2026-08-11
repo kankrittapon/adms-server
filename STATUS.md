@@ -23,9 +23,10 @@ The project SHALL follow this order:
 2. **`ADMS-Data-ExcelImport-002`**: Human Master Excel Import (**COMPLETE**).
 3. **`ADMS-Checkpoint-PostExcelImport-001`**: Post-import checkpoint (**COMPLETE**).
 4. **`ADMS-Data-HumanDeviceMapping-001`**: Human ↔ Device Mapping Workflow Plan (**COMPLETE**).
-5. **`ADMS-Data-HumanDeviceMappingSchema-001`**: Human ↔ Device Mapping Schema Enhancement (**COMPLETE — THIS PROMPT** — Designed DDL migration `sql/005_human_device_mapping_schema.sql` for temporal ownership `[valid_from, valid_to)`, audit fields `verified_by`, `verification_method`, `verification_note`, active uniqueness index, and rollback plan).
-6. **`ADMS-Data-HumanDeviceMappingSchema-002`**: Human ↔ Device Mapping Schema Migration Execution (**NEXT AUTHORIZED PHASE — WRITE MODE** — Execute backup and apply `sql/005_human_device_mapping_schema.sql` pending explicit user authorization).
-7. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
+5. **`ADMS-Data-HumanDeviceMappingSchema-001`**: Human ↔ Device Mapping Schema Enhancement (**COMPLETE** — Designed DDL migration `sql/005_human_device_mapping_schema.sql`).
+6. **`ADMS-Data-DeviceUserLifecycle-001`**: Device User Lifecycle / Account Incarnation Audit (**COMPLETE — THIS PROMPT** — Verified `ensure_device_user()` identity reuse, recycling risks, selected Decision B to add `roster_last_seen_at` and `inactive_at` to `device_users` in migration `005`).
+7. **`ADMS-Data-HumanDeviceMappingSchema-002`**: Human ↔ Device Mapping Schema Migration Execution (**NEXT AUTHORIZED PHASE — WRITE MODE** — Execute backup and apply enhanced `sql/005_human_device_mapping_schema.sql` pending explicit user authorization).
+8. Native ADMS Push E2E: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
 
 ---
 
@@ -41,7 +42,12 @@ The project SHALL follow this order:
 * **Human Master Excel Data Import**: COMPLETE (`human_employees` 120 records, `human_employee_sources` 120 records, dry-run verified 0 NEW / 120 UNCHANGED)
 * **Human ↔ Device Mapping Plan**: COMPLETE (`ADMS-Data-HumanDeviceMapping-001` — PLAN ONLY)
 * **Human ↔ Device Mapping Schema Plan**: COMPLETE (`ADMS-Data-HumanDeviceMappingSchema-001` — PLAN ONLY)
+* **Device User Lifecycle Audit**: COMPLETE (`ADMS-Data-DeviceUserLifecycle-001` — PLAN ONLY)
+* **device_user recycling**: VERIFIED RISK (Reuses `device_user_pk` on conflict `(device_id, device_user_id)`)
+* **current account incarnation support**: PARTIAL / MODIFIED FOR MIGRATION 005 (Decision B selected)
+* **mapping schema migration**: PENDING (`sql/005_human_device_mapping_schema.sql` enhanced with `roster_last_seen_at`, `inactive_at`)
 * **Human ↔ Device VERIFIED Mappings**: 0 records (UNMAPPED)
+* **Human ↔ Device Mapping WRITE**: NOT AUTHORIZED
 * **Automatic Sequential user_id Mapping**: PROHIBITED (Excel row 1 != ZKTeco user_id 1)
 * **ZKTeco Terminal Writes from Human Import**: NONE (0 terminal socket calls)
 * **Remote Fingerprint Enrollment**: UNSUPPORTED / NOT USED

@@ -1,239 +1,116 @@
-# Canonical Architecture: Human ↔ Device Identity Mapping Schema Design
+# Canonical Architecture: Device User Lifecycle & Account Incarnation Audit
 
-**PromptID:** `ADMS-Data-HumanDeviceMappingSchema-001`  
-**Status:** ARCHITECTURE DESIGN COMPLETE / PLAN ONLY  
-
----
-
-## 1. Executive Summary & Problem Statement
-
-The **ADMS Identity Mapping Architecture** enforces a strict separation between **Human Master Data** (`human_employees.employee_id` UUID) and **Device-Local Identity** (`device_users(device_id, device_user_id)`).
-
-Following the analysis in `ADMS-Data-HumanDeviceMapping-001`, the baseline mapping table `employee_device_mappings` created during `002_identity_foundation.sql` exhibits four **Critical Schema Gaps**:
-
-1. **Lack of Auditability (`verified_by`, `verification_method`, `verification_note`):** Cannot prove *who* verified a mapping, *how* it was verified, or *why* it was established.
-2. **Lack of Temporal Boundaries (`valid_from`, `valid_to`):** Cannot represent temporal ownership. If a physical terminal `user_id` is deleted and reassigned to another employee on the terminal LCD in the future, a timeless mapping will corrupt historical attendance attribution.
-3. **Inflexible Active Uniqueness (`employee_device_mappings_device_user_pk_key`):** The existing `device_user_pk UNIQUE` constraint prohibits keeping historical mapping rows when a device user account is reassigned over time.
-4. **Missing Status Semantics (`CANDIDATE`, `REVOKED`):** Needs explicit differentiation between active verified mappings, legacy mappings, and candidate suggestions.
-
-This document specifies the DDL migration plan (`sql/005_human_device_mapping_schema.sql`) to resolve all critical schema gaps cleanly without altering raw attendance data or breaking existing runtime ingestion.
+**PromptID:** `ADMS-Data-DeviceUserLifecycle-001`  
+**Status:** READ-ONLY VERIFIED ANALYSIS COMPLETE / PLAN ONLY  
 
 ---
 
-## 2. Fundamental Identity & Security Boundaries
+## 1. Executive Summary & Audit Context
+
+Following the initial schema design in `ADMS-Data-HumanDeviceMappingSchema-001`, this audit evaluates the exact lifecycle mechanics of ZKTeco terminal users (`device_users`) and how account recycling (deletion and recreation of terminal `user_id` values) affects identity continuity and historical attendance attribution.
+
+### Core Audit Questions & Findings
+
+1. **Identity Key in `ensure_device_user()`:** Lookup key is `(device_id, device_user_id)`.
+2. **Account Recycling Identity Reuse:** If terminal user `'1'` is deleted and recreated on the physical device, `ensure_device_user()` will reuse the exact same existing `device_user_pk` row.
+3. **`device_uid` Storage & Uniqueness:** `device_uid` (`INT`) is present in the schema but **does NOT participate** in any uniqueness constraint (`UNIQUE (device_id, device_user_id)`). It is `NULL` for attendance-discovered records.
+4. **Roster Synchronization Status:** Automatic roster sync (`get_users()`) is **NOT implemented** in production Collector (`app/collector.py`). Ingestion relies strictly on attendance log events (`get_attendance()` backfill & `live_capture()`).
+5. **Disappearance / Reappearance / UID Change Detection:** Current runtime **cannot detect** account disappearance, account recreation, or `device_uid` changes.
+6. **Temporal Human Mapping Sufficiency:** Temporal Human mapping (`[valid_from, valid_to)`) is **CONDITIONAL**. It is sufficient *if and only if* administrative workflows explicitly record accurate ownership boundaries (`valid_from`/`valid_to`) when account reassignments occur. However, adding lifecycle metadata to `device_users` significantly strengthens automated safeguards against silent misattribution.
+
+---
+
+## 2. Technical Semantics of `device_users` and Ingestion
 
 ```text
-+---------------------------------------+
-| HUMAN MASTER DOMAIN                   |
-| Table: human_employees                |
-| Canonical Key: employee_id (UUID)     |
-| Attributes: display_name, rank, etc.  |
-+---------------------------------------+
-                   ▲
-                   |  (Explicit Temporal Mapping)
-                   |  Table: employee_device_mappings
-                   |  [valid_from, valid_to)
-                   ▼
-+---------------------------------------+
-| DEVICE IDENTITY DOMAIN                |
-| Table: device_users                   |
-| Canonical Key: (device_id, user_id)   |
-| Local Keys: device_user_id, device_uid|
-+---------------------------------------+
-                   ▲
-                   |  (Terminal Flash Ownership)
-                   ▼
-+---------------------------------------+
-| BIOMETRIC TEMPLATE DOMAIN             |
-| Owned exclusively by terminal flash   |
-| NOT stored/downloaded in PostgreSQL   |
-+---------------------------------------+
++-------------------------------------------------------------------------+
+|                       ZKTeco Physical Terminal                          |
+|  Local Slot: user_id (string "1") <---> internal index: uid (integer 1) |
++-------------------------------------------------------------------------+
+                                     │
+           Ingestion via pyzk (Attendance Events / Logs)
+                                     ▼
++-------------------------------------------------------------------------+
+|                    app/db.py :: ensure_device_user()                    |
+|  INSERT INTO device_users (device_id, device_user_id, last_seen_at)     |
+|  ON CONFLICT (device_id, device_user_id) DO UPDATE SET last_seen_at=now()|
+|  RETURNING device_user_pk;                                              |
++-------------------------------------------------------------------------+
+                                     │
+                   Reuses exact same device_user_pk!
+                                     ▼
++-------------------------------------------------------------------------+
+|                      PostgreSQL: device_users                           |
+|  device_user_pk = 1  | device_id = 1 | device_user_id = '1'             |
+|  device_uid = NULL   | display_name = 'Device User 1'                   |
++-------------------------------------------------------------------------+
 ```
 
-### Core Invariants
-1. **Human Canonical Key:** `human_employees.employee_id` UUID.
-2. **Device User Canonical Key:** `(device_id, device_user_id)` represented by `device_user_pk`.
-3. **Excel Row Rule:** `Excel row number == ZKTeco user_id` is **STRICTLY PROHIBITED**.
-4. **No Auto-Mapping:** No mapping row may be created automatically by Collector, Excel import, or name matching.
-5. **No Biometric Storage:** Biometric templates remain on physical terminal flash. ADMS does not download or store template bytes.
+### Key Semantics of `ensure_device_user()`
+- **Input:** `(cur, device_id, device_user_id, display_name)`
+- **Conflict Target:** `(device_id, device_user_id)`
+- **On Conflict Action:** `DO UPDATE SET last_seen_at = now()`
+- **Identity Reuse:** If user `'1'` is deleted and recreated on the terminal LCD, any new attendance log containing `user_id = '1'` will resolve to the existing `device_user_pk` row without creating a new incarnation key or raising an alert.
 
 ---
 
-## 3. Temporal Ownership & History Preservation Model
+## 3. ZKTeco Identifier Mechanics: `user_id` vs `uid`
 
-### Half-Open Interval Semantics: `[valid_from, valid_to)`
-- `valid_from TIMESTAMPTZ NOT NULL DEFAULT now()`: The timestamp from which this mapping becomes valid.
-- `valid_to TIMESTAMPTZ NULL`: The timestamp when this mapping expires. `NULL` indicates an currently active mapping.
-- **Match Criteria:** An attendance punch at `scan_time` matches a mapping if and only if:
-  $$\text{scan\_time} \ge \text{valid\_from} \quad \text{AND} \quad (\text{valid\_to IS NULL} \;\lor\; \text{scan\_time} < \text{valid\_to})$$
-
-### Mapping History Preservation
-Overwriting mapping records (changing `employee_id` on an existing row) is **PROHIBITED**.
-
-When `device_user_pk = 1` is reassigned from **Human A** to **Human B** at timestamp $T_{\text{reassign}}$:
-1. **Close Active Mapping:** Update Human A's mapping setting `valid_to = T_reassign`.
-2. **Open New Mapping:** Insert new row for Human B with `valid_from = T_reassign` and `valid_to = NULL`.
+- **`user_id` (String):** The primary user identifier displayed on the LCD and printed on badges (e.g., `'1'`, `'1002'`). Handled as a string across the codebase.
+- **`uid` (Integer):** Terminal internal slot index assigned sequentially by ZKTeco firmware (e.g., `1`, `2`).
+- **Recycling Behavior:** 
+  - Both `user_id` and `uid` can be deleted and reused on ZKTeco standalone terminals.
+  - When account `'1'` (with `uid = 1`) is deleted and a new user `'1'` is enrolled later, firmware may assign a new `uid` (e.g., `uid = 5`).
+  - **Continuity Signal:** A change in `device_uid` for the same `device_user_id` is a strong technical signal of account recreation/reassignment.
 
 ---
 
-## 4. Verification Audit Model
+## 4. Roster Sync & Lifecycle Metadata Evaluation
 
-To ensure full auditability for compliance and troubleshooting, every mapping record MUST capture:
+### Current Capability
+- `get_users()` is supported by `pyzk` but **only executed during manual inspection/tests**.
+- `app/collector.py` does NOT run periodic or startup roster syncs.
+- `last_seen_at` in `device_users` is updated only when an attendance log event occurs.
 
-- `verified_at TIMESTAMPTZ NOT NULL DEFAULT now()`: Timestamp when verification occurred.
-- `verified_by TEXT NOT NULL DEFAULT 'SYSTEM_ADMIN'`: Username, operator ID, or console role.
-- `verification_method TEXT NOT NULL CHECK (...)`: Allowed values:
-  - `'CONTROLLED_SCAN'`: Verified via observed real-time test punch.
-  - `'TERMINAL_ROSTER_REVIEW'`: Verified by operator review of LCD roster.
-  - `'MANUAL_ADMIN_CONFIRMATION'`: Explicit manual admin assignment.
-  - `'LEGACY_MIGRATION'`: Initial baseline migration.
-- `verification_note TEXT NULL`: Optional non-sensitive justification text.
+### Evaluated Lifecycle Fields for `device_users`
+1. `first_seen_at` (`TIMESTAMPTZ`): **RECOMMENDED NOW** (Tracks initial observation bound).
+2. `last_seen_at` (`TIMESTAMPTZ`): **EXISTING / RECOMMENDED** (Tracks latest attendance activity).
+3. `roster_last_seen_at` (`TIMESTAMPTZ NULL`): **RECOMMENDED FOR FUTURE ROSTER SYNC** (Tracks latest successful roster snapshot presence).
+4. `active` (`BOOLEAN NOT NULL DEFAULT true`): **RECOMMENDED NOW** (Flags whether account is active or missing).
+5. `inactive_at` (`TIMESTAMPTZ NULL`): **RECOMMENDED NOW** (Timestamp when marked missing from roster).
 
 ---
 
-## 5. Constraint & Uniqueness Design
+## 5. Account Incarnation & Decision Gate
 
-### Replacing Legacy Constraint
-The existing migration `002_identity_foundation.sql` created:
-`ALTER TABLE employee_device_mappings ADD CONSTRAINT employee_device_mappings_device_user_pk_key UNIQUE (device_user_pk);`
+### Decision Gate Result: **Decision B — Add Device User Lifecycle Fields to Migration 005**
 
-This strict `UNIQUE` constraint prevents historical rows for the same `device_user_pk`. 
+Rather than creating a complex separate `device_user_incarnations` table (Option C) or relying solely on mapping boundaries without device-side flags (Option A), **Decision B** provides the optimal balance:
 
-### New Partial Unique Index (Active Mapping Uniqueness)
-To allow historical rows while strictly preventing multiple simultaneously active `VERIFIED` owners:
+1. **Enhance Migration `005` (`sql/005_human_device_mapping_schema.sql`):**
+   - Add audit fields to `employee_device_mappings` (`verified_by`, `verification_method`, `verification_note`, `valid_from`, `valid_to`).
+   - Add active partial unique index on `employee_device_mappings` (`WHERE mapping_status = 'VERIFIED' AND valid_to IS NULL`).
+   - Add basic lifecycle metadata columns to `device_users` (`roster_last_seen_at`, `inactive_at`).
+2. **Verification Note Nullability:** `verification_note` is recommended as **NULLABLE / OPTIONAL** to prevent forcing operators to type meaningless filler strings during manual verification.
+3. **Historical Overlap Protection:** Retain PostgreSQL Partial Unique Index for active mappings, enforced alongside application-level interval validation (`[valid_from, valid_to)`). `btree_gist` is NOT required.
 
-```sql
--- Drop legacy strict UNIQUE constraint
-ALTER TABLE employee_device_mappings 
-  DROP CONSTRAINT IF EXISTS employee_device_mappings_device_user_pk_key;
+---
 
--- Create Partial Unique Index for Active VERIFIED mappings
-CREATE UNIQUE INDEX idx_active_verified_device_user 
-  ON employee_device_mappings (device_user_pk) 
-  WHERE mapping_status = 'VERIFIED' AND valid_to IS NULL;
+## 6. Implementation & Ingestion Impact Matrix
+
+| Case | Continuity Signal | Lifecycle Action | Mapping Action | Admin Action Required |
+| ---- | ----------------- | ---------------- | -------------- | -------------------- |
+| **Case 1:** Same `user_id`, same `UID` | High continuity | Update `last_seen_at` | Retain active mapping | None |
+| **Case 2:** Same `user_id`, absent from roster | Account missing | Set `active = false`, set `inactive_at` | Auto-close mapping at `inactive_at` (or set `valid_to`) | Flag for administrative review |
+| **Case 3:** Same `user_id`, different `UID` | Account recreated | Mark previous row inactive, create new incarnation / flag UID change | Close existing mapping `valid_to = now()` | **REQUIRED:** Re-verify new human owner |
+| **Case 4:** Attendance scan for unmapped `user_id` | New terminal user | `ensure_device_user()` inserts slot | Attendance stored with `employee_id = NULL` | **REQUIRED:** Perform controlled test-scan mapping |
+
+---
+
+## 7. Next Execution Phase
+
+The project sequence proceeds to:
+```text
+ADMS-Data-HumanDeviceMappingSchema-002 (WRITE mode — pending explicit user authorization)
 ```
-
-### Overlapping Historical Protection Policy
-For historical time ranges, application transactions MUST enforce:
-- $T_{\text{valid\_from}} < T_{\text{valid\_to}}$
-- Non-overlapping intervals for the same `device_user_pk`.
-- *Note on `btree_gist`:* PostgreSQL exclusion constraints using `tstzrange` require the `btree_gist` extension. To maintain zero-dependency operational simplicity on basic PostgreSQL containers, active uniqueness is enforced via PostgreSQL Partial Unique Index, while interval overlap validation is handled cleanly within database access transactions (`app/db.py`).
-
----
-
-## 6. Attendance Resolution Semantics
-
-### Ingestion & Query Logic
-When resolving `employee_id` for an attendance punch `(device_user_pk, scan_time)`:
-
-```sql
-SELECT employee_id 
-FROM employee_device_mappings 
-WHERE device_user_pk = %s 
-  AND mapping_status = 'VERIFIED'
-  AND valid_from <= %s 
-  AND (valid_to IS NULL OR valid_to > %s);
-```
-
-- **Exactly 1 match:** `employee_id` populated with Human UUID.
-- **0 matches:** `employee_id = NULL` (Unmapped attendance persisted cleanly).
-- **> 1 matches:** Data integrity violation raised (prevented by transaction logic).
-
----
-
-## 7. Migration Plan Specification (`sql/005_human_device_mapping_schema.sql`)
-
-```sql
--- SQL Migration 005: Human ↔ Device Mapping Schema Enhancement
--- PromptID: ADMS-Data-HumanDeviceMappingSchema-002
--- Description: Add temporal ownership (valid_from, valid_to), audit fields (verified_by, verification_method, verification_note), 
---              and update active mapping uniqueness constraints.
-
-BEGIN;
-
--- 1. Add audit and temporal columns to employee_device_mappings
-ALTER TABLE employee_device_mappings
-  ADD COLUMN IF NOT EXISTS verified_by TEXT NOT NULL DEFAULT 'SYSTEM_ADMIN',
-  ADD COLUMN IF NOT EXISTS verification_method TEXT NOT NULL DEFAULT 'MANUAL_ADMIN_CONFIRMATION',
-  ADD COLUMN IF NOT EXISTS verification_note TEXT,
-  ADD COLUMN IF NOT EXISTS valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
-  ADD COLUMN IF NOT EXISTS valid_to TIMESTAMPTZ;
-
--- 2. Add CHECK constraint for verification_method
-ALTER TABLE employee_device_mappings
-  ADD CONSTRAINT chk_verification_method CHECK (
-    verification_method IN (
-      'CONTROLLED_SCAN',
-      'TERMINAL_ROSTER_REVIEW',
-      'MANUAL_ADMIN_CONFIRMATION',
-      'LEGACY_MIGRATION'
-    )
-  );
-
--- 3. Update mapping_status CHECK constraint to include CANDIDATE and REVOKED
-ALTER TABLE employee_device_mappings
-  DROP CONSTRAINT IF EXISTS employee_device_mappings_mapping_status_check;
-
-ALTER TABLE employee_device_mappings
-  ADD CONSTRAINT employee_device_mappings_mapping_status_check CHECK (
-    mapping_status IN ('VERIFIED', 'PROBABLE', 'LEGACY', 'CANDIDATE', 'REVOKED')
-  );
-
--- 4. Replace legacy strict UNIQUE(device_user_pk) constraint with Partial Unique Index
-ALTER TABLE employee_device_mappings 
-  DROP CONSTRAINT IF EXISTS employee_device_mappings_device_user_pk_key;
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_active_verified_device_user 
-  ON employee_device_mappings (device_user_pk) 
-  WHERE mapping_status = 'VERIFIED' AND valid_to IS NULL;
-
--- 5. Performance Index for Temporal Lookup
-CREATE INDEX IF NOT EXISTS idx_employee_device_mappings_temporal 
-  ON employee_device_mappings (device_user_pk, mapping_status, valid_from, valid_to);
-
-COMMIT;
-```
-
----
-
-## 8. Rollback Plan
-
-If rollback of Migration 005 is required:
-
-```sql
-BEGIN;
-
-DROP INDEX IF EXISTS idx_employee_device_mappings_temporal;
-DROP INDEX IF EXISTS idx_active_verified_device_user;
-
-ALTER TABLE employee_device_mappings
-  DROP CONSTRAINT IF EXISTS chk_verification_method,
-  DROP CONSTRAINT IF EXISTS employee_device_mappings_mapping_status_check;
-
-ALTER TABLE employee_device_mappings
-  ADD CONSTRAINT employee_device_mappings_mapping_status_check CHECK (
-    mapping_status IN ('VERIFIED', 'PROBABLE', 'LEGACY')
-  );
-
-ALTER TABLE employee_device_mappings
-  DROP COLUMN IF EXISTS verified_by,
-  DROP COLUMN IF EXISTS verification_method,
-  DROP COLUMN IF EXISTS verification_note,
-  DROP COLUMN IF EXISTS valid_from,
-  DROP COLUMN IF EXISTS valid_to;
-
-ALTER TABLE employee_device_mappings
-  ADD CONSTRAINT employee_device_mappings_device_user_pk_key UNIQUE (device_user_pk);
-
-COMMIT;
-```
-
----
-
-## 9. Next Phase Readiness
-
-Upon user authorization of `ADMS-Data-HumanDeviceMappingSchema-002`:
-1. Generate PostgreSQL custom-format backup `adms_pre_schema005_<timestamp>.dump`.
-2. Apply `sql/005_human_device_mapping_schema.sql`.
-3. Verify test suite (including temporal lookup and active uniqueness assertions).
-4. Update `app/db.py` signature: `resolve_verified_employee_mapping(cur, device_user_pk, scan_time)`.
+Migration script `sql/005_human_device_mapping_schema.sql` will include both mapping table enhancements and device user lifecycle columns.
