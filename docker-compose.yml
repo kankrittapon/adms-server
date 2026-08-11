@@ -35,6 +35,11 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-adms}:${POSTGRES_PASSWORD}@adms-postgres:5432/${POSTGRES_DB:-adms}
+      DB_HOST: adms-postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:-adms}
+      DB_USER: ${POSTGRES_USER:-adms}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       ZK_DEVICE_IP: ${ZK_DEVICE_IP:?set ZK_DEVICE_IP in .env}
       ZK_DEVICE_PORT: ${ZK_DEVICE_PORT:-4370}
       ZK_DEVICE_PASSWORD: ${ZK_DEVICE_PASSWORD:-600}
