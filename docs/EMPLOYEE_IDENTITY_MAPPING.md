@@ -3,9 +3,9 @@
 ## Document Status
 
 * **Status**: Approved Identity Mapping Architecture Specification
-* **Source PromptIDs**: `ADMS-Data-IdentityMapping-001` / `ADMS-Data-LegacyIdentityConstraint-001`
+* **Source PromptIDs**: `ADMS-Data-IdentityMapping-001` / `ADMS-Data-LegacyIdentityConstraint-001` / `ADMS-Data-HumanMasterSchema-001`
 * **Target Environment**: ADMS Server PostgreSQL & SONIC ZEM560_TFT Hardware Roster
-* **Implementation Target Phase**: `ADMS-Data-LegacyIdentityConstraint-002` (Constraint Removal) $\to$ `ADMS-Collector-IdentityTransition-002` (Collector Integration)
+* **Implementation Target Phase**: Additive Schema Migration `sql/004_human_master_schema.sql` $\to$ Excel Import `ADMS-Data-ExcelImport-002`
 
 ---
 
@@ -13,10 +13,11 @@
 
 The **ADMS Identity Mapping Architecture** enforces a strict separation between **Human Master Data** and **Device-Local Identities**:
 
-1. **Human Master Data (`human_employees`)**: Represents physical personnel from HR / Excel workbooks.
+1. **Human Master Data (`human_employees`)**: Represents physical personnel from HR / Excel workbooks. Immutable canonical identity is **`employee_id UUID`**.
 2. **Device-Local Identity (`device_users`)**: Represents local user slots on physical ZKTeco biometric terminals.
 3. **Separation Invariant**: A ZKTeco terminal `user_id` is **NOT** the canonical human employee ID. Excel import must **NEVER** automatically create terminal users or assign fingerprint slots.
-4. **Local Enrollment Only**: Fingerprint enrollment is performed physically on terminal keypads (`ADMS-Device-RemoteEnrollmentCapability-001`). Device users enter ADMS only after physical creation on the terminal.
+4. **Import Provenance Isolation**: Excel import reconciliation uses **`human_employee_sources`** (`source_system`, `source_record_key`), avoiding name-based or row-based identity assumptions.
+5. **Local Enrollment Only**: Fingerprint enrollment is performed physically on terminal keypads (`ADMS-Device-RemoteEnrollmentCapability-001`). Device users enter ADMS only after physical creation on the terminal.
 
 ---
 
@@ -30,7 +31,8 @@ The **ADMS Identity Mapping Architecture** enforces a strict separation between 
 | - employee_id (UUID)  |              | - device_id (Serial)  |
 | - personnel_id        |              | - device_user_id      |
 | - display_name        |              | - device_display_name |
-+-----------------------+              +-----------------------+
+| - rank, branch, cat   |              +-----------------------+
++-----------------------+                          |
             |                                      |
             +------------------+-------------------+
                                |
@@ -65,6 +67,8 @@ CREATE TABLE human_employees (
   personnel_id TEXT UNIQUE, -- Optional official organization ID
   display_name TEXT NOT NULL,
   rank TEXT,
+  branch TEXT,
+  category TEXT,
   position TEXT,
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -72,7 +76,24 @@ CREATE TABLE human_employees (
 );
 ```
 
-### B. `devices` (Physical Terminals)
+### B. `human_employee_sources` (Import Provenance)
+```sql
+CREATE TABLE human_employee_sources (
+  source_link_id BIGSERIAL PRIMARY KEY,
+  employee_id UUID NOT NULL REFERENCES human_employees(employee_id) ON DELETE CASCADE,
+  source_system TEXT NOT NULL DEFAULT 'EXCEL_HUMAN_MASTER',
+  source_file TEXT NOT NULL,
+  source_sheet TEXT NOT NULL,
+  source_row INT NOT NULL,
+  source_record_key TEXT NOT NULL,
+  source_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (source_system, source_record_key)
+);
+```
+
+### C. `devices` (Physical Terminals)
 ```sql
 CREATE TABLE devices (
   device_id BIGSERIAL PRIMARY KEY,
@@ -84,7 +105,7 @@ CREATE TABLE devices (
 );
 ```
 
-### C. `device_users` (Terminal-Local Accounts)
+### D. `device_users` (Terminal-Local Accounts)
 ```sql
 CREATE TABLE device_users (
   device_user_pk BIGSERIAL PRIMARY KEY,
@@ -98,7 +119,7 @@ CREATE TABLE device_users (
 );
 ```
 
-### D. `employee_device_mappings` (Explicit Resolution)
+### E. `employee_device_mappings` (Explicit Resolution)
 ```sql
 CREATE TABLE employee_device_mappings (
   mapping_id BIGSERIAL PRIMARY KEY,
@@ -128,7 +149,3 @@ Attendance Ingested (raw device_user_id stored)
           v
 Attendance Log Persisted cleanly to PostgreSQL
 ```
-
-* **Zero Scan Rejection**: Attendance ingestion NEVER fails or drops records because an employee mapping is missing.
-* **Multi-Device Isolation**: User `'1'` on Device A (`SONIC-01`) and User `'1'` on Device B (`SONIC-02`) map independently to different employees without key collisions.
-* **Legacy Constraint Decoupling**: Dropping `attendance_logs_user_id_fkey` (`ADMS-Data-LegacyIdentityConstraint-002`) allows the Collector to stop auto-generating legacy employee stub rows.

@@ -3,7 +3,7 @@
 ## Document Status
 
 * **Status**: Canonical Architecture Specification
-* **Source PromptIDs**: `ADMS-Data-IdentityMapping-001` / `ADMS-Data-LegacyIdentityConstraint-001`
+* **Source PromptIDs**: `ADMS-Data-IdentityMapping-001` / `ADMS-Data-LegacyIdentityConstraint-001` / `ADMS-Data-HumanMasterSchema-001`
 * **Target Hardware**: SONIC ZEM560_TFT (MIPS Linux 2.6.24, Firmware `Ver 6.60 Aug 26 2011`)
 * **Primary Collector Architecture**: Python Finite State Machine (`app/collector.py`, `pyzk==0.9`, TCP 4370)
 
@@ -29,6 +29,7 @@
                                     |                             |
                                     |  - attendance_logs          |
                                     |  - human_employees          |
+                                    |  - human_employee_sources   |
                                     |  - devices / device_users   |
                                     |  - sync_events              |
                                     +-----------------------------+
@@ -48,8 +49,9 @@
 ## 2. Identity Architecture & Separation Rules
 
 1. **Human Master Data vs Device Identity Separation**:
-   - **`human_employees`**: Represents physical personnel from HR / Excel master files.
-   - **`device_users`**: Represents local accounts on physical ZKTeco hardware.
+   - **`human_employees`**: Represents physical personnel from HR / Excel master files (`employee_id UUID`).
+   - **`human_employee_sources`**: Tracks import provenance (`source_system`, `source_record_key`).
+   - **`device_users`**: Represents local accounts on physical ZKTeco hardware (`device_user_pk`).
    - **Core Invariant**: ZKTeco `user_id` is **NOT** a human employee ID. Excel import must **NEVER** create terminal users or assign fingerprint slots.
 2. **Local Biometric Enrollment**:
    - Fingerprint enrollment is performed locally on the physical terminal keypad (`ADMS-Device-RemoteEnrollmentCapability-001`).
@@ -58,7 +60,7 @@
    - Raw scan events store `(device_id, device_user_id, scan_time)`.
    - Attendance ingestion **NEVER** fails or rejects records due to missing employee mappings. Unmapped scans remain stored with `employee_id = NULL`.
 4. **Constraint Decoupling**:
-   - Legacy constraint `attendance_logs_user_id_fkey` is targeted for removal (`ADMS-Data-LegacyIdentityConstraint-002`), enabling `ensure_device_user()` to replace `ensure_employee_stub()`.
+   - Legacy constraint `attendance_logs_user_id_fkey` removed (`ADMS-Data-LegacyIdentityConstraint-002`), enabling `ensure_device_user()` to replace `ensure_employee_stub()`.
 
 ---
 
