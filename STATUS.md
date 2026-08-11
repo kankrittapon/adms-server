@@ -22,9 +22,10 @@ The project SHALL follow this order:
 1. **`ADMS-Docs-Categorize-002`**: Documentation reorganization (**COMPLETE**).
 2. **`ADMS-Data-ExcelImport-002`**: Human Master Excel Import (**COMPLETE**).
 3. **`ADMS-Checkpoint-PostExcelImport-001`**: Post-import checkpoint (**COMPLETE**).
-4. **`ADMS-Data-HumanDeviceMapping-001`**: Human ↔ Device Mapping Workflow Plan (**COMPLETE — THIS PROMPT** — Designed explicit administrator-reviewed mapping workflow, evidence hierarchy, controlled test-scan protocol, schema gap analysis. Reconfirmed prohibited row-number mapping. Identified critical schema gaps in auditability & temporal identity).
-5. **`ADMS-Data-HumanDeviceMappingSchema-001`**: Human ↔ Device Mapping Schema Enhancement (**NEXT AUTHORIZED PHASE — PLAN ONLY** — Additive DDL design for `verified_by`, `verification_method`, `verification_note`, `valid_from`, `valid_to`).
-6. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
+4. **`ADMS-Data-HumanDeviceMapping-001`**: Human ↔ Device Mapping Workflow Plan (**COMPLETE**).
+5. **`ADMS-Data-HumanDeviceMappingSchema-001`**: Human ↔ Device Mapping Schema Enhancement (**COMPLETE — THIS PROMPT** — Designed DDL migration `sql/005_human_device_mapping_schema.sql` for temporal ownership `[valid_from, valid_to)`, audit fields `verified_by`, `verification_method`, `verification_note`, active uniqueness index, and rollback plan).
+6. **`ADMS-Data-HumanDeviceMappingSchema-002`**: Human ↔ Device Mapping Schema Migration Execution (**NEXT AUTHORIZED PHASE — WRITE MODE** — Execute backup and apply `sql/005_human_device_mapping_schema.sql` pending explicit user authorization).
+7. **Native ADMS Push E2E**: EXPERIMENTAL TRACK ONLY (Isolated verification after identity workflow foundation is complete).
 
 ---
 
@@ -39,6 +40,7 @@ The project SHALL follow this order:
 * **Documentation Categorization**: COMPLETE (`ADMS-Docs-Categorize-002`: 20 canonical docs moved to category directories, relative Markdown links active)
 * **Human Master Excel Data Import**: COMPLETE (`human_employees` 120 records, `human_employee_sources` 120 records, dry-run verified 0 NEW / 120 UNCHANGED)
 * **Human ↔ Device Mapping Plan**: COMPLETE (`ADMS-Data-HumanDeviceMapping-001` — PLAN ONLY)
+* **Human ↔ Device Mapping Schema Plan**: COMPLETE (`ADMS-Data-HumanDeviceMappingSchema-001` — PLAN ONLY)
 * **Human ↔ Device VERIFIED Mappings**: 0 records (UNMAPPED)
 * **Automatic Sequential user_id Mapping**: PROHIBITED (Excel row 1 != ZKTeco user_id 1)
 * **ZKTeco Terminal Writes from Human Import**: NONE (0 terminal socket calls)
@@ -93,28 +95,18 @@ The project SHALL follow this order:
 | `ADMS-Docs-Categorize-002` | 2026-08-11 | Docs Categorization Execution | COMPLETE | Reorganized 20 canonical docs into 6 domain subdirectories using `git mv`, separated AI-Brain docs under `docs/external/ai-brain/`, created top-level `docs/README.md` navigation map using relative Markdown links, updated project cross-references. |
 | `ADMS-Data-ExcelImport-002` | 2026-08-11 | Excel Import Execution | COMPLETE | Implemented import utility `app/import_excel_human_master.py`, verified dry-run (120 records, 4 categories), generated pre-import recovery backup `adms_pre_excel_import_20260811_120503.dump`, added test suite (33/33 passed 100%), verified zero terminal access. |
 | `ADMS-Checkpoint-PostExcelImport-001` | 2026-08-11 | Post-Import Checkpoint | COMPLETE | Verified 120 `human_employees` & 120 `human_employee_sources` records, 0 mappings created, 6/6 attendance logs preserved, generated post-import recovery backup `adms_post_excel_import_20260811_121449.dump`, verified archive via `pg_restore -l`. |
-| `ADMS-Data-HumanDeviceMapping-001` | 2026-08-11 | Human Device Mapping Plan | COMPLETE (Latest Task) | Designed Human ↔ Device mapping architecture, evidence hierarchy, controlled test-scan workflow, schema gap analysis. Identified missing auditability & temporal identity. Selected Route B: `ADMS-Data-HumanDeviceMappingSchema-001`. |
+| `ADMS-Data-HumanDeviceMapping-001` | 2026-08-11 | Human Device Mapping Plan | COMPLETE | Designed Human ↔ Device mapping architecture, evidence hierarchy, controlled test-scan workflow, schema gap analysis. Identified missing auditability & temporal identity. Selected Route B: `ADMS-Data-HumanDeviceMappingSchema-001`. |
+| `ADMS-Data-HumanDeviceMappingSchema-001` | 2026-08-11 | Mapping Schema Plan | COMPLETE (Latest Task) | Designed DDL migration `sql/005_human_device_mapping_schema.sql` adding temporal bounds (`valid_from`, `valid_to`), audit fields (`verified_by`, `verification_method`, `verification_note`), active partial unique index, and rollback plan. |
 
 ---
 
 ## Pending & Upcoming Work
 
-1. **Human ↔ Device Mapping Schema Enhancement** (Next Authorized Phase):
-   - `# PromptID: ADMS-Data-HumanDeviceMappingSchema-001` (PLAN ONLY): Additive DDL design for `verified_by`, `verification_method`, `verification_note`, `valid_from`, `valid_to`.
+1. **Human ↔ Device Mapping Schema Migration Execution**:
+   - `# PromptID: ADMS-Data-HumanDeviceMappingSchema-002` (WRITE mode — Execute fresh `pg_dump` backup, apply `sql/005_human_device_mapping_schema.sql`, verify constraints).
 
 2. **Human ↔ Device Mapping Execution**:
-   - `# PromptID: ADMS-Data-HumanDeviceMapping-002` (WRITE mode, pending explicit user approval after schema enhancement).
+   - `# PromptID: ADMS-Data-HumanDeviceMapping-002` (WRITE mode, pending explicit user authorization after schema enhancement).
 
 3. **Native ADMS Push E2E** (Locked Step 5):
-   - Experimental track only. Deferred until identity workflow foundation is complete.
-covery backup `adms_post_excel_import_20260811_121449.dump`, verified archive via `pg_restore -l`. |
-
----
-
-## Pending & Upcoming Work
-
-1. **Human ↔ Device Mapping Workflow Plan** (Next Authorized Phase):
-   - `# PromptID: ADMS-Data-HumanDeviceMapping-001` (PLAN ONLY): Design explicit administrator-reviewed mapping workflow between `human_employees.employee_id` and `device_users(device_id, device_user_id)`.
-
-2. **Native ADMS Push E2E** (Locked Step 5):
    - Experimental track only. Deferred until identity workflow foundation is complete.
