@@ -22,6 +22,7 @@
 * **Legacy Stub Creation**: DISABLED (0 new stubs created)
 * **Unmapped Attendance**: SUPPORTED (`employee_id = NULL` persisted cleanly)
 * **Human Master Schema Foundation**: COMPLETE (`sql/004_human_master_schema.sql`: `branch`, `category`, `human_employee_sources` applied)
+* **Documentation Categorization Plan**: COMPLETE (`ADMS-Docs-Categorize-001`: 55 files inventoried, 20 canonical moves mapped)
 * **Human Master Excel Data Import**: NOT STARTED (`human_employees` 0 records)
 * **Human Mapping**: NOT STARTED (`employee_device_mappings` 0 records)
 * **Real PostgreSQL Recovery Backup**: VERIFIED (`adms_pre_schema004_20260811_115214.dump`, SHA256 `f268070d...`)
@@ -61,17 +62,21 @@
 | `ADMS-Checkpoint-PostIdentityTransition-001` | 2026-08-11 | Post-Identity Checkpoint | COMPLETE | Formal recovery checkpoint post-identity transition. Verified `human_employees` 0 records, verified 0 new legacy stubs created, generated real PostgreSQL custom-format backup archive (`adms_post_identity_20260811_113944.dump`), and verified archive listing via `pg_restore -l`. |
 | `ADMS-Data-ExcelImport-001` | 2026-08-11 | Excel Import Plan | COMPLETE | Profiled 120 clean Human Master records across 4 categories (`นายทหาร` 20, `พันจ่า` 58, `จ่า` 6, `พลทหาร` 36), verified 0 duplicates, established mapping contract for `human_employees`, rejected 1..120 row mapping assumption. |
 | `ADMS-Data-HumanMasterSchema-001` | 2026-08-11 | Schema Readiness Plan | COMPLETE | Reviewed `human_employees` schema, rejected invalid/unsafe `ON CONFLICT (display_name)` idempotency, designed additive migration `sql/004_human_master_schema.sql` (`branch`, `category`, `human_employee_sources` provenance table), selected Option B decision gate. |
-| `ADMS-Data-HumanMasterSchema-002` | 2026-08-11 | Schema Foundation Execution | COMPLETE (Latest Checkpoint) | Applied SQL migration `sql/004_human_master_schema.sql` adding `branch` & `category` columns to `human_employees`, created `human_employee_sources` provenance linkage table (`UNIQUE (source_system, source_record_key)`), created pre-migration backup (`adms_pre_schema004_20260811_115214.dump`), and verified unit test suite (28/28 passed). |
+| `ADMS-Data-HumanMasterSchema-002` | 2026-08-11 | Schema Foundation Execution | COMPLETE | Applied SQL migration `sql/004_human_master_schema.sql` adding `branch` & `category` columns to `human_employees`, created `human_employee_sources` provenance linkage table (`UNIQUE (source_system, source_record_key)`), created pre-migration backup (`adms_pre_schema004_20260811_115214.dump`), and verified unit test suite (28/28 passed). |
+| `ADMS-Docs-Categorize-001` | 2026-08-11 | Docs Categorization Plan | COMPLETE (Latest Checkpoint) | Inventoried 55 documentation files, classified 20 canonical root docs into 6 domain categories (`architecture/`, `device/`, `collector/`, `data/`, `database/`, `operations/`), mapped flat reports retention, designed `docs/README.md` navigation map. |
 
 ---
 
 ## Pending & Upcoming Work
 
-1. **Human Master Excel SQL Import Execution** (Pending):
+1. **Documentation Reorganization Execution** (Pending):
+   - `#NotInfra PromptID: ADMS-Docs-Categorize-002` (WRITE Mode): Move 20 canonical root docs using `git mv`, create `docs/README.md`, update cross-references in `README.md` and `STATUS.md`.
+
+2. **Human Master Excel SQL Import Execution** (Pending):
    - `# PromptID: ADMS-Data-ExcelImport-002` (WRITE Mode): Import 120 clean Human Master records into `human_employees` and `human_employee_sources`.
 
-2. **RTC Synchronization Policy** (Pending):
+3. **RTC Synchronization Policy** (Pending):
    - Define controlled automatic clock adjustment policy for terminal RTC drift (-25.39s observed).
 
-3. **Large-History Physical-Device Benchmark** (Pending):
+4. **Large-History Physical-Device Benchmark** (Pending):
    - Physical terminal currently contains 6 logs (100k synthetic benchmark passed in 0.0040s filtering). Benchmark physical 100k transfer when large history accumulates.
