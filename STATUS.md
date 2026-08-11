@@ -9,6 +9,7 @@
 * **Backfill System**: Hybrid Reconciliation (`BACKFILLING` -> `LIVE`)
 * **Healthcheck System**: Atomic Ephemeral State File (`/tmp/collector_health.json`) + Non-Invasive CLI (`app/healthcheck.py`)
 * **Identity Architecture**: Human Master (`human_employees`) & Device Identity (`device_users`) Strict Separation
+* **SQL Identity Foundation**: Additive Schema Migration `sql/002_identity_foundation.sql` Applied
 
 ---
 
@@ -34,20 +35,18 @@
 | `ADMS-Collector-Healthcheck-002` | 2026-08-11 | Healthcheck Execution | COMPLETE | Implemented atomic health status updates (`app/collector.py`), non-invasive CLI health evaluation module (`app/healthcheck.py`), Docker Compose healthcheck block (`docker-compose.yml`), test suite (22/22 passed), live verification against physical terminal (Exit Code 0 verified during LIVE state). |
 | `ADMS-Data-IdentityMapping-001` | 2026-08-11 | Identity Mapping Plan | COMPLETE | Detailed design for strict separation of Human Master Data (`employees`) and Device-Local Identity (`device_users`), multi-device mapping schema (`devices`, `device_users`, `employee_device_mappings`), rejection of Excel row-number mapping assumption, and unmapped attendance ingestion policy. |
 | `ADMS-Data-IdentitySchema-001` | 2026-08-11 | Identity Schema Plan | COMPLETE | Detailed DDL migration design (`sql/002_identity_foundation.sql`), additive zero-data-loss architecture (`devices`, `device_users`, `human_employees`, `employee_device_mappings`), seed queries for physical terminal (`3392113170057`), and 5-stage migration path. |
-| `ADMS-Checkpoint-PreIdentitySchema-001` | 2026-08-11 | Pre-Schema Checkpoint | COMPLETE (Latest Checkpoint) | Established clean, verified repository checkpoint baseline prior to executing the first additive database schema migration (`sql/002_identity_foundation.sql`). |
+| `ADMS-Checkpoint-PreIdentitySchema-001` | 2026-08-11 | Pre-Schema Checkpoint | COMPLETE | Established clean, verified repository checkpoint baseline prior to executing the first additive database schema migration (`sql/002_identity_foundation.sql`). |
+| `ADMS-Data-IdentitySchema-002` | 2026-08-11 | Identity Schema Execution | COMPLETE (Latest Checkpoint) | Applied additive SQL identity schema migration (`sql/002_identity_foundation.sql`), registered physical terminal `3392113170057`, created `device_users` foundation, verified 100% attendance log preservation (6/6 records), and verified collector & healthcheck compatibility. |
 
 ---
 
 ## Pending & Upcoming Work
 
-1. **SQL Identity Schema Migration Execution** (Pending):
-   - `# PromptID: ADMS-Data-IdentitySchema-002` (WRITE Mode): Execute additive DDL script `sql/002_identity_foundation.sql` to create `devices`, `device_users`, `human_employees`, `employee_device_mappings`, and additive FK columns on `attendance_logs`.
-
-2. **Human Master Excel SQL Import** (Pending):
+1. **Human Master Excel SQL Import** (Pending):
    - `# PromptID: ADMS-Data-ExcelImport-001` (Plan ONLY): Design dry-run normalization and import script for populating `human_employees` from Excel (`120` records).
 
-3. **RTC Synchronization Policy** (Pending):
+2. **RTC Synchronization Policy** (Pending):
    - Define controlled automatic clock adjustment policy for terminal RTC drift (-25.39s observed).
 
-4. **Large-History Physical-Device Benchmark** (Pending):
+3. **Large-History Physical-Device Benchmark** (Pending):
    - Physical terminal currently contains 6 logs (100k synthetic benchmark passed in 0.0040s filtering). Benchmark physical 100k transfer when large history accumulates.

@@ -30,7 +30,8 @@ This index records all historical and active audit, infrastructure, architecture
 | `ADMS-Collector-Healthcheck-002` | 2026-08-11 | Healthcheck Execution | WRITE — LIMITED APPLICATION AUTHORIZATION | COMPLETE | Implemented atomic health status updates (`app/collector.py`), non-invasive CLI health evaluation module (`app/healthcheck.py`), Docker Compose healthcheck block (`docker-compose.yml`), test suite (22/22 passed), live verification against physical terminal (Exit Code 0 verified during LIVE state). |
 | `ADMS-Data-IdentityMapping-001` | 2026-08-11 | Identity Mapping Plan | READ-ONLY PLAN / DOC ONLY | COMPLETE | Detailed design for strict separation of Human Master Data (`employees`) and Device-Local Identity (`device_users`), multi-device mapping schema (`devices`, `device_users`, `employee_device_mappings`), rejection of Excel row-number mapping assumption, and unmapped attendance ingestion policy. |
 | `ADMS-Data-IdentitySchema-001` | 2026-08-11 | Identity Schema Plan | READ-ONLY PLAN / DOC ONLY | COMPLETE | Detailed DDL migration design (`sql/002_identity_foundation.sql`), additive zero-data-loss architecture (`devices`, `device_users`, `human_employees`, `employee_device_mappings`), seed queries for physical terminal (`3392113170057`), and 5-stage migration path. |
-| `ADMS-Checkpoint-PreIdentitySchema-001` | 2026-08-11 | Pre-Schema Checkpoint | DOC ONLY | COMPLETE (Latest ADMS Checkpoint) | Established clean, verified repository checkpoint baseline prior to executing the first additive database schema migration (`sql/002_identity_foundation.sql`). |
+| `ADMS-Checkpoint-PreIdentitySchema-001` | 2026-08-11 | Pre-Schema Checkpoint | DOC ONLY | COMPLETE | Established clean, verified repository checkpoint baseline prior to executing the first additive database schema migration (`sql/002_identity_foundation.sql`). |
+| `ADMS-Data-IdentitySchema-002` | 2026-08-11 | Identity Schema Execution | DEPLOY VERIFIED GIT REVISION + LIMITED ADDITIVE DATABASE MIGRATION | COMPLETE (Latest ADMS Data Architecture Execution Checkpoint) | Applied additive SQL identity schema migration (`sql/002_identity_foundation.sql`), registered physical terminal `3392113170057`, created `device_users` foundation, verified 100% attendance log preservation (6/6 records), and verified collector & healthcheck compatibility. |
 
 *Latest relevant checkpoint for network-hardening work: `AIBRAIN-Infra-HardenNetwork-002`*  
 *Latest relevant checkpoint for architecture mapping: `AIBRAIN-Architecture-MapCurrentState-001`*  
@@ -49,4 +50,5 @@ This index records all historical and active audit, infrastructure, architecture
 *Latest relevant checkpoint for ADMS collector healthcheck execution: `ADMS-Collector-Healthcheck-002`*  
 *Latest relevant checkpoint for ADMS employee identity mapping plan: `ADMS-Data-IdentityMapping-001`*  
 *Latest relevant checkpoint for ADMS identity schema migration plan: `ADMS-Data-IdentitySchema-001`*  
-*Latest relevant checkpoint for ADMS pre-identity-schema baseline: `ADMS-Checkpoint-PreIdentitySchema-001`*
+*Latest relevant checkpoint for ADMS pre-identity-schema baseline: `ADMS-Checkpoint-PreIdentitySchema-001`*  
+*Latest relevant checkpoint for ADMS identity schema migration execution: `ADMS-Data-IdentitySchema-002`*
