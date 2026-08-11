@@ -14,6 +14,21 @@
 
 ---
 
+## Post Identity Transition Checkpoint
+
+* **Collector Identity Transition**: COMPLETE (`ADMS-Collector-IdentityTransition-002`)
+* **Device Identity Model**: OPERATIONAL (`devices` PK 1, `device_users` 2 accounts)
+* **Human Master Auto-Creation**: DISABLED (Collector NEVER auto-creates Human rows)
+* **Legacy Stub Creation**: DISABLED (0 new stubs created)
+* **Unmapped Attendance**: SUPPORTED (`employee_id = NULL` persisted cleanly)
+* **Human Master Excel Import**: NOT STARTED (`human_employees` 0 records)
+* **Human Mapping**: NOT STARTED (`employee_device_mappings` 0 records)
+* **Real PostgreSQL Recovery Backup**: VERIFIED (`adms_post_identity_20260811_113944.dump`, SHA256 `77b9d987...`)
+* **Backup Format**: `pg_dump` Custom Format (PGDMP_V1)
+* **Backup Archive Readability**: VERIFIED via `pg_restore -l`
+
+---
+
 ## Completed Tasks & Reports
 
 | PromptID | Date | Type | Status | Summary / Key Deliverables |
@@ -41,7 +56,8 @@
 | `ADMS-Collector-IdentityTransition-001` | 2026-08-11 | Identity Transition Plan + Git Hygiene | COMPLETE | Detailed design for Collector identity transition (`ensure_device_user`), identified legacy FK constraint blocker (`attendance_logs_user_id_fkey`), updated `.gitignore`, and untracked local AI rules/prompt history from Git index while preserving local files. |
 | `ADMS-Data-LegacyIdentityConstraint-001` | 2026-08-11 | Constraint Transition Plan | COMPLETE | Detailed design for dropping `attendance_logs_user_id_fkey` constraint while preserving `user_id` string column and `UNIQUE (user_id, device_ip, scan_time)` constraint, unblocking Collector transition away from `ensure_employee_stub()`. |
 | `ADMS-Data-LegacyIdentityConstraint-002` | 2026-08-11 | Constraint Transition Execution | COMPLETE | Applied SQL migration `sql/003_legacy_identity_constraint.sql` dropping `attendance_logs_user_id_fkey` constraint, preserved raw `user_id` column & `UNIQUE (user_id, device_ip, scan_time)` dedupe constraint, verified 100% attendance preservation (6/6 records), and unblocked Collector transition (`ADMS-Collector-IdentityTransition-002`). |
-| `ADMS-Collector-IdentityTransition-002` | 2026-08-11 | Identity Transition Execution | COMPLETE (Latest Checkpoint) | Implemented Collector database layer identity transition (`app/db.py`), removed `ensure_employee_stub()`, added `get_or_create_device()`, `ensure_device_user()`, and `resolve_verified_employee_mapping()`, added test suite (28/28 passed 100%), verified live against physical terminal `192.168.1.201` (0 new stubs created, unmapped scans stored cleanly with `employee_id = NULL`). |
+| `ADMS-Collector-IdentityTransition-002` | 2026-08-11 | Identity Transition Execution | COMPLETE | Implemented Collector database layer identity transition (`app/db.py`), removed `ensure_employee_stub()`, added `get_or_create_device()`, `ensure_device_user()`, and `resolve_verified_employee_mapping()`, added test suite (28/28 passed 100%), verified live against physical terminal `192.168.1.201` (0 new stubs created, unmapped scans stored cleanly with `employee_id = NULL`). |
+| `ADMS-Checkpoint-PostIdentityTransition-001` | 2026-08-11 | Post-Identity Checkpoint | COMPLETE (Latest Checkpoint) | Formal recovery checkpoint post-identity transition. Verified `human_employees` 0 records, verified 0 new legacy stubs created, generated real PostgreSQL custom-format backup archive (`adms_post_identity_20260811_113944.dump`), and verified archive listing via `pg_restore -l`. |
 
 ---
 
