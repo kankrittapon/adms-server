@@ -1,9 +1,7 @@
-# Device Enrollment Workflow — Canonical Documentation
-
-**Status:** IMPLEMENTED (INFRASTRUCTURE — PILOT READY)  
-**Classification:** IMPLEMENTED — Production enrollment infrastructure (infrastructure only; no production enrollment executed)  
-**Related PromptIDs:** `ADMS-Data-DeviceEnrollmentWorkflow-001` (PLAN), `ADMS-Data-DeviceEnrollmentWorkflow-002` (IMPLEMENTATION)  
-**Related Reports:** `docs/reports/ADMS-Data-DeviceEnrollmentWorkflow-001.md`, `docs/reports/ADMS-Data-DeviceEnrollmentWorkflow-002.md`  
+# Device Enrollment Workflow — Canonical Documentation**Status:** IMPLEMENTED (INFRASTRUCTURE) + PILOT EXECUTED (READY_FOR_MAPPING)  
+**Classification:** IMPLEMENTED — Production enrollment infrastructure + one-human controlled pilot executed (READY_FOR_MAPPING reached; VERIFIED mapping NOT created)  
+**Related PromptIDs:** `ADMS-Data-DeviceEnrollmentWorkflow-001` (PLAN), `ADMS-Data-DeviceEnrollmentWorkflow-002` (IMPLEMENTATION), `ADMS-Data-DeviceEnrollmentPilot-001` (ONE-HUMAN PILOT)  
+**Related Reports:** `docs/reports/ADMS-Data-DeviceEnrollmentWorkflow-001.md`, `docs/reports/ADMS-Data-DeviceEnrollmentWorkflow-002.md`, `docs/reports/ADMS-Data-DeviceEnrollmentPilot-001.md`    
 
 ---
 
@@ -225,17 +223,17 @@ ADMS ensures the exact reserved `device_user_id` is used, eliminating transcript
 | Pilot device_user_id | 1001 |
 | Bulk before pilot checkpoint | NO |
 
-### Pilot Steps
-1. Owner selects one Human from Human Master.
-2. ADMS allocates `device_user_id = 1001`.
-3. ADMS creates terminal account 1001 via `set_user()`.
-4. Human enrolls fingerprint at terminal.
-5. Administrator verifies enrollment via roster check.
-6. Human performs controlled scan.
-7. Administrator confirms.
-8. ADMS creates VERIFIED mapping.
-9. Checkpoint: verify end-to-end flow.
-10. Only after pilot PASS → bulk enrollment begins.
+### Pilot Steps (EXECUTED 2026-08-12)
+1. Owner selected one Human from Human Master: **กฤตพล หมาดเส็น** (พ.จ.ต., employee_id `039c4486-b30f-4ce1-b780-783cd268858d`).
+2. ADMS allocated `device_user_id = 1001` via the production allocator (RESERVED).
+3. ADMS created terminal account 1001 via `set_user()` (NORMAL privilege; pyzk returned False but roster verified creation — owner-approved reconciliation via canonical module path).
+4. Human enrolled fingerprint(s) at the physical terminal under User ID 1001.
+5. Verified roster evidence + captured device_uid (TERMINAL_ACCOUNT_CREATED → FINGERPRINT_ENROLLED).
+6. Human performed ONE controlled scan (attendance id 12, 2026-08-12 08:47:37+00, within the 5-min window).
+7. Owner confirmed identity explicitly (CONTROLLED_SCAN_CONFIRMED).
+8. Enrollment reached **READY_FOR_MAPPING**. VERIFIED mapping NOT created (requires HumanDeviceMapping-003).
+9. Checkpoint: post-pilot backup verified, runtime HEALTHY, 168/168 tests PASS.
+10. Bulk enrollment remains BLOCKED until VERIFIED mapping + post-mapping checkpoint complete.
 
 ---
 
@@ -336,9 +334,9 @@ ADMS-Data-DeviceUserLifecycle-002 (WRITE — roster lifecycle detection)
         ↓
 ADMS-Data-DeviceEnrollmentWorkflow-002 (COMPLETE — enrollment infrastructure IMPLEMENTED)
         ↓
-ADMS-Data-DeviceEnrollmentPilot-001 (NEXT — ONE-HUMAN PILOT)
+ADMS-Data-DeviceEnrollmentPilot-001 (COMPLETE — ONE-HUMAN PILOT, READY_FOR_MAPPING reached)
         ↓
-ADMS-Data-HumanDeviceMapping-003 (WRITE — create first VERIFIED mapping)
+ADMS-Data-HumanDeviceMapping-003 (NEXT — create first VERIFIED mapping)
         ↓
 ADMS-Data-HumanDeviceMapping-004 (READ-ONLY checkpoint)
         ↓
@@ -362,8 +360,9 @@ The temporal resolver resolves per `device_user_pk`, so attendance from differen
 
 | Field | Value |
 |-------|-------|
-| Classification | IMPLEMENTED (INFRASTRUCTURE — PILOT READY) |
-| Evidence | FILE EVIDENCE + VERIFIED LIVE (terminal state, DB baseline) |
+| Classification | IMPLEMENTED (INFRASTRUCTURE) + PILOT EXECUTED (READY_FOR_MAPPING) |
+| Evidence | FILE EVIDENCE + VERIFIED LIVE (terminal account 1001, controlled scan, DB state) |
 | Implementation | COMPLETE (app/enrollment.py + sql/006 deployed to ai-brain; 168/168 tests) |
-| Next PromptID | `ADMS-Data-DeviceEnrollmentPilot-001` |
+| Pilot | COMPLETE — account 1001 (`cpo3 Krittapon M`, NORMAL), fingerprint enrolled, controlled scan 08:47:37+00, READY_FOR_MAPPING |
+| Next PromptID | `ADMS-Data-HumanDeviceMapping-003` |
 | Owner approval required | YES (for any WRITE phase) |

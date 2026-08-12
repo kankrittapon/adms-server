@@ -18,6 +18,10 @@ GEMINI.md
 .kob/
 promptID/
 
+# Local IDE MCP server configuration (tooling, not project code)
+.vscode/mcp.json
+.agents/mcp_config.json
+
 # Database Snapshots & Local Backups
 *.dump
 *.backup
