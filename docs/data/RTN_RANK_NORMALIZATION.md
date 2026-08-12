@@ -115,12 +115,16 @@ Category totals: นายทหาร 20 · พันจ่า 58 · จ่า 
 **Findings:** the current Human Master contains **36 พลทหาร records** (rank
 `พลฯ`, category `พลทหาร`).
 
-**Action taken:** those rows are **NOT deleted** in this Prompt. The exclusion
-is enforced at the future import/normalization boundary (`--exclude-plothan`
-flag on `app/import_excel_human_master.py`; `filter_excluded_records()`).
-A safe archival/exclusion migration (e.g. `active=false` archival or a
-separate non-production table) is proposed for a future authorized Prompt —
-the 36 rows remain in the Human Master until then.
+**Action taken:** those rows are **NOT deleted**. The exclusion is enforced
+at the import/normalization boundary (`--exclude-plothan` flag on
+`app/import_excel_human_master.py`; `filter_excluded_records()`) and via a
+reversible **production-scope flag** (migration `sql/007_plothan_production_scope.sql`,
+`ADMS-Data-PlothanProductionExclusion-001`): the **36 พลทหาร records are now
+flagged `production_scope=false`** while their UUIDs, provenance, and history
+are fully preserved. `reserve_next_device_user_id()` additionally requires
+`production_scope = true`, excluding พลทหาร from future production
+enrollment. Rollback: `UPDATE human_employees SET production_scope = true
+WHERE category = 'พลทหาร';`.
 
 ## 5. Implementation
 
@@ -128,6 +132,10 @@ the 36 rows remain in the Human Master until then.
   `is_plothan()`, `classify_rank()`, `production_scope_allowed()`.
 - `app/import_excel_human_master.py` — `filter_excluded_records()` +
   `--exclude-plothan` (backward compatible; default OFF).
+- `sql/007_plothan_production_scope.sql` — additive `production_scope` flag
+  + deterministic flip of the 36 พลทหาร records (reversible, idempotent).
+- `app/enrollment.py` — `reserve_next_device_user_id()` requires
+  `production_scope = true` (future-enrollment enforcement).
 - `tests/test_rtn_rank_normalization.py` — catalog integrity, normalization,
   acting forms, exclusion predicate (24 tests).
 
