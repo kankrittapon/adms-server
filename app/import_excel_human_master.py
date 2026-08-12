@@ -36,6 +36,16 @@ except ImportError:
         DB_USER = os.getenv("DB_USER", "postgres")
         DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
+# Deterministic พลทหาร (enlisted conscript) exclusion policy
+# PromptID: ADMS-Data-HumanDeviceMapping-003 — owner policy: พลทหาร are NOT
+# part of the production Human Master / enrollment population.
+try:
+    from app.rtn_ranks import is_plothan
+except ImportError:  # pragma: no cover - standalone execution fallback
+    def is_plothan(rank_text: str) -> bool:
+        cleaned = " ".join(str(rank_text or "").split())
+        return cleaned in ("พลฯ", "พลทหาร", "พลทหารกองประจำการ", "พล.ทหาร")
+
 DEFAULT_WORKBOOK_PATH = os.path.join("excel", "files", "รายละเอียด กพ.พัน.สอล.ฯ ก.พ.69.xlsx")
 DEFAULT_SHEET_NAME = "ยอด ม.ค.69"
 SOURCE_SYSTEM = "EXCEL_HUMAN_MASTER"
@@ -73,6 +83,29 @@ def extract_rank_and_name(raw_name_cell: str) -> tuple[str, str]:
         return parts[0], parts[1]
         
     return "", clean_raw
+
+def filter_excluded_records(records: list[dict], exclude_plothan: bool = False) -> tuple[list[dict], list[dict]]:
+    """
+    Splits records into (included, excluded) lists.
+
+    Owner policy (ADMS-Data-HumanDeviceMapping-003 section D): พลทหาร records
+    are EXCLUDED from the production Human Master / enrollment scope. The
+    exclusion is deterministic (app.rtn_ranks.is_plothan) and applied at the
+    import/normalization boundary. Existing database rows are NEVER deleted;
+    excluded records are only skipped from INSERT/UPDATE reconciliation.
+
+    Returns (included, excluded).
+    """
+    if not exclude_plothan:
+        return list(records), []
+    included, excluded = [], []
+    for r in records:
+        if is_plothan(r.get("rank", "")) or r.get("category") == "พลทหาร":
+            excluded.append(r)
+        else:
+            included.append(r)
+    return included, excluded
+
 
 def compute_source_hash(rank: str, display_name: str, branch: str, category: str, notes: str) -> str:
     """Computes deterministic SHA256 content hash for a normalized personnel row."""
@@ -167,8 +200,9 @@ def get_db_connection():
         password = os.getenv("DB_PASSWORD", "postgres")
         return psycopg2.connect(host=host, port=port, dbname=dbname, user=user, password=password)
 
-def reconcile_import(records: list[dict], apply: bool = False) -> dict:
+def reconcile_import(records: list[dict], apply: bool = False, exclude_plothan: bool = False) -> dict:
     """Performs dry-run or atomic database import reconciliation."""
+    included, excluded = filter_excluded_records(records, exclude_plothan)
     summary = {
         "total_parsed": len(records),
         "categories": {},
@@ -178,10 +212,11 @@ def reconcile_import(records: list[dict], apply: bool = False) -> dict:
         "unchanged": 0,
         "changed": 0,
         "ambiguous": 0,
+        "excluded_plothan": len(excluded),
         "applied": apply
     }
     
-    for r in records:
+    for r in included:
         cat = r["category"]
         summary["categories"][cat] = summary["categories"].get(cat, 0) + 1
         if r["display_name"]:
@@ -201,7 +236,7 @@ def reconcile_import(records: list[dict], apply: bool = False) -> dict:
                 cur.execute("SELECT source_record_key, source_hash FROM human_employee_sources WHERE source_system = %s", (SOURCE_SYSTEM,))
                 existing = {row["source_record_key"]: row["source_hash"] for row in cur.fetchall()}
                 
-                for r in records:
+                for r in included:
                     key = r["source_record_key"]
                     h = r["source_hash"]
                     if key not in existing:
@@ -224,7 +259,7 @@ def reconcile_import(records: list[dict], apply: bool = False) -> dict:
     try:
         with conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                for r in records:
+                for r in included:
                     key = r["source_record_key"]
                     h = r["source_hash"]
                     
@@ -286,6 +321,7 @@ def main():
     parser.add_argument("--sheet", default=DEFAULT_SHEET_NAME, help="Source sheet name")
     parser.add_argument("--apply", action="store_true", help="Explicitly commit database changes (default is dry-run)")
     parser.add_argument("--dry-run", action="store_true", help="Perform dry-run validation only (default)")
+    parser.add_argument("--exclude-plothan", action="store_true", help="Exclude พลทหาร (enlisted) records from production scope (owner policy, ADMS-Data-HumanDeviceMapping-003)")
     
     args = parser.parse_args()
     
@@ -301,7 +337,7 @@ def main():
     print(f"Parsed {len(records)} personnel records cleanly.\n")
     
     # Category summary
-    summary = reconcile_import(records, apply=is_apply)
+    summary = reconcile_import(records, apply=is_apply, exclude_plothan=args.exclude_plothan)
     print("--- CATEGORY BREAKDOWN ---")
     for cat, count in summary["categories"].items():
         print(f"  - {cat:12s}: {count:3d} personnel")
@@ -314,7 +350,13 @@ def main():
     print(f"  UNCHANGED records  : {summary['unchanged']}")
     print(f"  CHANGED records    : {summary['changed']}")
     print(f"  AMBIGUOUS records  : {summary['ambiguous']}")
+    print(f"  EXCLUDED (พลทหาร)  : {summary['excluded_plothan']}")
     print(f"  Applied to DB      : {summary['applied']}\n")
+
+    if args.exclude_plothan and summary['excluded_plothan'] > 0:
+        print(f"[POLICY] {summary['excluded_plothan']} พลทหาร record(s) excluded from production "
+              f"scope. Existing rows are NOT deleted; they remain in the Human Master "
+              f"pending the separately-authorized archival/exclusion migration.\n")
     
     # Print sample records
     print("--- SAMPLE RECORD PREVIEW (First 2 per category) ---")
