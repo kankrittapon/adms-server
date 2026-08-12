@@ -347,6 +347,31 @@ class TestReservation(unittest.TestCase):
             )
 
     @patch("app.enrollment.get_db_connection")
+    def test_reservation_requires_production_scope_sql(self, mock_conn_fn):
+        """Human validation must require production_scope = true (พลทหาร exclusion)."""
+        cur = FakeCursor(
+            fetchone_queue=[[1], [1], [None], None, (1, "1001", "RESERVED", NOW)],
+            fetchall_result=[],
+        )
+        make_db(mock_conn_fn, cur)
+        reserve_next_device_user_id(
+            self.cfg, employee_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", device_id=1, operator="op"
+        )
+        human_sql = [s for s in cur.sql() if "FROM human_employees" in s][0]
+        self.assertIn("production_scope = true", human_sql)
+        self.assertIn("active = true", human_sql)
+
+    @patch("app.enrollment.get_db_connection")
+    def test_human_excluded_from_production_scope_rejected(self, mock_conn_fn):
+        """A Human excluded from production scope (production_scope=false) is rejected."""
+        cur = FakeCursor(fetchone_queue=[None])  # no eligible Human row
+        make_db(mock_conn_fn, cur)
+        with self.assertRaisesRegex(EnrollmentError, "production scope"):
+            reserve_next_device_user_id(
+                self.cfg, employee_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", device_id=1, operator="op"
+            )
+
+    @patch("app.enrollment.get_db_connection")
     def test_operator_required(self, mock_conn_fn):
         cur = FakeCursor()
         make_db(mock_conn_fn, cur)

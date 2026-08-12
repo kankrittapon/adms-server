@@ -286,12 +286,14 @@ def reserve_next_device_user_id(
     with get_db_connection(cfg) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT 1 FROM human_employees WHERE employee_id = %s AND active = true;",
+                "SELECT 1 FROM human_employees "
+                "WHERE employee_id = %s AND active = true AND production_scope = true;",
                 (employee_id,),
             )
             if not cur.fetchone():
                 raise EnrollmentError(
-                    "Human %s does not exist or is inactive" % employee_id
+                    "Human %s does not exist or is inactive (or is excluded "
+                    "from production scope)" % employee_id
                 )
 
             cur.execute(
