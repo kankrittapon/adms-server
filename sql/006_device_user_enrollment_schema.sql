@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS device_user_enrollments (
 
   -- A terminal ID can never be reserved by two enrollments on the same device,
   -- and is never immediately recyclable (CANCELLED/RETIRED rows keep the ID).
-  CONSTRAINT uq_enrollment_terminal_id UNIQUE (device_id, reserved_device_user_id)
+  CONSTRAINT uq_enrollment_terminal_id UNIQUE (device_id, reserved_device_user_id),
 
   -- Evidence constraints: confirmation states require their timestamps.
   CONSTRAINT chk_scan_confirmed_has_time CHECK (
