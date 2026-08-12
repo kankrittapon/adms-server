@@ -60,6 +60,42 @@ services:
       mqtt:
         condition: service_started
 
+  # EXPERIMENTAL Native Push listener (ADMS-NativePush-Experimental-001).
+  # Isolated from the polling Collector; LAN-only bind on the ai-brain LAN IP.
+  # Push is transport only — identity authority remains the VERIFIED mapping.
+  native-push:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: adms_native_push
+    restart: unless-stopped
+    command: ["python", "-m", "app.native_push"]
+    ports:
+      - "${PUSH_BIND_IP:-192.168.1.248}:${PUSH_PORT:-8000}:8000"
+    environment:
+      DB_HOST: adms-postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:-adms}
+      DB_USER: ${POSTGRES_USER:-adms}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+      MQTT_TOPIC: ${MQTT_TOPIC:-attendance/events}
+      ON_TIME_START: ${ON_TIME_START:-05:00:00}
+      ON_TIME_END: ${ON_TIME_END:-10:00:00}
+      ZK_DEVICE_IP: ${ZK_DEVICE_IP:?set ZK_DEVICE_IP in .env}
+      PUSH_HOST: 0.0.0.0
+      PUSH_PORT: "8000"
+      PUSH_SOURCE_ALLOWLIST: ${PUSH_SOURCE_ALLOWLIST:-true}
+      PUSH_ALLOWED_SOURCES: ${PUSH_ALLOWED_SOURCES:-192.168.1.201}
+      PUSH_SERIAL_VALIDATION: ${PUSH_SERIAL_VALIDATION:-true}
+      PUSH_EXPECTED_SERIAL: ${PUSH_EXPECTED_SERIAL:-3392113170057}
+      PUSH_SERVER_NAME: ${PUSH_SERVER_NAME:-ADMS-EXPERIMENTAL}
+      PUSH_HEALTH_FILE: /tmp/native_push_health.json
+    depends_on:
+      adms-postgres:
+        condition: service_healthy
+
 volumes:
   adms_postgres_data:
   adms_mqtt_data:
