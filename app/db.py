@@ -25,8 +25,28 @@ def get_db_connection(cfg: Config):
         conn.close()
 
 def parse_time(val: str) -> time:
-    hour, minute = map(int, val.split(":"))
-    return time(hour=hour, minute=minute)
+    """
+    Parses a time-of-day string into a datetime.time instance.
+
+    Supported formats (production contract):
+      - HH:MM        (e.g. "08:30")
+      - HH:MM:SS     (e.g. "05:00:00" — production docker-compose default)
+
+    Invalid / empty / None values raise ValueError, which callers such as
+    determine_status() catch and translate to "UNKNOWN" (fail-safe).
+    Timezone handling is intentionally NOT performed here — time-of-day only;
+    timezone normalization is owned by normalize_device_timestamp().
+    """
+    if not val:
+        raise ValueError("empty time value")
+    parts = val.split(":")
+    if len(parts) == 2:
+        hour, minute = map(int, parts)
+        return time(hour=hour, minute=minute)
+    if len(parts) == 3:
+        hour, minute, second = map(int, parts)
+        return time(hour=hour, minute=minute, second=second)
+    raise ValueError(f"unsupported time format: {val!r}")
 
 def determine_status(scan_time: datetime, on_time_start: str, on_time_end: str) -> str:
     try:
