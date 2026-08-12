@@ -172,8 +172,11 @@ The project SHALL follow this order:
    - Next personnel enrollment can follow the proven pilot workflow (reservation → account → physical fingerprint → controlled scan → VERIFIED mapping); the allocator, state machine, rank normalization and `production_scope` enforcement are all in place. Bulk enrollment remains NOT AUTHORIZED.
    - Multi-fingerprint behavior for the SAME Human is now PROVEN (`ADMS-Data-MultiFingerprintValidation-001`): multiple physical fingers on ONE terminal account resolve through ONE VERIFIED mapping. Multi-person enrollment still NOT validated.
 
-4. **Parse_Time Bug Fix (NON-BLOCKING, recommended)**:
-   - `# PromptID: ADMS-Collector-AttendanceParseTime-001` (WRITE mode — Fix `parse_time()` to handle `HH:MM:SS` format, restore correct `status` field computation).
+4. **Parse_Time Bug Fix (NON-BLOCKING, recommended — AUDITED, PLAN READY)**:
+   - `# PromptID: ADMS-Collector-AttendanceParseTime-001` (WRITE mode — awaiting owner authorization).
+   - Audit (`ADMS-Data-MultiFingerprintValidation-001` session): root cause **confirmed live** — `app/db.py parse_time()` does `hour, minute = map(int, val.split(":"))` (assumes HH:MM) but production compose defaults `ON_TIME_START=05:00:00` / `ON_TIME_END=10:00:00` (HH:MM:SS) → `ValueError` → `determine_status()` returns `UNKNOWN`. All 10 attendance rows (incl. 2021 historical) have `status='UNKNOWN'`.
+   - Impact: `status` field only — scan_time/employee_id/identity resolution unaffected (NON-BLOCKING).
+   - Plan: `parse_time()` accepts HH:MM and HH:MM:SS (seconds default 0); tests for both formats + boundaries; optional status backfill (owner decision — legacy rows may stay UNKNOWN); deploy listener only with pre/post backups.
 
 5. **Production Enrollment Operator Workflow (PROPOSED — owner-gated)**:
    - Design a repeatable operator workflow/UI for enrolling real personnel when physically available (batch-safe, per-person gates, evidence capture), following the proven pilot pattern. Plan/audit only unless separately authorized.
