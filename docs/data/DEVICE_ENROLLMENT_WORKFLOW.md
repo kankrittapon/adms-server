@@ -1,9 +1,9 @@
 # Device Enrollment Workflow — Canonical Documentation
 
-**Status:** IMPLEMENTED (PLAN)  
-**Classification:** PLANNED — Production enrollment workflow design  
-**Related PromptID:** `ADMS-Data-DeviceEnrollmentWorkflow-001`  
-**Related Report:** `docs/reports/ADMS-Data-DeviceEnrollmentWorkflow-001.md`  
+**Status:** IMPLEMENTED (INFRASTRUCTURE — PILOT READY)  
+**Classification:** IMPLEMENTED — Production enrollment infrastructure (infrastructure only; no production enrollment executed)  
+**Related PromptIDs:** `ADMS-Data-DeviceEnrollmentWorkflow-001` (PLAN), `ADMS-Data-DeviceEnrollmentWorkflow-002` (IMPLEMENTATION)  
+**Related Reports:** `docs/reports/ADMS-Data-DeviceEnrollmentWorkflow-001.md`, `docs/reports/ADMS-Data-DeviceEnrollmentWorkflow-002.md`  
 
 ---
 
@@ -45,22 +45,22 @@ This document defines the production workflow for enrolling Human Master records
 ## 3. Account State Machine
 
 ```text
-AVAILABLE → RESERVED → CREATED_ON_TERMINAL → FINGERPRINT_ENROLLED → CONTROLLED_SCAN_CONFIRMED → VERIFIED_MAPPING
+RESERVED → TERMINAL_ACCOUNT_CREATED → FINGERPRINT_ENROLLMENT_PENDING → FINGERPRINT_ENROLLED → CONTROLLED_SCAN_PENDING → CONTROLLED_SCAN_CONFIRMED → READY_FOR_MAPPING
 
-Terminal states: CANCELLED, RETIRED, RE_ENROLL_REQUIRED
+Terminal states: CANCELLED, RETIRED
 ```
 
 | State | Description |
 |-------|-------------|
-| AVAILABLE | ID is in the pool, not yet reserved |
-| RESERVED | ID allocated to a Human, not yet on terminal |
-| CREATED_ON_TERMINAL | Terminal account exists, no fingerprint yet |
-| FINGERPRINT_ENROLLED | Biometric template stored on terminal |
-| CONTROLLED_SCAN_CONFIRMED | Scan observed, administrator confirms |
-| VERIFIED_MAPPING | Temporal mapping active, attendance resolves |
-| CANCELLED | Reservation released before terminal creation |
-| RETIRED | Mapping closed, account decommissioned |
-| RE_ENROLL_REQUIRED | Fingerprint quality issue, same account |
+| FINGERPRINT_ENROLLMENT_PENDING | Physical fingerprint enrollment window opened |
+| RESERVED | ID allocated to a Human for a device; not yet on terminal |
+| TERMINAL_ACCOUNT_CREATED | Terminal account exists via set_user(); no fingerprint yet |
+| FINGERPRINT_ENROLLED | Operator confirms physical enrollment occurred |
+| CONTROLLED_SCAN_PENDING | Narrow controlled-scan window opened (default 5 min) |
+| CONTROLLED_SCAN_CONFIRMED | Matching scan observed inside window |
+| READY_FOR_MAPPING | Operator confirms Human identity; ready for VERIFIED mapping (NOT a mapping) |
+| CANCELLED | Reservation cancelled before completion |
+| RETIRED | Enrollment closed without a mapping |
 
 ---
 
@@ -280,13 +280,13 @@ ADMS does NOT store fingerprint templates. The controlled scan proves possession
 
 ---
 
-## 14. Proposed Future Schema
+## 14. Enrollment Reservation Storage (IMPLEMENTED)
 
 ```sql
--- PROPOSED — NOT YET CREATED
--- Requires ADMS-Data-DeviceEnrollmentWorkflow-002 (WRITE)
+-- IMPLEMENTED — sql/006_device_user_enrollment_schema.sql
+-- (Historical proposal; superseded by the implemented migration)
 
-CREATE TABLE enrollment_reservations (
+CREATE TABLE device_user_enrollments (  -- actual implemented name
   reservation_id BIGSERIAL PRIMARY KEY,
   employee_id UUID NOT NULL REFERENCES human_employees(employee_id),
   device_id INTEGER NOT NULL REFERENCES devices(device_id),
@@ -308,16 +308,35 @@ CREATE TABLE enrollment_reservations (
 
 ---
 
+## 14b. Implemented API (app/enrollment.py)
+
+The production enrollment infrastructure is implemented in `app/enrollment.py`
+(deployed inside the listener image on ai-brain):
+
+| Function | Purpose |
+|----------|---------|
+| `reserve_next_device_user_id(cfg, employee_id, device_id, operator, roster_user_ids)` | Reserves the next safe production ID (>= 1001) for a Human on a device; validates Human/device, prevents duplicates, advisory-lock serialized |
+| `create_reserved_terminal_account(cfg, enrollment_id, display_name, device)` | Creates the terminal account via `set_user()` (NORMAL privilege, exact reserved ID); fails safe on existing account / unreachable device |
+| `verify_terminal_account_created(cfg, enrollment_id, roster_users)` | Verifies roster evidence: reserved ID present, NORMAL privilege, captures `device_uid` |
+| `start_fingerprint_enrollment` / `confirm_fingerprint_enrolled` | Physical enrollment window + operator confirmation evidence |
+| `start_controlled_scan_window` / `confirm_controlled_scan` | Bounded controlled-scan window; matching scan recorded as supporting evidence |
+| `mark_ready_for_mapping` / `cancel_enrollment` / `retire_enrollment` | Explicit operator identity confirmation; safe cancel/retire paths |
+| `validate_terminal_display_name` | ASCII-safe display name policy (no UUID / placeholder / Thai until rendering verified) |
+
+State transitions are enforced in code AND by DB constraints
+(`sql/006_device_user_enrollment_schema.sql`). No function creates a VERIFIED
+mapping — `employee_device_mappings` remains the sole authoritative source.
+
 ## 15. Implementation Sequence
 
 ```text
-ADMS-Data-DeviceEnrollmentWorkflow-001 (CURRENT — PLAN ONLY)
+ADMS-Data-DeviceEnrollmentWorkflow-001 (COMPLETE — PLAN ONLY)
         ↓
 ADMS-Data-DeviceUserLifecycle-002 (WRITE — roster lifecycle detection)
         ↓
-ADMS-Data-DeviceEnrollmentWorkflow-002 (WRITE — enrollment infrastructure)
+ADMS-Data-DeviceEnrollmentWorkflow-002 (COMPLETE — enrollment infrastructure IMPLEMENTED)
         ↓
-FIRST PRODUCTION ENROLLMENT — ONE HUMAN ONLY (pilot)
+ADMS-Data-DeviceEnrollmentPilot-001 (NEXT — ONE-HUMAN PILOT)
         ↓
 ADMS-Data-HumanDeviceMapping-003 (WRITE — create first VERIFIED mapping)
         ↓
@@ -343,8 +362,8 @@ The temporal resolver resolves per `device_user_pk`, so attendance from differen
 
 | Field | Value |
 |-------|-------|
-| Classification | PLANNED |
+| Classification | IMPLEMENTED (INFRASTRUCTURE — PILOT READY) |
 | Evidence | FILE EVIDENCE + VERIFIED LIVE (terminal state, DB baseline) |
-| Implementation | NOT STARTED |
-| Next PromptID | `ADMS-Data-DeviceUserLifecycle-002` |
+| Implementation | COMPLETE (app/enrollment.py + sql/006 deployed to ai-brain; 168/168 tests) |
+| Next PromptID | `ADMS-Data-DeviceEnrollmentPilot-001` |
 | Owner approval required | YES (for any WRITE phase) |
