@@ -185,3 +185,7 @@ The project SHALL follow this order:
    - Next personnel enrollment can follow the proven pilot workflow; allocator, state machine, rank normalization, production_scope enforcement and multi-fingerprint behavior are all in place. Multi-person physical validation DEFERRED until personnel available.
 
 7. ~~Native ADMS Push E2E~~ — **EXPERIMENT COMPLETE / DEFERRED** (`ADMS-NativePush-Experimental-001`: server listener proven; ZEM560 does not transmit push even after config+reboot → NOT TRANSMITTING on this firmware; listener removed, experimental source+tests retained; polling remains production primary).
+
+8. **Frontend F1 — API Gap Closure (in progress — PLAN/AUDIT done, implementation awaiting stack approval)**:
+   - `docs/F1_API_GAP_AUDIT.md` produced: confirmed API gap (no UI-facing HTTP layer), exact endpoint→backend-function mapping for all read endpoints (health/humans/devices/device-users/attendance/enrollments/mappings/ranks/backups) and gated write endpoints (enrollment state machine + VERIFIED mapping via canonical `app/enrollment.py` / `app/mapping.py` functions — no bypass). Realtime via MQTT→SSE. Auth model pending owner approval.
+   - Awaiting owner stack approval (FastAPI + React/TS/Vite per `docs/FRONTEND_ARCHITECTURE_PLAN.md`) before implementation.
