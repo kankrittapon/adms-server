@@ -16,7 +16,8 @@ from app.db import (
     save_attendance_batch,
     get_device_watermark,
     determine_status,
-    log_sync_event
+    log_sync_event,
+    reconcile_roster_lifecycle
 )
 from app.mqtt_client import MQTTService
 from app.timestamp_utils import normalize_device_timestamp
@@ -71,6 +72,14 @@ class CollectorStateEngine:
         self.malformed_records_count: int = 0
         self.last_backfill_error: Optional[str] = None
 
+        # Roster Lifecycle Telemetry
+        self.last_roster_poll_at: Optional[datetime] = None
+        self.last_roster_poll_success: Optional[datetime] = None
+        self.last_roster_user_count: Optional[int] = None
+        self.last_roster_marked_inactive: Optional[int] = None
+        self.last_roster_reappeared: Optional[int] = None
+        self.last_roster_uid_anomalies: Optional[int] = None
+
         # Services
         self.mqtt_service = MQTTService(cfg)
 
@@ -96,7 +105,13 @@ class CollectorStateEngine:
                 "last_backfill_started_at": self.last_backfill_started_at.isoformat() if self.last_backfill_started_at else None,
                 "last_backfill_completed_at": self.last_backfill_completed_at.isoformat() if self.last_backfill_completed_at else None,
                 "last_event_received": self.last_event_received.isoformat() if self.last_event_received else None,
-                "last_event_persisted": self.last_event_persisted.isoformat() if self.last_event_persisted else None
+                "last_event_persisted": self.last_event_persisted.isoformat() if self.last_event_persisted else None,
+                "last_roster_poll_at": self.last_roster_poll_at.isoformat() if self.last_roster_poll_at else None,
+                "last_roster_poll_success": self.last_roster_poll_success.isoformat() if self.last_roster_poll_success else None,
+                "last_roster_user_count": self.last_roster_user_count,
+                "last_roster_marked_inactive": self.last_roster_marked_inactive,
+                "last_roster_reappeared": self.last_roster_reappeared,
+                "last_roster_uid_anomalies": self.last_roster_uid_anomalies
             }
 
             dir_path = os.path.dirname(HEALTH_FILE_PATH)
@@ -167,6 +182,73 @@ class CollectorStateEngine:
             self.last_connect_failure = datetime.now()
             log.error("Failed to connect to ZKTeco terminal: %s", e)
             self.transition_to(State.BACKOFF)
+
+    def perform_roster_lifecycle_check(self):
+        """
+        Performs a read-only terminal roster snapshot and reconciles device_users
+        lifecycle metadata. Only called after a successful, complete roster read.
+
+        If the roster read fails (timeout, disconnect, exception), NO lifecycle
+        updates are made — UNKNOWN state is NOT the same as an empty roster.
+        """
+        if not self.connection:
+            log.warning("Skipping roster lifecycle check — no active ZK connection.")
+            return
+
+        self.last_roster_poll_at = datetime.now()
+        self.write_health_status()
+
+        try:
+            raw_users = self.connection.get_users()
+            if raw_users is None:
+                log.warning("Roster read returned None — treating as FAILED. No lifecycle updates.")
+                return
+
+            observed_users = []
+            for u in raw_users:
+                observed_users.append({
+                    "user_id": str(u.user_id),
+                    "uid": getattr(u, "uid", None),
+                    "name": getattr(u, "name", None),
+                })
+
+            self.last_roster_poll_success = datetime.now()
+            self.last_roster_user_count = len(observed_users)
+            log.info("Roster snapshot: %d users observed on terminal.", len(observed_users))
+
+            # Resolve device_id from DB
+            from app.db import get_db_connection
+            with get_db_connection(self.cfg) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT device_id FROM devices WHERE device_ip = %s;",
+                        (self.cfg.device_ip,),
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        log.error("Device not found in DB for ip=%s. Cannot reconcile roster.", self.cfg.device_ip)
+                        return
+                    device_id = row[0]
+
+            # Atomic per-device reconciliation
+            summary = reconcile_roster_lifecycle(self.cfg, device_id, observed_users)
+            self.last_roster_marked_inactive = summary["marked_inactive"]
+            self.last_roster_reappeared = summary["reappeared"]
+            self.last_roster_uid_anomalies = summary["uid_anomalies"]
+
+            audit_msg = (
+                f"Roster lifecycle: {summary['observed']} observed, "
+                f"{summary['new_users']} new, {summary['marked_inactive']} marked_inactive, "
+                f"{summary['reappeared']} reappeared, {summary['uid_anomalies']} uid_anomalies."
+            )
+            log.info(audit_msg)
+            log_sync_event(self.cfg, "ROSTER_LIFECYCLE", audit_msg)
+
+        except Exception as e:
+            log.warning("Roster lifecycle check FAILED: %s. No lifecycle updates applied.", e)
+            # Do NOT update inactive_at on failure — UNKNOWN != empty roster
+        finally:
+            self.write_health_status()
 
     def handle_backfilling(self):
         """
@@ -243,6 +325,9 @@ class CollectorStateEngine:
             if self.connection and hasattr(self.connection, 'enable_device'):
                 self.connection.enable_device()
 
+            # Step 7: Roster Lifecycle Check (after successful backfill, before LIVE)
+            self.perform_roster_lifecycle_check()
+
             self.live_start_time = time.time()
             self.transition_to(State.LIVE)
 
@@ -260,6 +345,7 @@ class CollectorStateEngine:
 
         log.info("Entering LIVE attendance stream monitoring...")
         self.write_health_status()
+        last_roster_poll_monotonic: float = time.time()
         try:
             for attendance in self.connection.live_capture():
                 if self.stop_event.is_set():
@@ -278,6 +364,12 @@ class CollectorStateEngine:
 
                 if attendance is None:
                     # 10s socket timeout yield (idle ping)
+                    # Periodic roster lifecycle check
+                    if (time.time() - last_roster_poll_monotonic) >= self.cfg.roster_poll_interval_seconds:
+                        log.info("Periodic roster lifecycle check triggered (interval=%ss).",
+                                 self.cfg.roster_poll_interval_seconds)
+                        self.perform_roster_lifecycle_check()
+                        last_roster_poll_monotonic = time.time()
                     continue
 
                 self.last_event_received = datetime.now()

@@ -29,6 +29,7 @@ class Config:
     backfill_overlap_minutes: float
     backfill_batch_size: int
     periodic_reconciliation_minutes: int
+    roster_poll_interval_seconds: int
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -55,4 +56,5 @@ class Config:
             backfill_overlap_minutes=float(os.getenv("BACKFILL_OVERLAP_MINUTES", "5.0")),
             backfill_batch_size=int(os.getenv("BACKFILL_BATCH_SIZE", "500")),
             periodic_reconciliation_minutes=int(os.getenv("PERIODIC_RECONCILIATION_MINUTES", "0")),
+            roster_poll_interval_seconds=int(os.getenv("ROSTER_POLL_INTERVAL_SECONDS", "300")),
         )

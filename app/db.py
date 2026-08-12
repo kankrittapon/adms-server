@@ -274,6 +274,166 @@ def save_attendance_batch(cfg: Config, attendance_records: List[Any], stop_event
 
     return inserted_total, skipped_total
 
+def reconcile_roster_lifecycle(
+    cfg: Config,
+    device_id: int,
+    observed_users: List[Dict[str, Any]],
+) -> Dict[str, int]:
+    """
+    Reconciles a successful terminal roster snapshot against the device_users table.
+
+    Atomic per-device snapshot:
+      - For observed users: ensure/resolve device_user, update roster_last_seen_at,
+        clear inactive_at (REAPPEARED if was inactive).
+      - For known users absent from roster: set inactive_at = now() if currently NULL.
+      - Detect device_uid changes and log warnings (no auto-mapping).
+
+    IMPORTANT: This function MUST only be called after a successful, complete roster
+    read. If the roster read failed (timeout, disconnect, exception), do NOT call this
+    function — a failed read is UNKNOWN state, not an empty roster.
+
+    Args:
+        cfg: Config instance for DB connection.
+        device_id: The device_id to scope reconciliation.
+        observed_users: List of dicts with keys: user_id (str), uid (int|None),
+                        name (str|None). From a successful get_users() call.
+
+    Returns:
+        Dict with counts: observed, new_users, marked_inactive, reappeared, uid_anomalies.
+    """
+    summary = {
+        "observed": 0,
+        "new_users": 0,
+        "marked_inactive": 0,
+        "reappeared": 0,
+        "uid_anomalies": 0,
+    }
+
+    observed_map: Dict[str, Dict[str, Any]] = {}
+    for u in observed_users:
+        uid_str = str(u.get("user_id", ""))
+        if uid_str:
+            observed_map[uid_str] = u
+
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            # 1. Load all known device_users for this device
+            cur.execute(
+                "SELECT device_user_pk, device_user_id, device_uid, active, "
+                "roster_last_seen_at, inactive_at "
+                "FROM device_users WHERE device_id = %s;",
+                (device_id,),
+            )
+            known_rows = cur.fetchall()
+            known_map: Dict[str, Dict[str, Any]] = {}
+            for row in known_rows:
+                known_map[str(row[1])] = {
+                    "device_user_pk": row[0],
+                    "device_user_id": row[1],
+                    "device_uid": row[2],
+                    "active": row[3],
+                    "roster_last_seen_at": row[4],
+                    "inactive_at": row[5],
+                }
+
+            # 2. Process observed users (present in roster)
+            for uid_str, obs in observed_map.items():
+                summary["observed"] += 1
+                obs_uid = obs.get("uid")
+                obs_name = obs.get("name")
+
+                if uid_str in known_map:
+                    known = known_map[uid_str]
+                    dpk = known["device_user_pk"]
+
+                    # UID change detection
+                    if (
+                        known["device_uid"] is not None
+                        and obs_uid is not None
+                        and known["device_uid"] != obs_uid
+                    ):
+                        summary["uid_anomalies"] += 1
+                        log.warning(
+                            "UID ANOMALY: device_id=%s device_user_id=%s "
+                            "db_uid=%s terminal_uid=%s — continuity not assumed. "
+                            "No Human mapping auto-created.",
+                            device_id, uid_str, known["device_uid"], obs_uid,
+                        )
+
+                    # Reappearance detection
+                    was_inactive = known["inactive_at"] is not None
+                    if was_inactive:
+                        summary["reappeared"] += 1
+                        log.info(
+                            "REAPPEARED: device_user_id=%s (pk=%s) reappeared in roster. "
+                            "Clearing inactive_at.",
+                            uid_str, dpk,
+                        )
+
+                    # Update roster_last_seen_at, clear inactive_at, update device_uid
+                    cur.execute(
+                        "UPDATE device_users "
+                        "SET roster_last_seen_at = now(), "
+                        "    inactive_at = NULL, "
+                        "    device_uid = COALESCE(%s, device_uid), "
+                        "    active = true, "
+                        "    updated_at = now() "
+                        "WHERE device_user_pk = %s;",
+                        (obs_uid, dpk),
+                    )
+                else:
+                    # New user observed in roster — ensure device_user
+                    dpk = ensure_device_user(cur, device_id, uid_str, obs_name)
+                    summary["new_users"] += 1
+                    # Set roster_last_seen_at for the new user
+                    cur.execute(
+                        "UPDATE device_users "
+                        "SET roster_last_seen_at = now(), "
+                        "    device_uid = %s, "
+                        "    updated_at = now() "
+                        "WHERE device_user_pk = %s;",
+                        (obs_uid, dpk),
+                    )
+                    log.info(
+                        "NEW USER: device_user_id=%s (pk=%s) observed in roster for device_id=%s.",
+                        uid_str, dpk, device_id,
+                    )
+
+            # 3. Process missing users (known but absent from successful roster)
+            for uid_str, known in known_map.items():
+                if uid_str in observed_map:
+                    continue  # User was observed, skip
+
+                dpk = known["device_user_pk"]
+                if known["inactive_at"] is None:
+                    # Mark as inactive — first known disappearance boundary
+                    cur.execute(
+                        "UPDATE device_users "
+                        "SET inactive_at = now(), "
+                        "    active = false, "
+                        "    updated_at = now() "
+                        "WHERE device_user_pk = %s AND inactive_at IS NULL;",
+                        (dpk,),
+                    )
+                    summary["marked_inactive"] += 1
+                    log.info(
+                        "INACTIVE: device_user_id=%s (pk=%s) absent from successful roster. "
+                        "Marked inactive_at = now().",
+                        uid_str, dpk,
+                    )
+                # If already inactive, preserve original inactive_at (do nothing)
+
+        conn.commit()
+
+    log.info(
+        "Roster lifecycle reconciliation complete for device_id=%s: "
+        "%d observed, %d new, %d marked_inactive, %d reappeared, %d uid_anomalies.",
+        device_id, summary["observed"], summary["new_users"],
+        summary["marked_inactive"], summary["reappeared"], summary["uid_anomalies"],
+    )
+    return summary
+
+
 def log_sync_event(cfg: Config, event_type: str, message: str):
     """
     Logs an operational audit entry to sync_events table.
