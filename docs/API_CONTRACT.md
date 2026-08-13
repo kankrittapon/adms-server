@@ -1,10 +1,35 @@
-# ADMS API Contract (F1)
+# ADMS API Contract (F1 / F5)
 
-**PromptID:** `ADMS-Frontend-F1-API-001`
+**PromptID:** `ADMS-Frontend-F1-API-001` / `ADMS-Frontend-F5-Auth-001`
 **Status:** IMPLEMENTED / LIVE (backend foundation remains 100% COMPLETE)
 **Base URL:** `http://192.168.1.248:8081` (LAN-only)
 **OpenAPI:** `http://192.168.1.248:8081/openapi.json` · Swagger UI `/docs`
-**Write gate:** `API_WRITE_ENABLED=false` by default (TEMPORARY WRITE SAFETY, NOT final auth — F5)
+**Auth (F5):** DB-backed operator accounts, opaque Bearer tokens, roles VIEWER/OPERATOR/ADMIN — strict fail-closed (no/invalid token → 401, insufficient role → 403)
+**Write gate:** `API_WRITE_ENABLED=false` by default (defense-in-depth on top of role auth)
+
+---
+
+## 1. Authentication (F5)
+
+- `POST /api/v1/auth/login` `{username, password}` → `{token, role, expires_at, operator_id, username, display_name}` (token TTL default 12h, `API_TOKEN_TTL_HOURS`)
+- `POST /api/v1/auth/logout` — revokes the presented token (reversible via `revoked_at`)
+- `GET /api/v1/auth/me` — current operator context
+- Send `Authorization: Bearer <token>` on all other endpoints.
+- Tokens stored only as SHA-256 hashes; passwords PBKDF2-SHA256 (never plaintext).
+- First ADMIN bootstrapped via `python -m app.api.bootstrap_admin --username X --password Y` (one-time).
+
+### Role matrix
+
+| Endpoint group | Minimum role |
+|---|---|
+| All read endpoints (health, dashboard, humans, devices, device-users, attendance, mappings, enrollments, ranks) | VIEWER |
+| Enrollment workflow writes (reserve, fingerprint, scan, ready, cancel) | OPERATOR |
+| VERIFIED mapping creation | ADMIN |
+| Operator management (`/api/v1/operators*`) | ADMIN |
+| `/healthz`, `/api/v1/auth/login` | public |
+| `/api/v1/auth/logout`, `/api/v1/auth/me` | any authenticated |
+
+All writes additionally require `API_WRITE_ENABLED=true` (403 `WRITE_DISABLED` otherwise).
 
 ---
 
@@ -114,32 +139,33 @@ Attendance `scan_time` is canonical UTC; timezone normalization is owned by
 - **No SQL injection** — all repository queries are parameterized.
 - **CORS** — explicit env allowlist (`API_CORS_ORIGINS`), never `*` with credentials.
 
-## 7. Write safety (TEMPORARY)
+## 7. Write safety (defense-in-depth)
 
 `API_WRITE_ENABLED=false` (default) → all POST routes return
-`403 WRITE_DISABLED`. This is an interim guard, not final authentication.
-F5 owns full auth/production hardening. Enabling writes is a deliberate
+`403 WRITE_DISABLED` even for ADMIN tokens. F5 auth (roles) is now live; the
+write flag remains an additional master switch. Enabling writes is a deliberate
 operator decision (`API_WRITE_ENABLED=true` in compose env).
 
 ## 8. Environment variables (API container)
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `API_WRITE_ENABLED` | `false` | interim write gate |
+| `API_WRITE_ENABLED` | `false` | write gate (defense-in-depth) |
+| `API_TOKEN_TTL_HOURS` | `12` | auth token expiry |
 | `API_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | allowlist |
 | `API_HOST` | `0.0.0.0` | uvicorn bind inside container |
 | `API_PORT` | `8081` | listener port |
 | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | (from .env) | PostgreSQL |
 | `MQTT_HOST` / `MQTT_PORT` | `mqtt` / `1883` | MQTT reachability check |
 
-## 9. F2 / F5 responsibilities (handoff)
+## 9. F2 responsibilities (handoff)
 
 - **F2:** consume only this API. Do NOT connect PostgreSQL directly, talk to
   ZKTeco, or consume Native Push protocol.
 - **F2 env vars:** `VITE_API_BASE_URL=http://192.168.1.248:8081`,
-  `VITE_API_WRITE_ENABLED` (mirror), dev CORS origin `http://localhost:5173`.
-- **F5:** replace the interim write guard with real authentication
-  (roles viewer/operator/admin), production CORS origin, rate limiting.
+  dev CORS origin `http://localhost:5173`; sign-in via `/api/v1/auth/login`.
+- **F5 (DONE):** DB-backed operator accounts + role auth live; production CORS
+  origin + rate limiting still future hardening.
 - **Realtime:** MQTT `attendance/events` → SSE bridge (read-only fan-out)
   or short polling on `GET /api/v1/attendance?from=last_id` (deferred).
 
