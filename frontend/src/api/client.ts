@@ -1,6 +1,7 @@
 import type {
   Attendance,
   AttendanceDetail,
+  CreateMappingResult,
   DashboardSummary,
   Device,
   DeviceUser,
@@ -12,8 +13,10 @@ import type {
   Healthz,
   Human,
   Mapping,
+  MappingEligibility,
   Page,
   RankReference,
+  UnattributedAttendance,
 } from "./types";
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://192.168.1.248:8081";
@@ -182,6 +185,36 @@ export const api = {
     return request<Page<Mapping>>(`/api/v1/mappings${qs ? "?" + qs : ""}`, signal);
   },
   mapping: (id: number, signal?: AbortSignal) => request<Mapping>(`/api/v1/mappings/${id}`, signal),
+  mappingEligibility: (signal?: AbortSignal) =>
+    request<MappingEligibility>("/api/v1/mappings/eligibility", signal),
+  createMapping: (payload: {
+    employee_id: string;
+    device_user_pk: number;
+    enrollment_id: number;
+    controlled_attendance_id: number;
+    verified_by: string;
+    verification_note: string;
+  }) =>
+    request<CreateMappingResult>("/api/v1/mappings", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  // F4 reconciliation diagnostics (ADMIN)
+  unattributedAttendance: (
+    params: { limit?: number; offset?: number },
+    signal?: AbortSignal
+  ) => {
+    const q = new URLSearchParams();
+    if (params.limit !== undefined) q.set("limit", String(params.limit));
+    if (params.offset !== undefined) q.set("offset", String(params.offset));
+    const qs = q.toString();
+    return request<Page<UnattributedAttendance>>(
+      `/api/v1/attendance/unattributed${qs ? "?" + qs : ""}`,
+      signal
+    );
+  },
 
   // Enrollments
   enrollments: (params: { limit?: number; status?: string }, signal?: AbortSignal) => {

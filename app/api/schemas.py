@@ -154,6 +154,28 @@ class AttendanceRawPayload(BaseModel):
     raw_payload: Dict[str, Any]
 
 
+class AttributionReasoning(BaseModel):
+    classification: str
+    detail: str
+    valid_from: Optional[datetime] = None
+    valid_to: Optional[datetime] = None
+    resolver_employee_id: Optional[str] = None
+
+
+class UnattributedAttendance(BaseModel):
+    id: int
+    user_id: str
+    device_ip: str
+    scan_time: datetime
+    punch_type: Optional[str] = None
+    status: str
+    device_id: Optional[int] = None
+    device_user_pk: Optional[int] = None
+    employee_id: Optional[str] = None
+    created_at: datetime
+    reasoning: AttributionReasoning
+
+
 # --- Mappings -------------------------------------------------------------
 
 
@@ -173,6 +195,28 @@ class Mapping(BaseModel):
     updated_at: datetime
     employee_name: Optional[str] = None
     device_user_id: Optional[str] = None
+
+
+class MappingEligibilityItem(BaseModel):
+    enrollment_id: int
+    employee_id: str
+    device_id: int
+    reserved_device_user_id: str
+    controlled_scan_time: Optional[datetime] = None
+    confirmed_by: Optional[str] = None
+    confirmed_at: Optional[datetime] = None
+    notes: Optional[str] = None
+    employee_name: Optional[str] = None
+    device_name: Optional[str] = None
+    device_user_pk: Optional[int] = None
+    device_user_id: Optional[str] = None
+    device_user_active: Optional[bool] = None
+    controlled_attendance_id: Optional[int] = None
+
+
+class MappingEligibility(BaseModel):
+    items: List[MappingEligibilityItem]
+    count: int
 
 
 # --- Enrollment -----------------------------------------------------------

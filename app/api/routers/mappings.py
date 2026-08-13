@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from app.api import repository
 from app.api.dependencies import get_cfg, pagination, require_role, require_writes
 from app.api.errors import ApiError, not_found
-from app.api.schemas import Mapping, Page
+from app.api.schemas import Mapping, MappingEligibility, Page
 from app.config import Config
 from app.mapping import MappingError, create_verified_mapping
 
@@ -40,6 +40,23 @@ def list_mappings(
         device_user_pk=device_user_pk,
         mapping_status=mapping_status,
     )
+
+
+@router.get(
+    "/api/v1/mappings/eligibility",
+    response_model=MappingEligibility,
+    dependencies=[Depends(require_role("ADMIN"))],
+)
+def mapping_eligibility(cfg: Config = Depends(get_cfg)):
+    """READY_FOR_MAPPING enrollments with controlled-scan evidence.
+
+    F4: feeds the ADMIN mapping-creation form (POST /api/v1/mappings).
+    Read-only; only enrollments whose device user has no overlapping VERIFIED
+    mapping are offered, so a duplicate mapping can never be proposed.
+    Registered before /{mapping_id} so FastAPI does not shadow it.
+    """
+    items = repository.mapping_eligibility(cfg)
+    return {"items": items, "count": len(items)}
 
 
 @router.get("/api/v1/mappings/{mapping_id}", response_model=Mapping)

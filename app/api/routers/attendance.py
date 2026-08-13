@@ -12,9 +12,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.api import repository
-from app.api.dependencies import get_cfg, pagination
+from app.api.dependencies import get_cfg, pagination, require_role
 from app.api.errors import ApiError, not_found
-from app.api.schemas import Attendance, AttendanceDetail, AttendanceRawPayload, Page
+from app.api.schemas import Attendance, AttendanceDetail, AttendanceRawPayload, Page, UnattributedAttendance
 from app.config import Config
 
 router = APIRouter(tags=["attendance"])
@@ -57,6 +57,22 @@ def list_attendance(
         device_user_pk=device_user_pk,
         status=status,
     )
+
+
+@router.get(
+    "/api/v1/attendance/unattributed",
+    response_model=Page[UnattributedAttendance],
+    dependencies=[Depends(require_role("ADMIN"))],
+)
+def unattributed(page: tuple = Depends(pagination), cfg: Config = Depends(get_cfg)):
+    """F4: read-only reconciliation diagnostics.
+
+    Unattributed attendance rows with per-row resolver reasoning (NO_DEVICE_USER /
+    LEGACY_USER / NO_MAPPING / BEFORE_VALID_FROM / INSIDE_INTERVAL / AFTER_VALID_TO).
+    Never writes — attribution stays with the canonical VERIFIED temporal mapping.
+    """
+    limit, offset = page
+    return repository.unattributed_attendance(cfg, limit=limit, offset=offset)
 
 
 @router.get("/api/v1/attendance/{attendance_id}", response_model=AttendanceDetail)

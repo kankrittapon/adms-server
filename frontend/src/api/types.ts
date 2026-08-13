@@ -194,6 +194,61 @@ export interface EnrollmentTransitionResult {
   status: string;
 }
 
+export interface MappingEligibilityItem {
+  enrollment_id: number;
+  employee_id: string;
+  device_id: number;
+  reserved_device_user_id: string;
+  controlled_scan_time?: string | null;
+  confirmed_by?: string | null;
+  confirmed_at?: string | null;
+  notes?: string | null;
+  employee_name?: string | null;
+  device_name?: string | null;
+  device_user_pk?: number | null;
+  device_user_id?: string | null;
+  device_user_active?: boolean | null;
+  controlled_attendance_id?: number | null;
+}
+
+export interface MappingEligibility {
+  items: MappingEligibilityItem[];
+  count: number;
+}
+
+export interface CreateMappingResult {
+  mapping_id: number;
+  employee_id: string;
+  device_user_pk: number;
+  mapping_status: string;
+  verification_method: string;
+  valid_from: string;
+  valid_to?: string | null;
+  verified_at: string;
+}
+
+export interface AttributionReasoning {
+  classification: string;
+  detail: string;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  resolver_employee_id?: string | null;
+}
+
+export interface UnattributedAttendance {
+  id: number;
+  user_id: string;
+  device_ip: string;
+  scan_time: string;
+  punch_type?: string | null;
+  status: string;
+  device_id?: number | null;
+  device_user_pk?: number | null;
+  employee_id?: string | null;
+  created_at: string;
+  reasoning: AttributionReasoning;
+}
+
 export interface RankReference {
   rank_th_abbreviation: string;
   rank_th_full: string;

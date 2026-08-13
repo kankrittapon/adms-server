@@ -165,6 +165,16 @@ class ApiTestBase(unittest.TestCase):
         self.addCleanup(p.stop)
         return client
 
+    def make_role_client(self, role="ADMIN", write_enabled=False):
+        """Authenticated client for an arbitrary role (read endpoints)."""
+        app = create_app(settings=ApiSettings(write_enabled=write_enabled))
+        client = TestClient(app)
+        ctx = OperatorContext(operator_id=1, username="tester", display_name="Tester", role=role)
+        p = patch("app.api.dependencies._load_token_context", return_value=ctx)
+        p.start()
+        self.addCleanup(p.stop)
+        return client
+
 
 class TestHealth(ApiTestBase):
     def test_healthz(self):
@@ -419,6 +429,91 @@ class TestEnrollmentNextActions(ApiTestBase):
     def test_next_actions_invalid_id_422(self):
         resp = self.client.get("/api/v1/enrollments/notanumber/next-actions")
         self.assertEqual(resp.status_code, 422)
+
+
+class TestMappingEligibility(ApiTestBase):
+    """F4: READY_FOR_MAPPING enrollments with evidence for the mapping form."""
+
+    ELIG_ITEM = {
+        "enrollment_id": 1,
+        "employee_id": PILOT_EMPLOYEE_ID,
+        "device_id": 1,
+        "reserved_device_user_id": "1001",
+        "controlled_scan_time": datetime(2026, 8, 12, 8, 47, 37, tzinfo=timezone.utc),
+        "confirmed_by": "owner-krittaphol",
+        "confirmed_at": NOW,
+        "notes": None,
+        "employee_name": "กฤตพล หมาดเส็น",
+        "device_name": "SONIC ZEM560 #1",
+        "device_user_pk": 7,
+        "device_user_id": "1001",
+        "device_user_active": True,
+        "controlled_attendance_id": 12,
+    }
+
+    @patch("app.api.repository.mapping_eligibility", return_value=[ELIG_ITEM])
+    def test_eligibility_returns_items(self, mock_elig):
+        client = self.make_role_client("ADMIN")
+        resp = client.get("/api/v1/mappings/eligibility")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(body["items"][0]["controlled_attendance_id"], 12)
+        self.assertEqual(body["items"][0]["employee_name"], "กฤตพล หมาดเส็น")
+
+    @patch("app.api.repository.mapping_eligibility", return_value=[])
+    def test_eligibility_empty(self, mock_elig):
+        client = self.make_role_client("ADMIN")
+        resp = client.get("/api/v1/mappings/eligibility")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["items"], [])
+
+    def test_eligibility_requires_admin(self):
+        """OPERATOR must be rejected — VERIFIED mapping creation is ADMIN-only."""
+        client = self.make_role_client("OPERATOR")
+        resp = client.get("/api/v1/mappings/eligibility")
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["error"]["code"], "FORBIDDEN")
+
+
+class TestUnattributedAttendance(ApiTestBase):
+    """F4: read-only reconciliation diagnostics with resolver reasoning."""
+
+    UNATT = {
+        "id": 5,
+        "user_id": "1",
+        "device_ip": "192.168.1.201",
+        "scan_time": datetime(2026, 8, 10, 7, 0, 0, tzinfo=timezone.utc),
+        "punch_type": "",
+        "status": "ON_TIME",
+        "device_id": 1,
+        "device_user_pk": 1,
+        "employee_id": None,
+        "created_at": NOW,
+        "reasoning": {
+            "classification": "LEGACY_USER",
+            "detail": "legacy test device user 1 — never attributed",
+            "valid_from": None,
+            "valid_to": None,
+            "resolver_employee_id": None,
+        },
+    }
+
+    @patch("app.api.repository.unattributed_attendance",
+           return_value=page([UNATT], total=7))
+    def test_unattributed_paginated_with_reasoning(self, mock_rep):
+        client = self.make_role_client("ADMIN")
+        resp = client.get("/api/v1/attendance/unattributed?limit=10")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["total"], 7)
+        self.assertEqual(body["items"][0]["reasoning"]["classification"], "LEGACY_USER")
+        self.assertEqual(body["items"][0]["employee_id"], None)
+
+    def test_unattributed_requires_admin(self):
+        client = self.make_role_client("VIEWER")
+        resp = client.get("/api/v1/attendance/unattributed")
+        self.assertEqual(resp.status_code, 403)
 
 
 class TestRanks(ApiTestBase):

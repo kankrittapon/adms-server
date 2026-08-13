@@ -354,6 +354,143 @@ def get_mapping(cfg: Config, mapping_id: int) -> Optional[Dict[str, Any]]:
     )
 
 
+# --- F4: mapping eligibility / attendance reconciliation diagnostics ------
+
+
+def mapping_eligibility(cfg: Config) -> List[Dict[str, Any]]:
+    """READY_FOR_MAPPING enrollments with the full controlled-scan evidence.
+
+    F4 (ADMS-Frontend-F4-AdminMappingReconciliation-001): the UI drives the
+    ADMIN-gated POST /api/v1/mappings from this list. Only enrollments whose
+    device user does NOT already carry an overlapping VERIFIED mapping are
+    offered (mirrors create_verified_mapping step 5) — no duplicate mapping
+    can be proposed.
+    """
+    return _fetch_all(
+        cfg,
+        """
+        SELECT e.enrollment_id, e.employee_id, e.device_id, e.reserved_device_user_id,
+               e.controlled_scan_time, e.confirmed_by, e.confirmed_at, e.notes,
+               h.display_name AS employee_name, d.device_name,
+               du.device_user_pk, du.device_user_id, du.active AS device_user_active,
+               (SELECT a.id FROM attendance_logs a
+                 WHERE a.device_user_pk = du.device_user_pk
+                   AND a.scan_time = e.controlled_scan_time
+                 LIMIT 1) AS controlled_attendance_id
+        FROM device_user_enrollments e
+        LEFT JOIN human_employees h ON h.employee_id = e.employee_id
+        LEFT JOIN devices d ON d.device_id = e.device_id
+        LEFT JOIN device_users du
+          ON du.device_id = e.device_id AND du.device_user_id = e.reserved_device_user_id
+        WHERE e.status = 'READY_FOR_MAPPING'
+          AND NOT EXISTS (
+            SELECT 1 FROM employee_device_mappings m
+            WHERE m.device_user_pk = du.device_user_pk
+              AND m.mapping_status = 'VERIFIED'
+              AND (m.valid_to IS NULL OR m.valid_to > e.controlled_scan_time)
+          )
+        ORDER BY e.enrollment_id;
+        """,
+    )
+
+
+LEGACY_TEST_USER_IDS = frozenset({"1", "2"})
+
+
+def _attribution_reasoning(cur: Any, row: Dict[str, Any]) -> Dict[str, Any]:
+    """Classifies why an attendance row is unattributed, using canonical evidence.
+
+    Never attributes anything — this is diagnostics only. Classification uses
+    the canonical temporal resolver (resolve_verified_employee_mapping) plus
+    device-user / mapping-interval evidence.
+    """
+    pk = row.get("device_user_pk")
+    if pk is None:
+        return {"classification": "NO_DEVICE_USER", "detail": "attendance has no device_user_pk"}
+    cur.execute(
+        "SELECT device_user_id, active FROM device_users WHERE device_user_pk = %s;",
+        (pk,),
+    )
+    du = cur.fetchone()
+    if du is None:
+        return {
+            "classification": "NO_DEVICE_USER",
+            "detail": "device_user_pk %s not found" % pk,
+        }
+    du_id, du_active = du
+    if str(du_id) in LEGACY_TEST_USER_IDS:
+        return {
+            "classification": "LEGACY_USER",
+            "detail": "legacy test device user %s — never attributed" % du_id,
+        }
+    cur.execute(
+        "SELECT employee_id, valid_from, valid_to FROM employee_device_mappings "
+        "WHERE device_user_pk = %s AND mapping_status = 'VERIFIED' ORDER BY valid_from;",
+        (pk,),
+    )
+    mappings = cur.fetchall()
+    if not mappings:
+        return {
+            "classification": "NO_MAPPING",
+            "detail": "no VERIFIED mapping exists for device_user_pk %s" % pk,
+        }
+    scan = row["scan_time"]
+    resolved = resolve_verified_employee_mapping(cur, pk, scan)
+    for emp_id, vf, vt in mappings:
+        if scan < vf:
+            return {
+                "classification": "BEFORE_VALID_FROM",
+                "detail": "scan %s is before valid_from %s (mapping employee %s)"
+                % (scan.isoformat(), vf.isoformat(), emp_id),
+                "valid_from": vf,
+                "valid_to": vt,
+                "resolver_employee_id": resolved,
+            }
+        if vt is not None and scan >= vt:
+            continue
+        return {
+            "classification": "INSIDE_INTERVAL",
+            "detail": "scan is inside a VERIFIED interval but row is unattributed — "
+            "resolver returns %s" % (resolved or "None"),
+            "valid_from": vf,
+            "valid_to": vt,
+            "resolver_employee_id": resolved,
+        }
+    return {
+        "classification": "AFTER_VALID_TO",
+        "detail": "scan is after the last VERIFIED interval (device user %s)" % du_id,
+        "valid_from": None,
+        "valid_to": None,
+        "resolver_employee_id": resolved,
+    }
+
+
+def unattributed_attendance(cfg: Config, limit: int, offset: int) -> Dict[str, Any]:
+    """Unattributed attendance rows (employee_id NULL) with resolver reasoning.
+
+    Read-only reconciliation diagnostics. Never writes — attribution stays
+    with the canonical VERIFIED temporal mapping at ingestion time.
+    """
+    with _connect(cfg) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM attendance_logs WHERE employee_id IS NULL;"
+            )
+            total = cur.fetchone()[0]
+            cur.execute(
+                "SELECT id, user_id, device_ip, scan_time, punch_type, status, "
+                "device_id, device_user_pk, employee_id, created_at "
+                "FROM attendance_logs WHERE employee_id IS NULL "
+                "ORDER BY scan_time DESC, id DESC LIMIT %s OFFSET %s;",
+                (limit, offset),
+            )
+            cols = [d[0] for d in cur.description]
+            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+            for r in rows:
+                r["reasoning"] = _attribution_reasoning(cur, r)
+    return {"items": rows, "total": total, "limit": limit, "offset": offset}
+
+
 # --- Enrollments ----------------------------------------------------------
 
 
