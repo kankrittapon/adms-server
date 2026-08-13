@@ -1,0 +1,17 @@
+/* Minimal global styles for the ADMS F2 frontend.
+   (Tailwind is listed in the architecture plan as an option; F2 ships with
+   plain CSS utility classes kept in components to avoid build-tool coupling.) */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
