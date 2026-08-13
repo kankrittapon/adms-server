@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { api, clearToken, getToken } from "../api/client";
-import type { MeResponse } from "../api/client";
+import { api, clearToken } from "../api/client";
+import { useAuth } from "../auth";
 
 const NAV = [
   { to: "/", label: "Dashboard" },
@@ -15,17 +14,7 @@ const NAV = [
 
 export function Layout() {
   const navigate = useNavigate();
-  const [me, setMe] = useState<MeResponse | null>(null);
-
-  useEffect(() => {
-    if (!getToken()) return;
-    api
-      .me()
-      .then(setMe)
-      .catch(() => {
-        // UnauthorizedError clears the token; fall through to login on next nav.
-      });
-  }, []);
+  const { me } = useAuth();
 
   async function logout() {
     try {

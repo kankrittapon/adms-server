@@ -5,6 +5,9 @@ import type {
   Device,
   DeviceUser,
   Enrollment,
+  EnrollmentNextActions,
+  EnrollmentReserveResult,
+  EnrollmentTransitionResult,
   HealthCheck,
   Healthz,
   Human,
@@ -189,7 +192,54 @@ export const api = {
     return request<Page<Enrollment>>(`/api/v1/enrollments${qs ? "?" + qs : ""}`, signal);
   },
   enrollment: (id: number, signal?: AbortSignal) => request<Enrollment>(`/api/v1/enrollments/${id}`, signal),
+  enrollmentNextActions: (id: number, signal?: AbortSignal) =>
+    request<EnrollmentNextActions>(`/api/v1/enrollments/${id}/next-actions`, signal),
+
+  // Enrollment workflow writes (gated server-side by API_WRITE_ENABLED + role)
+  reserveEnrollment: (payload: {
+    employee_id: string;
+    device_id: number;
+    operator: string;
+    roster_user_ids?: string[];
+  }) =>
+    request<EnrollmentReserveResult>("/api/v1/enrollments/reserve", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  startFingerprintEnrollment: (id: number, operator: string, notes?: string) =>
+    enrollmentTransition(`/api/v1/enrollments/${id}/start-fingerprint-enrollment`, operator, notes),
+  confirmFingerprintEnrolled: (id: number, operator: string, notes?: string) =>
+    enrollmentTransition(`/api/v1/enrollments/${id}/confirm-fingerprint`, operator, notes),
+  startControlledScan: (id: number, operator: string, notes?: string) =>
+    enrollmentTransition(`/api/v1/enrollments/${id}/start-controlled-scan`, operator, notes),
+  confirmControlledScan: (id: number, operator: string, scanTime: string, notes?: string) =>
+    request<EnrollmentTransitionResult>(`/api/v1/enrollments/${id}/confirm-controlled-scan`, undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operator, scan_time: scanTime, notes }),
+    }),
+  markReadyForMapping: (id: number, operator: string, notes?: string) =>
+    enrollmentTransition(`/api/v1/enrollments/${id}/mark-ready-for-mapping`, operator, notes),
+  cancelEnrollment: (id: number, operator: string, notes: string) =>
+    request<EnrollmentTransitionResult>(`/api/v1/enrollments/${id}/cancel`, undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operator, notes }),
+    }),
 
   // Reference
   ranks: (signal?: AbortSignal) => request<RankReference[]>("/api/v1/reference/ranks", signal),
 };
+
+function enrollmentTransition(
+  path: string,
+  operator: string,
+  notes?: string
+): Promise<EnrollmentTransitionResult> {
+  return request<EnrollmentTransitionResult>(path, undefined, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ operator, notes }),
+  });
+}

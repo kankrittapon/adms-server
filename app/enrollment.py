@@ -67,6 +67,38 @@ ALLOWED_TRANSITIONS: Dict[str, Set[str]] = {
     "RETIRED": set(),
 }
 
+# Canonical API action catalog for the enrollment workflow. The frontend uses
+# GET /api/v1/enrollments/{id}/next-actions to learn which actions are valid
+# in the current state — the state machine is NEVER duplicated in the UI.
+# Physical terminal steps (terminal account creation) are performed by the
+# operator at the terminal / collector workflow, not through the API.
+ENROLLMENT_ACTIONS: Dict[str, Dict[str, Any]] = {
+    "start-fingerprint-enrollment": {
+        "target": "FINGERPRINT_ENROLLMENT_PENDING",
+        "requires_role": "OPERATOR",
+    },
+    "confirm-fingerprint": {
+        "target": "FINGERPRINT_ENROLLED",
+        "requires_role": "OPERATOR",
+    },
+    "start-controlled-scan": {
+        "target": "CONTROLLED_SCAN_PENDING",
+        "requires_role": "OPERATOR",
+    },
+    "confirm-controlled-scan": {
+        "target": "CONTROLLED_SCAN_CONFIRMED",
+        "requires_role": "OPERATOR",
+    },
+    "mark-ready-for-mapping": {
+        "target": "READY_FOR_MAPPING",
+        "requires_role": "OPERATOR",
+    },
+    "cancel": {
+        "target": "CANCELLED",
+        "requires_role": "OPERATOR",
+    },
+}
+
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )

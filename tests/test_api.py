@@ -376,6 +376,51 @@ class TestEnrollments(ApiTestBase):
         self.assertEqual(resp.json()["reserved_device_user_id"], "1001")
 
 
+class TestEnrollmentNextActions(ApiTestBase):
+    """F3: next-actions derives from the canonical state machine (no UI duplication)."""
+
+    def _enrollment(self, status):
+        row = dict(ENROLLMENT_ROW, status=status)
+        with patch("app.api.repository.get_enrollment_row", return_value=row):
+            return self.client.get("/api/v1/enrollments/1/next-actions")
+
+    def test_reserved_allows_cancel_only(self):
+        resp = self._enrollment("RESERVED")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["status"], "RESERVED")
+        actions = {a["action"] for a in body["next_actions"]}
+        self.assertEqual(actions, {"cancel"})
+
+    def test_fingerprint_enrolled_allows_controlled_scan(self):
+        resp = self._enrollment("FINGERPRINT_ENROLLED")
+        actions = {a["action"] for a in resp.json()["next_actions"]}
+        self.assertEqual(actions, {"start-controlled-scan", "cancel"})
+
+    def test_controlled_scan_confirmed_allows_ready_for_mapping(self):
+        resp = self._enrollment("CONTROLLED_SCAN_CONFIRMED")
+        actions = {a["action"] for a in resp.json()["next_actions"]}
+        self.assertEqual(actions, {"mark-ready-for-mapping", "cancel"})
+
+    def test_ready_for_mapping_has_no_api_actions(self):
+        """READY_FOR_MAPPING only permits RETIRED (via admin mapping creation)."""
+        resp = self._enrollment("READY_FOR_MAPPING")
+        self.assertEqual(resp.json()["next_actions"], [])
+
+    def test_cancelled_terminal_state_no_actions(self):
+        resp = self._enrollment("CANCELLED")
+        self.assertEqual(resp.json()["next_actions"], [])
+
+    def test_next_actions_404(self):
+        with patch("app.api.repository.get_enrollment_row", return_value=None):
+            resp = self.client.get("/api/v1/enrollments/999/next-actions")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_next_actions_invalid_id_422(self):
+        resp = self.client.get("/api/v1/enrollments/notanumber/next-actions")
+        self.assertEqual(resp.status_code, 422)
+
+
 class TestRanks(ApiTestBase):
     def test_ranks_from_canonical_catalog(self):
         resp = self.client.get("/api/v1/reference/ranks")

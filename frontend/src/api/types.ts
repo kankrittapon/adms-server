@@ -170,6 +170,30 @@ export interface Enrollment {
   device_name?: string | null;
 }
 
+export interface EnrollmentNextActions {
+  enrollment_id: number;
+  status: string;
+  next_actions: Array<{
+    action: string;
+    target_status: string;
+    requires_role: string;
+  }>;
+}
+
+export interface EnrollmentReserveResult {
+  enrollment_id: number;
+  reserved_device_user_id: string;
+  status: string;
+  reserved_at: string;
+  employee_id: string;
+  device_id: number;
+}
+
+export interface EnrollmentTransitionResult {
+  enrollment_id: number;
+  status: string;
+}
+
 export interface RankReference {
   rank_th_abbreviation: string;
   rank_th_full: string;

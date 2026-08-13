@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { getToken } from "./api/client";
+import { AuthProvider } from "./auth";
 import { Layout } from "./components/Layout";
 import { Attendance, AttendanceDetail } from "./pages/Attendance";
 import { Dashboard } from "./pages/Dashboard";
@@ -19,15 +20,16 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 export function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route
-        element={
-          <RequireAuth>
-            <Layout />
-          </RequireAuth>
-        }
-      >
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          element={
+            <RequireAuth>
+              <Layout />
+            </RequireAuth>
+          }
+        >
         <Route path="/" element={<Dashboard />} />
         <Route path="/personnel" element={<Personnel />} />
         <Route path="/personnel/:employeeId" element={<HumanDetail />} />
@@ -37,7 +39,8 @@ export function App() {
         <Route path="/enrollments" element={<Enrollments />} />
         <Route path="/mappings" element={<Mappings />} />
         <Route path="/system" element={<System />} />
-      </Route>
-    </Routes>
+        </Route>
+      </Routes>
+    </AuthProvider>
   );
 }

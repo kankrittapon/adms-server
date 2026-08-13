@@ -22,6 +22,8 @@ from app.api.errors import ApiError, not_found
 from app.api.schemas import Enrollment, Page
 from app.config import Config
 from app.enrollment import (
+    ALLOWED_TRANSITIONS,
+    ENROLLMENT_ACTIONS,
     EnrollmentError,
     cancel_enrollment,
     confirm_controlled_scan,
@@ -61,6 +63,36 @@ def get_enrollment_detail(enrollment_id: int, cfg: Config = Depends(get_cfg)):
     if row is None:
         raise not_found("enrollment", enrollment_id)
     return row
+
+
+@router.get("/api/v1/enrollments/{enrollment_id}/next-actions")
+def get_next_actions(enrollment_id: int, cfg: Config = Depends(get_cfg)):
+    """Returns the valid next operator actions for an enrollment's current state.
+
+    Computed from the canonical state machine (app.enrollment.ALLOWED_TRANSITIONS
+    + ENROLLMENT_ACTIONS) so the frontend never duplicates workflow logic.
+    Read-only — no state mutation. Physical terminal steps (e.g. terminal
+    account creation) are intentionally absent: they happen at the terminal.
+    """
+    row = repository.get_enrollment_row(cfg, enrollment_id)
+    if row is None:
+        raise not_found("enrollment", enrollment_id)
+    status = row["status"]
+    allowed = ALLOWED_TRANSITIONS.get(status, set())
+    actions = [
+        {
+            "action": action,
+            "target_status": spec["target"],
+            "requires_role": spec["requires_role"],
+        }
+        for action, spec in sorted(ENROLLMENT_ACTIONS.items())
+        if spec["target"] in allowed
+    ]
+    return {
+        "enrollment_id": enrollment_id,
+        "status": status,
+        "next_actions": actions,
+    }
 
 
 # ---------------------------------------------------------------------------
