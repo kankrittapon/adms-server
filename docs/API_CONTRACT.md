@@ -1,4 +1,4 @@
-# ADMS API Contract (F1 / F5 / F3)
+# ADMS API Contract (F1 / F5 / F3 / F4)
 
 **PromptID:** `ADMS-Frontend-F1-API-001` / `ADMS-Frontend-F5-Auth-001`
 **Status:** IMPLEMENTED / LIVE (backend foundation remains 100% COMPLETE)
@@ -88,6 +88,7 @@ Every error uses the envelope:
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/v1/attendance` | `date_from`, `date_to`, `employee_id`, `device_user_pk`, `status` filters; no raw_payload |
+| GET | `/api/v1/attendance/unattributed` | **ADMIN** — read-only reconciliation diagnostics: unattributed rows with canonical resolver reasoning (NO_DEVICE_USER/LEGACY_USER/NO_MAPPING/BEFORE_VALID_FROM/INSIDE_INTERVAL/AFTER_VALID_TO); never writes |
 | GET | `/api/v1/attendance/{attendance_id}` | joined device + Human summary |
 | GET | `/api/v1/attendance/{attendance_id}/raw-payload` | explicit diagnostics endpoint |
 
@@ -95,8 +96,9 @@ Every error uses the envelope:
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/v1/mappings` | `employee_id`, `device_user_pk`, `mapping_status` filters |
+| GET | `/api/v1/mappings/eligibility` | **ADMIN** — READY_FOR_MAPPING enrollments with controlled-scan evidence (excludes already-mapped device users); feeds the mapping form |
 | GET | `/api/v1/mappings/{mapping_id}` | temporal fields |
-| POST | `/api/v1/mappings` | **gated** — canonical `app.mapping.create_verified_mapping()` |
+| POST | `/api/v1/mappings` | **gated + ADMIN** — canonical `app.mapping.create_verified_mapping()` |
 
 ### Enrollments
 | Method | Path | Notes |
