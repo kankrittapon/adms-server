@@ -1,4 +1,4 @@
-# ADMS API Contract (F1 / F5)
+# ADMS API Contract (F1 / F5 / F3)
 
 **PromptID:** `ADMS-Frontend-F1-API-001` / `ADMS-Frontend-F5-Auth-001`
 **Status:** IMPLEMENTED / LIVE (backend foundation remains 100% COMPLETE)
@@ -103,6 +103,7 @@ Every error uses the envelope:
 |---|---|---|
 | GET | `/api/v1/enrollments` | `status`, `employee_id`, `device_id` filters |
 | GET | `/api/v1/enrollments/{enrollment_id}` | full workflow state |
+| GET | `/api/v1/enrollments/{enrollment_id}/next-actions` | valid next operator actions from the canonical state machine (`ENROLLMENT_ACTIONS` + `ALLOWED_TRANSITIONS`); empty at READY_FOR_MAPPING / terminal states |
 | POST | `/api/v1/enrollments/reserve` | **gated** — `reserve_next_device_user_id()` |
 | POST | `/api/v1/enrollments/{id}/create-terminal-account` | **gated** — returns 501 `NOT_IMPLEMENTED` (requires live terminal connection; physical enrollment is operator-performed) |
 | POST | `/api/v1/enrollments/{id}/start-fingerprint-enrollment` | **gated** — state machine |
