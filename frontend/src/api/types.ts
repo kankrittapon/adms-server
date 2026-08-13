@@ -107,6 +107,7 @@ export interface DeviceUser {
   last_seen_at: string;
   roster_last_seen_at?: string | null;
   inactive_at?: string | null;
+  account_incarnation: number;
   created_at: string;
   updated_at: string;
 }

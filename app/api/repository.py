@@ -212,7 +212,7 @@ def list_device_users(
         cfg,
         "SELECT device_user_pk, device_id, device_user_id, device_uid, "
         "device_display_name, privilege, active, first_seen_at, last_seen_at, "
-        "roster_last_seen_at, inactive_at, created_at, updated_at "
+        "roster_last_seen_at, inactive_at, account_incarnation, created_at, updated_at "
         f"FROM device_users{where_sql} ORDER BY device_user_pk LIMIT %s OFFSET %s",
         tuple(params) + (limit, offset),
     )
@@ -224,7 +224,7 @@ def get_device_user(cfg: Config, device_user_pk: int) -> Optional[Dict[str, Any]
         cfg,
         "SELECT device_user_pk, device_id, device_user_id, device_uid, "
         "device_display_name, privilege, active, first_seen_at, last_seen_at, "
-        "roster_last_seen_at, inactive_at, created_at, updated_at "
+        "roster_last_seen_at, inactive_at, account_incarnation, created_at, updated_at "
         "FROM device_users WHERE device_user_pk = %s",
         (device_user_pk,),
     )

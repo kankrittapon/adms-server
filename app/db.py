@@ -327,6 +327,7 @@ def reconcile_roster_lifecycle(
         "marked_inactive": 0,
         "reappeared": 0,
         "uid_anomalies": 0,
+        "mappings_closed": 0,
     }
 
     observed_map: Dict[str, Dict[str, Any]] = {}
@@ -386,20 +387,36 @@ def reconcile_roster_lifecycle(
                         summary["reappeared"] += 1
                         log.info(
                             "REAPPEARED: device_user_id=%s (pk=%s) reappeared in roster. "
-                            "Clearing inactive_at.",
+                            "Reactivating as NEW account incarnation.",
                             uid_str, dpk,
                         )
+                        # A reappeared terminal account is a NEW incarnation. The
+                        # previous VERIFIED mapping (if any) was already closed at
+                        # the disappearance boundary and is NEVER reopened or
+                        # inherited here. Attendance for this incarnation stays
+                        # unmapped until a new controlled VERIFIED mapping.
+                        cur.execute(
+                            "INSERT INTO sync_events (device_ip, event_type, message) "
+                            "VALUES (%s, %s, %s);",
+                            (cfg.device_ip, "DEVICE_USER_REAPPEARED",
+                             "device_user_pk=%s device_user_id=%s incarnation_bump=+1 reactivated "
+                             "(previous mapping remains closed)" % (dpk, uid_str)),
+                        )
 
-                    # Update roster_last_seen_at, clear inactive_at, update device_uid
+                    # Update roster_last_seen_at, clear inactive_at, update device_uid.
+                    # account_incarnation is incremented EXACTLY once on reappearance
+                    # (was_inactive) and left unchanged for normally-polled active users.
+                    inc_bump = 1 if was_inactive else 0
                     cur.execute(
                         "UPDATE device_users "
                         "SET roster_last_seen_at = now(), "
                         "    inactive_at = NULL, "
                         "    device_uid = COALESCE(%s, device_uid), "
                         "    active = true, "
+                        "    account_incarnation = account_incarnation + %s, "
                         "    updated_at = now() "
                         "WHERE device_user_pk = %s;",
-                        (obs_uid, dpk),
+                        (obs_uid, inc_bump, dpk),
                     )
                 else:
                     # New user observed in roster — ensure device_user
@@ -441,15 +458,57 @@ def reconcile_roster_lifecycle(
                         "Marked inactive_at = now().",
                         uid_str, dpk,
                     )
+                    cur.execute(
+                        "INSERT INTO sync_events (device_ip, event_type, message) "
+                        "VALUES (%s, %s, %s);",
+                        (cfg.device_ip, "DEVICE_USER_INACTIVE",
+                         "device_user_pk=%s device_user_id=%s active=false inactive_at=now()"
+                         % (dpk, uid_str)),
+                    )
+
+                    # Close any currently open VERIFIED mapping at the confirmed
+                    # ownership/lifecycle boundary. Uses the same now() boundary as
+                    # inactive_at so historical attribution before valid_to is
+                    # preserved and nothing at/after the boundary resolves through
+                    # this (now retired) account. Guards on valid_to IS NULL make
+                    # repeated empty-roster polls idempotent. No delete.
+                    cur.execute(
+                        "UPDATE employee_device_mappings "
+                        "SET valid_to = now(), "
+                        "    updated_at = now() "
+                        "WHERE device_user_pk = %s "
+                        "  AND mapping_status = 'VERIFIED' "
+                        "  AND valid_to IS NULL;",
+                        (dpk,),
+                    )
+                    mappings_closed = cur.rowcount if cur.rowcount is not None else 0
+                    if mappings_closed:
+                        summary["mappings_closed"] += mappings_closed
+                        log.info(
+                            "MAPPING CLOSED BY LIFECYCLE: device_user_pk=%s "
+                            "device_user_id=%s closed %d VERIFIED mapping(s) at "
+                            "valid_to=now(). Previous temporal ownership preserved.",
+                            dpk, uid_str, mappings_closed,
+                        )
+                        cur.execute(
+                            "INSERT INTO sync_events (device_ip, event_type, message) "
+                            "VALUES (%s, %s, %s);",
+                            (cfg.device_ip, "MAPPING_CLOSED_BY_DEVICE_USER_LIFECYCLE",
+                             "device_user_pk=%s device_user_id=%s valid_to=now() "
+                             "mappings_closed=%d (historical attribution preserved)"
+                             % (dpk, uid_str, mappings_closed)),
+                        )
                 # If already inactive, preserve original inactive_at (do nothing)
 
         conn.commit()
 
     log.info(
         "Roster lifecycle reconciliation complete for device_id=%s: "
-        "%d observed, %d new, %d marked_inactive, %d reappeared, %d uid_anomalies.",
+        "%d observed, %d new, %d marked_inactive, %d reappeared, %d uid_anomalies, "
+        "%d mappings_closed.",
         device_id, summary["observed"], summary["new_users"],
         summary["marked_inactive"], summary["reappeared"], summary["uid_anomalies"],
+        summary["mappings_closed"],
     )
     return summary
 

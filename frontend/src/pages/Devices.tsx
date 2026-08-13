@@ -40,6 +40,7 @@ export function Devices() {
             <th className="px-3 py-2">display name</th>
             <th className="px-3 py-2">privilege</th>
             <th className="px-3 py-2">state</th>
+            <th className="px-3 py-2">incarn.</th>
             <th className="px-3 py-2">last seen</th>
           </tr>
         </thead>
@@ -54,6 +55,13 @@ export function Devices() {
               <td className="px-3 py-2">
                 {u.active ? <StatusBadge status="HEALTHY" /> : <StatusBadge status="INACTIVE" />}
                 {u.inactive_at ? <span className="ml-1 text-xs text-gray-400">since {fmt(u.inactive_at)}</span> : null}
+              </td>
+              <td className="px-3 py-2">
+                {u.account_incarnation > 1 ? (
+                  <span className="font-semibold text-amber-600">{u.account_incarnation}</span>
+                ) : (
+                  <span className="text-gray-500">{u.account_incarnation}</span>
+                )}
               </td>
               <td className="px-3 py-2 text-xs text-gray-500">{u.roster_last_seen_at ? fmt(u.roster_last_seen_at) : "—"}</td>
             </tr>

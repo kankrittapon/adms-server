@@ -65,6 +65,9 @@ class TestRosterLifecycle(unittest.TestCase):
         # Second fetchall: not used in reconcile, but set up just in case
         mock_cur.fetchall.return_value = known_rows
         mock_cur.fetchone.return_value = fetchone_result if fetchone_result else [1]
+        # rowcount is used by the lifecycle mapping-close path; default 0
+        # (no VERIFIED mappings closed) unless a test overrides it.
+        mock_cur.rowcount = 0
 
         return mock_ctx, mock_cur
 

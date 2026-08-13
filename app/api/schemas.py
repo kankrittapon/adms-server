@@ -123,6 +123,7 @@ class DeviceUser(BaseModel):
     last_seen_at: datetime
     roster_last_seen_at: Optional[datetime] = None
     inactive_at: Optional[datetime] = None
+    account_incarnation: int = 1
     created_at: datetime
     updated_at: datetime
 

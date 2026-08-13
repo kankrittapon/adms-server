@@ -235,11 +235,13 @@ class CollectorStateEngine:
             self.last_roster_marked_inactive = summary["marked_inactive"]
             self.last_roster_reappeared = summary["reappeared"]
             self.last_roster_uid_anomalies = summary["uid_anomalies"]
+            self.last_roster_mappings_closed = summary.get("mappings_closed", 0)
 
             audit_msg = (
                 f"Roster lifecycle: {summary['observed']} observed, "
                 f"{summary['new_users']} new, {summary['marked_inactive']} marked_inactive, "
-                f"{summary['reappeared']} reappeared, {summary['uid_anomalies']} uid_anomalies."
+                f"{summary['reappeared']} reappeared, {summary['uid_anomalies']} uid_anomalies, "
+                f"{summary.get('mappings_closed', 0)} mappings_closed."
             )
             log.info(audit_msg)
             log_sync_event(self.cfg, "ROSTER_LIFECYCLE", audit_msg)
