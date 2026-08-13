@@ -11,8 +11,9 @@
 
 ## 1. Authentication (F5)
 
-- `POST /api/v1/auth/login` `{username, password}` → `{token, role, expires_at, operator_id, username, display_name}` (token TTL default 12h, `API_TOKEN_TTL_HOURS`)
+- `POST /api/v1/auth/login` `{username, password}` → `{token, role, expires_at, operator_id, username, display_name}` (token TTL default 12h, `API_TOKEN_TTL_HOURS`; per-IP rate limit default 5/min → 429 `RATE_LIMITED` + `Retry-After`)
 - `POST /api/v1/auth/logout` — revokes the presented token (reversible via `revoked_at`)
+- `POST /api/v1/auth/change-password` `{current_password, new_password ≥ 12}` — rehashes and revokes all other sessions (keeps current); logs `AUTH_PASSWORD_CHANGE`
 - `GET /api/v1/auth/me` — current operator context
 - Send `Authorization: Bearer <token>` on all other endpoints.
 - Tokens stored only as SHA-256 hashes; passwords PBKDF2-SHA256 (never plaintext).
@@ -115,6 +116,12 @@ Every error uses the envelope:
 | POST | `/api/v1/enrollments/{id}/mark-ready-for-mapping` | **gated** — explicit identity confirmation |
 | POST | `/api/v1/enrollments/{id}/cancel` | **gated** — requires notes (reason) |
 
+### Audit (F5 hardening, ADMIN)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/v1/audit/events` | paginated `sync_events` with `event_type` + `date_from`/`date_to` filters; read-only |
+| GET | `/api/v1/audit/event-types` | distinct event types for the filter UI |
+
 ### Reference
 | Method | Path | Notes |
 |---|---|---|
@@ -155,6 +162,9 @@ operator decision (`API_WRITE_ENABLED=true` in compose env).
 |---|---|---|
 | `API_WRITE_ENABLED` | `false` | write gate (defense-in-depth) |
 | `API_TOKEN_TTL_HOURS` | `12` | auth token expiry |
+| `API_RATE_LIMIT_ENABLED` | `true` | master switch for rate limiting |
+| `API_LOGIN_RATE_PER_MIN` | `5` | per-IP login attempts per minute (429 + Retry-After) |
+| `API_GLOBAL_RATE_PER_MIN` | `600` | per-IP backstop for all /api/v1 traffic |
 | `API_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,http://192.168.1.248:8082` | allowlist (dev + production console) |
 | `API_HOST` | `0.0.0.0` | uvicorn bind inside container |
 | `API_PORT` | `8081` | listener port |
