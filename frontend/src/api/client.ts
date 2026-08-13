@@ -1,6 +1,7 @@
 import type {
   Attendance,
   AttendanceDetail,
+  AuditEvent,
   CreateMappingResult,
   DashboardSummary,
   Device,
@@ -263,6 +264,26 @@ export const api = {
 
   // Reference
   ranks: (signal?: AbortSignal) => request<RankReference[]>("/api/v1/reference/ranks", signal),
+
+  // F5 hardening: audit trail (admin)
+  auditEvents: (params: { limit?: number; offset?: number; event_type?: string }, signal?: AbortSignal) => {
+    const q = new URLSearchParams();
+    if (params.limit !== undefined) q.set("limit", String(params.limit));
+    if (params.offset !== undefined) q.set("offset", String(params.offset));
+    if (params.event_type) q.set("event_type", params.event_type);
+    const qs = q.toString();
+    return request<Page<AuditEvent>>(`/api/v1/audit/events${qs ? "?" + qs : ""}`, signal);
+  },
+  auditEventTypes: (signal?: AbortSignal) =>
+    request<{ event_types: string[] }>("/api/v1/audit/event-types", signal),
+
+  // F5 hardening: password self-change
+  changePassword: (current_password: string, new_password: string) =>
+    request<{ changed: boolean; other_tokens_revoked: number }>("/api/v1/auth/change-password", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_password, new_password }),
+    }),
 };
 
 function enrollmentTransition(

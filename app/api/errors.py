@@ -17,7 +17,7 @@ Status codes:
 Never leak DB passwords, stack traces, raw SQL, or secrets.
 """
 
-from typing import Any
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -27,10 +27,17 @@ from fastapi.responses import JSONResponse
 class ApiError(Exception):
     """Domain-level API error with a stable machine-readable code."""
 
-    def __init__(self, status_code: int, code: str, message: str):
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        headers: Optional[Dict[str, str]] = None,
+    ):
         self.status_code = status_code
         self.code = code
         self.message = message
+        self.headers = headers
         super().__init__(message)
 
 
@@ -48,6 +55,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content=_error_body(exc.code, exc.message),
+            headers=exc.headers,
         )
 
     @app.exception_handler(RequestValidationError)

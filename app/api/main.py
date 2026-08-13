@@ -15,14 +15,17 @@ Security posture:
 import logging
 from typing import Optional
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.dependencies import require_role
 from app.api.errors import register_exception_handlers
 from app.api.settings import ApiSettings, get_settings
 from app.api.routers import (
     attendance,
+    audit,
     auth,
     dashboard,
     device_users,
@@ -49,6 +52,37 @@ APP_DESCRIPTION = (
 VIEWER = Depends(require_role("VIEWER"))
 
 
+class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
+    """Per-IP global backstop for /api/v1 traffic (429 when exceeded).
+
+    F5 hardening. Login has its own stricter per-IP limit; this guards the
+    rest of the surface. In-process counters are accurate (single worker).
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        settings = request.app.state.settings
+        if settings.rate_limit_enabled and request.url.path.startswith("/api/v1"):
+            from app.api.ratelimit import check_limit
+
+            key = request.client.host if request.client else "unknown"
+            allowed, retry_after = check_limit(
+                key, "global", settings.global_rate_per_min
+            )
+            if not allowed:
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "error": {
+                            "code": "RATE_LIMITED",
+                            "message": "too many requests — retry in %d seconds"
+                            % int(retry_after),
+                        }
+                    },
+                    headers={"Retry-After": str(int(retry_after))},
+                )
+        return await call_next(request)
+
+
 def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     settings = settings or get_settings()
 
@@ -66,6 +100,10 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+    # F5 hardening: per-IP global backstop limit for all /api/v1 traffic.
+    if settings.rate_limit_enabled:
+        app.add_middleware(GlobalRateLimitMiddleware)
+
     register_exception_handlers(app)
 
     app.state.settings = settings
@@ -78,6 +116,9 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     # Auth + operator management (login is public; operators is admin-gated).
     app.include_router(auth.router)
     app.include_router(operators.router)
+
+    # Audit trail (admin-gated inside the router).
+    app.include_router(audit.router)
 
     # Read API surface — any authenticated role (VIEWER+).
     for router in (

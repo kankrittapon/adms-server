@@ -247,6 +247,14 @@ class Enrollment(BaseModel):
 # --- Reference ------------------------------------------------------------
 
 
+class AuditEvent(BaseModel):
+    id: int
+    device_ip: Optional[str] = None
+    event_type: str
+    message: Optional[str] = None
+    created_at: datetime
+
+
 class RankReference(BaseModel):
     rank_th_abbreviation: str
     rank_th_full: str

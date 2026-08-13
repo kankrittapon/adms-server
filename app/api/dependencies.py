@@ -117,3 +117,48 @@ def pagination(
     offset: int = Query(0, ge=0),
 ) -> tuple:
     return limit, offset
+
+
+# Scope name -> ApiSettings field holding the per-minute limit.
+_SCOPE_RATE_FIELDS = {
+    "login": "login_rate_per_min",
+    "global": "global_rate_per_min",
+}
+
+
+def rate_limit(scope: str):
+    """Dependency factory: per-IP fixed-window rate limit (429 when exceeded).
+
+    F5 hardening. Only active when API_RATE_LIMIT_ENABLED=true. Uses the
+    in-process limiter (accurate — the API runs as a single uvicorn worker).
+    """
+
+    def dependency(request: Request) -> None:
+        settings: ApiSettings = request.app.state.settings
+        if not settings.rate_limit_enabled:
+            return
+        from app.api.ratelimit import check_limit
+
+        per_min = getattr(settings, _SCOPE_RATE_FIELDS.get(scope, "global_rate_per_min"))
+        key = request.client.host if request.client else "unknown"
+        allowed, retry_after = check_limit(key, scope, per_min)
+        if not allowed:
+            # Audit the trigger (login-scope is the security-relevant case).
+            try:
+                from app.db import log_sync_event
+
+                log_sync_event(
+                    get_cfg(),
+                    "RATE_LIMITED",
+                    "scope=%s ip=%s" % (scope, key),
+                )
+            except Exception:
+                pass
+            raise ApiError(
+                429,
+                "RATE_LIMITED",
+                "too many requests — retry in %d seconds" % int(retry_after),
+                headers={"Retry-After": str(int(retry_after))},
+            )
+
+    return dependency

@@ -249,6 +249,14 @@ export interface UnattributedAttendance {
   reasoning: AttributionReasoning;
 }
 
+export interface AuditEvent {
+  id: number;
+  device_ip?: string | null;
+  event_type: string;
+  message?: string | null;
+  created_at: string;
+}
+
 export interface RankReference {
   rank_th_abbreviation: string;
   rank_th_full: string;

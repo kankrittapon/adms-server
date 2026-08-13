@@ -8,6 +8,7 @@ import { Devices } from "./pages/Devices";
 import { Enrollments } from "./pages/Enrollments";
 import { Login } from "./pages/Login";
 import { Mappings } from "./pages/Mappings";
+import { Audit } from "./pages/Audit";
 import { HumanDetail, Personnel } from "./pages/Personnel";
 import { System } from "./pages/System";
 
@@ -38,6 +39,7 @@ export function App() {
         <Route path="/attendance/:id" element={<AttendanceDetail />} />
         <Route path="/enrollments" element={<Enrollments />} />
         <Route path="/mappings" element={<Mappings />} />
+        <Route path="/audit" element={<Audit />} />
         <Route path="/system" element={<System />} />
         </Route>
       </Routes>

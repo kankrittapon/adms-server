@@ -12,6 +12,8 @@ const NAV = [
   { to: "/system", label: "System" },
 ];
 
+const ADMIN_NAV = [{ to: "/audit", label: "Audit" }];
+
 export function Layout() {
   const navigate = useNavigate();
   const { me } = useAuth();
@@ -48,6 +50,20 @@ export function Layout() {
               {n.label}
             </NavLink>
           ))}
+          {me?.role === "ADMIN" &&
+            ADMIN_NAV.map((n) => (
+              <NavLink
+                key={n.to}
+                to={n.to}
+                className={({ isActive }) =>
+                  `mt-1 block rounded px-3 py-2 text-sm ${
+                    isActive ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"
+                  }`
+                }
+              >
+                {n.label}
+              </NavLink>
+            ))}
         </nav>
         <div className="mt-4 border-t border-gray-200 px-4 py-3">
           <div className="text-xs text-gray-500">Signed in as</div>

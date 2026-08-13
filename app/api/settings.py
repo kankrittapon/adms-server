@@ -26,6 +26,9 @@ class ApiSettings:
     api_host: str = "0.0.0.0"
     api_port: int = 8081
     token_ttl_hours: int = 12
+    rate_limit_enabled: bool = True
+    login_rate_per_min: int = 5
+    global_rate_per_min: int = 600
 
     @classmethod
     def from_env(cls) -> "ApiSettings":
@@ -43,12 +46,21 @@ class ApiSettings:
             ).split(",")
             if o.strip()
         )
+        rate_enabled = os.getenv("API_RATE_LIMIT_ENABLED", "true").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
         return cls(
             write_enabled=write_enabled,
             cors_origins=origins,
             api_host=os.getenv("API_HOST", "0.0.0.0"),
             api_port=int(os.getenv("API_PORT", "8081")),
             token_ttl_hours=int(os.getenv("API_TOKEN_TTL_HOURS", "12")),
+            rate_limit_enabled=rate_enabled,
+            login_rate_per_min=int(os.getenv("API_LOGIN_RATE_PER_MIN", "5")),
+            global_rate_per_min=int(os.getenv("API_GLOBAL_RATE_PER_MIN", "600")),
         )
 
 

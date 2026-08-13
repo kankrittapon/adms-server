@@ -354,6 +354,50 @@ def get_mapping(cfg: Config, mapping_id: int) -> Optional[Dict[str, Any]]:
     )
 
 
+# --- F5 hardening: audit trail -------------------------------------------
+
+
+def list_audit_events(
+    cfg: Config,
+    limit: int,
+    offset: int,
+    event_type: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Paginated sync_events audit trail (ADMIN)."""
+    where: List[str] = []
+    params: List[Any] = []
+    if event_type:
+        where.append("event_type = %s")
+        params.append(event_type)
+    if date_from is not None:
+        where.append("created_at >= %s")
+        params.append(date_from)
+    if date_to is not None:
+        where.append("created_at <= %s")
+        params.append(date_to)
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+    total = _fetch_scalar(
+        cfg, f"SELECT COUNT(*) FROM sync_events{where_sql}", tuple(params)
+    )
+    rows = _fetch_all(
+        cfg,
+        "SELECT id, device_ip, event_type, message, created_at "
+        f"FROM sync_events{where_sql} ORDER BY created_at DESC, id DESC "
+        "LIMIT %s OFFSET %s",
+        tuple(params) + (limit, offset),
+    )
+    return {"items": rows, "total": total, "limit": limit, "offset": offset}
+
+
+def list_audit_event_types(cfg: Config) -> List[str]:
+    rows = _fetch_all(
+        cfg, "SELECT DISTINCT event_type FROM sync_events ORDER BY event_type;"
+    )
+    return [r["event_type"] for r in rows]
+
+
 # --- F4: mapping eligibility / attendance reconciliation diagnostics ------
 
 
