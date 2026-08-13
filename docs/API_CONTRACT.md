@@ -155,13 +155,20 @@ operator decision (`API_WRITE_ENABLED=true` in compose env).
 |---|---|---|
 | `API_WRITE_ENABLED` | `false` | write gate (defense-in-depth) |
 | `API_TOKEN_TTL_HOURS` | `12` | auth token expiry |
-| `API_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | allowlist |
+| `API_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,http://192.168.1.248:8082` | allowlist (dev + production console) |
 | `API_HOST` | `0.0.0.0` | uvicorn bind inside container |
 | `API_PORT` | `8081` | listener port |
 | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | (from .env) | PostgreSQL |
 | `MQTT_HOST` / `MQTT_PORT` | `mqtt` / `1883` | MQTT reachability check |
 
-## 9. F2 responsibilities (handoff)
+## 9. Production console (F6)
+
+- Console (nginx SPA): **`http://192.168.1.248:8082`** — container `adms_web`,
+  LAN-only bind; SPA fallback + gzip + security headers. Cross-origin calls to
+  this API with `Authorization: Bearer` (no cookies); the origin is on the CORS
+  allowlist. Dev flow (`npm run dev` at `http://localhost:5173`) unchanged.
+
+## 10. F2 responsibilities (handoff)
 
 - **F2:** consume only this API. Do NOT connect PostgreSQL directly, talk to
   ZKTeco, or consume Native Push protocol.
