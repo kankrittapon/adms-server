@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from app.api import repository
-from app.api.dependencies import get_cfg, pagination, require_writes
+from app.api.dependencies import get_cfg, pagination, require_role, require_writes
 from app.api.errors import ApiError, not_found
 from app.api.schemas import Enrollment, Page
 from app.config import Config
@@ -80,7 +80,7 @@ class ReserveRequest(BaseModel):
 @router.post(
     "/api/v1/enrollments/reserve",
     status_code=201,
-    dependencies=[Depends(require_writes)],
+    dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def reserve(payload: ReserveRequest, cfg: Config = Depends(get_cfg)):
     try:
@@ -113,7 +113,7 @@ class CreateTerminalAccountRequest(BaseModel):
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/create-terminal-account",
-    dependencies=[Depends(require_writes)],
+    dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def create_terminal_account(
     enrollment_id: int,
@@ -134,7 +134,7 @@ def create_terminal_account(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/start-fingerprint-enrollment",
-    dependencies=[Depends(require_writes)],
+    dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def start_fingerprint(
     enrollment_id: int,
@@ -150,7 +150,7 @@ def start_fingerprint(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/confirm-fingerprint",
-    dependencies=[Depends(require_writes)],
+    dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def confirm_fingerprint(
     enrollment_id: int,
@@ -166,7 +166,7 @@ def confirm_fingerprint(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/start-controlled-scan",
-    dependencies=[Depends(require_writes)],
+    dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def start_scan_window(
     enrollment_id: int,
@@ -182,7 +182,7 @@ def start_scan_window(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/confirm-controlled-scan",
-    dependencies=[Depends(require_writes)],
+    dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def confirm_scan(
     enrollment_id: int,
@@ -200,7 +200,7 @@ def confirm_scan(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/mark-ready-for-mapping",
-    dependencies=[Depends(require_writes)],
+    dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def mark_ready(
     enrollment_id: int,
@@ -216,7 +216,7 @@ def mark_ready(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/cancel",
-    dependencies=[Depends(require_writes)],
+    dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def cancel(
     enrollment_id: int,

@@ -14,6 +14,19 @@ import type {
 } from "./types";
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://192.168.1.248:8081";
+const TOKEN_KEY = "adms_token";
+
+export function getToken(): string | null {
+  return sessionStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  sessionStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  sessionStorage.removeItem(TOKEN_KEY);
+}
 
 export class ApiClientError extends Error {
   code: string;
@@ -26,11 +39,22 @@ export class ApiClientError extends Error {
   }
 }
 
-async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { Accept: "application/json" },
-    signal,
-  });
+export class UnauthorizedError extends Error {
+  constructor() {
+    super("unauthorized");
+    this.name = "UnauthorizedError";
+  }
+}
+
+async function request<T>(path: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json", ...(init?.headers as Record<string, string>) };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${BASE_URL}${path}`, { ...init, headers, signal });
+  if (res.status === 401) {
+    clearToken();
+    throw new UnauthorizedError();
+  }
   if (!res.ok) {
     let code = "HTTP_" + res.status;
     let message = res.statusText;
@@ -48,8 +72,55 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function requestAuth<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json", ...(init?.headers as Record<string, string>) };
+  const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
+  if (!res.ok) {
+    let code = "HTTP_" + res.status;
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      if (body?.error?.code) {
+        code = body.error.code;
+        message = body.error.message;
+      }
+    } catch {
+      // non-JSON error body
+    }
+    throw new ApiClientError(res.status, code, message);
+  }
+  return res.json();
+}
+
+export interface LoginResponse {
+  token: string;
+  token_type: string;
+  role: string;
+  expires_at: string;
+  operator_id: number;
+  username: string;
+  display_name: string;
+}
+
+export interface MeResponse {
+  operator_id: number;
+  username: string;
+  display_name: string;
+  role: string;
+}
+
 export const api = {
   baseUrl: BASE_URL,
+
+  // Auth
+  login: (username: string, password: string) =>
+    requestAuth<LoginResponse>("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    }),
+  logout: () => request<unknown>("/api/v1/auth/logout", undefined, { method: "POST" }),
+  me: (signal?: AbortSignal) => request<MeResponse>("/api/v1/auth/me", signal),
 
   // System / health
   healthz: (signal?: AbortSignal) => request<Healthz>("/healthz", signal),

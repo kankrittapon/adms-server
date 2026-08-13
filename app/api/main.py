@@ -1,10 +1,10 @@
-"""ADMS Frontend F1 API application.
+"""ADMS Frontend API application.
 
-PromptID: ADMS-Frontend-F1-API-001
+PromptID: ADMS-Frontend-F1-API-001 / ADMS-Frontend-F5-Auth-001
 
-UI-facing HTTP API foundation. Read endpoints are always available; write
-endpoints are feature-flagged OFF by default (API_WRITE_ENABLED) as a
-TEMPORARY WRITE SAFETY mechanism — not final authentication (F5).
+UI-facing HTTP API. F5 auth: DB-backed operator accounts with role-based
+access (strict posture — invalid/missing token -> 401, insufficient role ->
+403). /healthz stays open for the Docker healthcheck.
 
 Security posture:
   - CORS: explicit environment-driven allowlist, never "*" with credentials.
@@ -15,13 +15,15 @@ Security posture:
 import logging
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.dependencies import require_role
 from app.api.errors import register_exception_handlers
 from app.api.settings import ApiSettings, get_settings
 from app.api.routers import (
     attendance,
+    auth,
     dashboard,
     device_users,
     devices,
@@ -29,18 +31,22 @@ from app.api.routers import (
     health,
     humans,
     mappings,
+    operators,
     reference,
 )
 
 log = logging.getLogger("app.api")
 
 APP_TITLE = "ADMS API"
-APP_VERSION = "1.0.0"
+APP_VERSION = "2.0.0"
 APP_DESCRIPTION = (
-    "ADMS (Attendance Device Management System) UI-facing API foundation (F1). "
+    "ADMS (Attendance Device Management System) UI-facing API. "
     "Backend/identity foundation is 100% complete; this layer exposes stable "
-    "read contracts and gated canonical workflow wrappers for the frontend (F2+)."
+    "read contracts and gated canonical workflow wrappers for the frontend. "
+    "F5 auth: operator accounts with VIEWER/OPERATOR/ADMIN roles."
 )
+
+VIEWER = Depends(require_role("VIEWER"))
 
 
 def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
@@ -64,20 +70,34 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
 
     app.state.settings = settings
 
-    app.include_router(health.router)
-    app.include_router(dashboard.router)
-    app.include_router(humans.router)
-    app.include_router(devices.router)
-    app.include_router(device_users.router)
-    app.include_router(attendance.router)
-    app.include_router(mappings.router)
-    app.include_router(enrollments.router)
-    app.include_router(reference.router)
+    # Public process liveness for the Docker healthcheck (no auth).
+    @app.get("/healthz", tags=["system"])
+    def healthz():
+        return {"status": "ok"}
+
+    # Auth + operator management (login is public; operators is admin-gated).
+    app.include_router(auth.router)
+    app.include_router(operators.router)
+
+    # Read API surface — any authenticated role (VIEWER+).
+    for router in (
+        health.router,
+        dashboard.router,
+        humans.router,
+        devices.router,
+        device_users.router,
+        attendance.router,
+        mappings.router,
+        enrollments.router,
+        reference.router,
+    ):
+        app.include_router(router, dependencies=[VIEWER])
 
     log.info(
-        "ADMS API created (write_enabled=%s, cors_origins=%s)",
+        "ADMS API created (write_enabled=%s, cors_origins=%s, token_ttl_hours=%s)",
         settings.write_enabled,
         settings.cors_origins,
+        settings.token_ttl_hours,
     )
     return app
 

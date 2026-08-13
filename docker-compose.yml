@@ -76,6 +76,7 @@ services:
       API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       API_HOST: 0.0.0.0
       API_PORT: "8081"
+      API_TOKEN_TTL_HOURS: ${API_TOKEN_TTL_HOURS:-12}
       MQTT_HOST: mqtt
       MQTT_PORT: "1883"
     ports:

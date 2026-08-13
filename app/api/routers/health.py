@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 
 from app.api import repository
 from app.api.dependencies import get_cfg
-from app.api.schemas import CollectorSummary, HealthCheck, Healthz
+from app.api.schemas import CollectorSummary, HealthCheck
 from app.config import Config
 
 router = APIRouter(tags=["health"])
@@ -34,11 +34,6 @@ def _read_collector_health() -> Optional[Dict[str, Any]]:
             return json.load(f)
     except Exception:
         return None
-
-
-@router.get("/healthz", response_model=Healthz, tags=["system"])
-def healthz() -> Healthz:
-    return Healthz(status="ok")
 
 
 @router.get("/api/v1/health", response_model=HealthCheck)

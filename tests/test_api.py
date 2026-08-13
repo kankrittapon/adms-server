@@ -1,13 +1,15 @@
 """
-F1 API contract tests (ADMS-Frontend-F1-API-001).
+F1/F2 API contract tests (ADMS-Frontend-F1-API-001 / F5 auth).
 
 Covers every endpoint family: health, dashboard, humans, attendance, devices,
 device-users, mappings, enrollments, ranks — plus pagination, filtering, 404,
-invalid UUID, error model, CORS, and the interim write-guard (OFF by default).
+invalid UUID, error model, CORS, and the write-guard (OFF by default).
 
 DB access is mocked at the app.api.repository boundary (same convention as
 tests/test_enrollment.py / tests/test_mapping_creation.py). Canonical
 enrollment/mapping modules are mocked at the router import boundary.
+Authentication is simulated by patching the token lookup; F5 auth flows are
+covered in tests/test_api_auth.py.
 """
 
 import unittest
@@ -16,8 +18,11 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from app.api.dependencies import OperatorContext
 from app.api.main import create_app
 from app.api.settings import ApiSettings
+
+VIEWER_CTX = OperatorContext(operator_id=1, username="tester", display_name="Tester", role="VIEWER")
 
 NOW = datetime(2026, 8, 13, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -144,10 +149,21 @@ class ApiTestBase(unittest.TestCase):
     def setUp(self):
         self.app = create_app(settings=ApiSettings(write_enabled=False))
         self.client = TestClient(self.app)
+        # Simulate an authenticated VIEWER for the read-only contract tests.
+        self._auth_patch = patch(
+            "app.api.dependencies._load_token_context", return_value=VIEWER_CTX
+        )
+        self._auth_patch.start()
+        self.addCleanup(self._auth_patch.stop)
 
-    def make_write_client(self):
+    def make_write_client(self, role="OPERATOR"):
         app = create_app(settings=ApiSettings(write_enabled=True))
-        return TestClient(app)
+        client = TestClient(app)
+        ctx = OperatorContext(operator_id=1, username="tester", display_name="Tester", role=role)
+        p = patch("app.api.dependencies._load_token_context", return_value=ctx)
+        p.start()
+        self.addCleanup(p.stop)
+        return client
 
 
 class TestHealth(ApiTestBase):
@@ -395,11 +411,16 @@ class TestWriteGuard(ApiTestBase):
     ]
 
     def test_all_write_routes_reject_when_disabled(self):
-        for path, payload in self.WRITE_PATHS:
-            with self.subTest(path=path):
-                resp = self.client.post(path, json=payload)
-                self.assertEqual(resp.status_code, 403)
-                self.assertEqual(resp.json()["error"]["code"], "WRITE_DISABLED")
+        """With API_WRITE_ENABLED=false, even an ADMIN token is blocked (403 WRITE_DISABLED)."""
+        app = create_app(settings=ApiSettings(write_enabled=False))
+        client = TestClient(app)
+        admin_ctx = OperatorContext(operator_id=1, username="admin", display_name="Admin", role="ADMIN")
+        with patch("app.api.dependencies._load_token_context", return_value=admin_ctx):
+            for path, payload in self.WRITE_PATHS:
+                with self.subTest(path=path):
+                    resp = client.post(path, json=payload)
+                    self.assertEqual(resp.status_code, 403)
+                    self.assertEqual(resp.json()["error"]["code"], "WRITE_DISABLED")
 
     @patch("app.api.routers.enrollments.reserve_next_device_user_id",
            return_value={"enrollment_id": 9, "reserved_device_user_id": "1002",
@@ -443,7 +464,7 @@ class TestWriteGuard(ApiTestBase):
             "valid_to": None,
             "verified_at": datetime(2026, 8, 13, 9, 0, 0, tzinfo=timezone.utc),
         }
-        client = self.make_write_client()
+        client = self.make_write_client(role="ADMIN")
         resp = client.post(
             "/api/v1/mappings",
             json={
@@ -455,6 +476,33 @@ class TestWriteGuard(ApiTestBase):
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.json()["mapping_status"], "VERIFIED")
         mock_mapping.assert_called_once()
+
+    def test_mapping_requires_admin_role(self):
+        """OPERATOR role must be rejected for VERIFIED mapping creation."""
+        client = self.make_write_client(role="OPERATOR")
+        resp = client.post(
+            "/api/v1/mappings",
+            json={
+                "employee_id": PILOT_EMPLOYEE_ID, "device_user_pk": 7,
+                "enrollment_id": 1, "controlled_attendance_id": 12,
+                "verified_by": "tester", "verification_note": "test",
+            },
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["error"]["code"], "FORBIDDEN")
+
+    def test_enrollment_write_requires_operator_role(self):
+        """VIEWER role must be rejected for enrollment workflow writes."""
+        app = create_app(settings=ApiSettings(write_enabled=True))
+        client = TestClient(app)
+        ctx = OperatorContext(operator_id=1, username="viewer", display_name="Viewer", role="VIEWER")
+        with patch("app.api.dependencies._load_token_context", return_value=ctx):
+            resp = client.post(
+                "/api/v1/enrollments/1/start-fingerprint-enrollment",
+                json={"operator": "viewer"},
+            )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["error"]["code"], "FORBIDDEN")
 
 
 class TestCors(ApiTestBase):

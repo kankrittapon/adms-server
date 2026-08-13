@@ -1,4 +1,7 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { api, clearToken, getToken } from "../api/client";
+import type { MeResponse } from "../api/client";
 
 const NAV = [
   { to: "/", label: "Dashboard" },
@@ -11,6 +14,29 @@ const NAV = [
 ];
 
 export function Layout() {
+  const navigate = useNavigate();
+  const [me, setMe] = useState<MeResponse | null>(null);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    api
+      .me()
+      .then(setMe)
+      .catch(() => {
+        // UnauthorizedError clears the token; fall through to login on next nav.
+      });
+  }, []);
+
+  async function logout() {
+    try {
+      await api.logout();
+    } catch {
+      // ignore — token is cleared regardless
+    }
+    clearToken();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <div className="flex min-h-screen bg-gray-50 text-gray-900">
       <aside className="w-56 shrink-0 border-r border-gray-200 bg-white">
@@ -34,6 +60,18 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+        <div className="mt-4 border-t border-gray-200 px-4 py-3">
+          <div className="text-xs text-gray-500">Signed in as</div>
+          <div className="truncate text-sm font-medium">{me ? me.display_name : "…"}</div>
+          {me && (
+            <div className="text-xs">
+              <span className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-600">{me.role}</span>
+            </div>
+          )}
+          <button onClick={logout} className="mt-2 text-xs text-blue-600 hover:underline">
+            Sign out
+          </button>
+        </div>
       </aside>
       <main className="flex-1 overflow-x-auto p-6">
         <Outlet />

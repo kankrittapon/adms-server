@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from app.api import repository
-from app.api.dependencies import get_cfg, pagination, require_writes
+from app.api.dependencies import get_cfg, pagination, require_role, require_writes
 from app.api.errors import ApiError, not_found
 from app.api.schemas import Mapping, Page
 from app.config import Config
@@ -76,7 +76,7 @@ class CreateMappingResponse(BaseModel):
     "/api/v1/mappings",
     response_model=CreateMappingResponse,
     status_code=201,
-    dependencies=[Depends(require_writes)],
+    dependencies=[Depends(require_role("ADMIN")), Depends(require_writes)],
 )
 def create_mapping(payload: CreateMappingRequest, cfg: Config = Depends(get_cfg)):
     try:
