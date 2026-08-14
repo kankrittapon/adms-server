@@ -196,6 +196,10 @@ operator decision (`API_WRITE_ENABLED=true` in compose env).
   or short polling on `GET /api/v1/attendance?from=last_id` (deferred).
 - **Codegen (DONE):** `npm run codegen:api` exports `app.openapi()` →
   `frontend/openapi.json` and regenerates `frontend/src/api/generated.ts`;
-  `tests/test_openapi_contract.py` guards drift (`ADMS-Frontend-Codegen-001`).
+  `tests/test_openapi_contract.py` guards drift. **Typed client:** `client.ts`
+  method signatures derive from the generated `operations` types via
+  `QueryOf`/`BodyOf`/`JsonResponse` helpers in `types.ts`; all write/transition
+  response routes declare `response_model=` so the spec is precise, not
+  `unknown` (`ADMS-Frontend-Codegen-001`, typed-client phase; commit `274fb06`).
 
 STOP.
