@@ -82,8 +82,8 @@ Every error uses the envelope:
 ### Device users
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/v1/device-users` | `device_id`, `active` filters |
-| GET | `/api/v1/device-users/{device_user_pk}` | lifecycle fields; never biometric data |
+| GET | `/api/v1/device-users` | `device_id`, `active` filters; includes `account_incarnation` (how many times the terminal account has been (re)created) |
+| GET | `/api/v1/device-users/{device_user_pk}` | lifecycle fields incl. `account_incarnation`; never biometric data |
 
 ### Attendance
 | Method | Path | Notes |
