@@ -10,9 +10,39 @@
 // Only types that do not exist in the schema (generic Page<T>, inline dict
 // returns from write/transition endpoints, API error envelope) are defined
 // locally here.
-import type { components } from "./generated";
+import type { components, operations } from "./generated";
 
 type Schemas = components["schemas"];
+
+/** Keys of the OpenAPI operations map (for QueryOf/BodyOf/JsonResponse). */
+export type OperationsKey = keyof operations;
+
+type Operations = operations;
+
+// --- Operation-level derivation helpers -------------------------------------
+// client.ts method signatures derive from the OpenAPI operations types, so the
+// client contract cannot drift from the API: any backend change fails `tsc` at
+// the call sites after `npm run codegen:api`.
+
+/** Query parameters of an operation (undefined when the endpoint has none). */
+export type QueryOf<OpId extends keyof Operations> = NonNullable<
+  Operations[OpId]["parameters"]["query"]
+>;
+
+/** Request body JSON of an operation. */
+export type BodyOf<OpId extends keyof Operations> = NonNullable<
+  Operations[OpId]["requestBody"]
+>["content"]["application/json"];
+
+/** Successful response JSON of an operation (default status 200). */
+export type JsonResponse<
+  OpId extends keyof Operations,
+  Status extends number = 200,
+> = Status extends keyof Operations[OpId]["responses"]
+  ? Operations[OpId]["responses"][Status] extends { content: { "application/json": infer T } }
+    ? T
+    : never
+  : never;
 
 // --- Local helpers (not in the OpenAPI schema) -----------------------------
 
@@ -31,39 +61,9 @@ export interface Page<T> {
   offset: number;
 }
 
-export interface Healthz {
-  status: string;
-}
-
-/** Inline return of GET /api/v1/enrollments/{id}/next-actions. */
-export interface EnrollmentNextActions {
-  enrollment_id: number;
-  status: string;
-  next_actions: Array<{
-    action: string;
-    target_status: string;
-    requires_role: string;
-  }>;
-}
-
-/** Inline return of POST /api/v1/enrollments/reserve. */
-export interface EnrollmentReserveResult {
-  enrollment_id: number;
-  reserved_device_user_id: string;
-  status: string;
-  reserved_at: string;
-  employee_id: string;
-  device_id: number;
-}
-
-/** Inline return of enrollment transition POSTs. */
-export interface EnrollmentTransitionResult {
-  enrollment_id: number;
-  status: string;
-}
-
 // --- Model types derived from the OpenAPI schema ---------------------------
 
+export type Healthz = Schemas["Healthz"];
 export type HealthCheck = Schemas["HealthCheck"];
 export type CollectorSummary = Schemas["CollectorSummary"];
 export type DashboardSummary = Schemas["DashboardSummary"];
@@ -80,6 +80,10 @@ export type Mapping = Schemas["Mapping"];
 export type MappingEligibilityItem = Schemas["MappingEligibilityItem"];
 export type MappingEligibility = Schemas["MappingEligibility"];
 export type Enrollment = Schemas["Enrollment"];
+export type EnrollmentNextActions = Schemas["EnrollmentNextActions"];
+export type EnrollmentReserveResult = Schemas["EnrollmentReserveResult"];
+export type EnrollmentTransitionResult = Schemas["EnrollmentTransitionResult"];
+export type EventTypesResponse = Schemas["EventTypesResponse"];
 export type AuditEvent = Schemas["AuditEvent"];
 export type RankReference = Schemas["RankReference"];
 export type LoginResponse = Schemas["LoginResponse"];

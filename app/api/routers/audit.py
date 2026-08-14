@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Query
 from app.api import repository
 from app.api.dependencies import get_cfg, pagination, require_role
 from app.api.errors import ApiError
-from app.api.schemas import AuditEvent, Page
+from app.api.schemas import AuditEvent, EventTypesResponse, Page
 from app.config import Config
 
 router = APIRouter(tags=["audit"])
@@ -63,6 +63,7 @@ def list_events(
 
 @router.get(
     "/api/v1/audit/event-types",
+    response_model=EventTypesResponse,
     dependencies=[Depends(admin_only)],
 )
 def event_types(cfg: Config = Depends(get_cfg)):

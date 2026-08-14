@@ -221,7 +221,11 @@ class TestRoleMatrix(unittest.TestCase):
         client, p = self._client_with("OPERATOR")
         with p, patch(
             "app.api.routers.enrollments.reserve_next_device_user_id",
-            return_value={"enrollment_id": 9, "reserved_device_user_id": "1002", "status": "RESERVED"},
+            return_value={"enrollment_id": 9, "reserved_device_user_id": "1002",
+                          "status": "RESERVED",
+                          "reserved_at": datetime(2026, 8, 12, 12, 0, 0, tzinfo=timezone.utc),
+                          "employee_id": "039c4486-b30f-4ce1-b780-783cd268858d",
+                          "device_id": 1},
         ):
             resp = client.post(
                 "/api/v1/enrollments/reserve",

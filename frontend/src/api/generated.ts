@@ -1052,6 +1052,59 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * EnrollmentNextActions
+         * @description Valid next operator actions for an enrollment's current state.
+         */
+        EnrollmentNextActions: {
+            /** Enrollment Id */
+            enrollment_id: number;
+            /** Next Actions */
+            next_actions: {
+                [key: string]: string;
+            }[];
+            /** Status */
+            status: string;
+        };
+        /**
+         * EnrollmentReserveResult
+         * @description Return of POST /api/v1/enrollments/reserve.
+         */
+        EnrollmentReserveResult: {
+            /** Device Id */
+            device_id: number;
+            /** Employee Id */
+            employee_id: string;
+            /** Enrollment Id */
+            enrollment_id: number;
+            /**
+             * Reserved At
+             * Format: date-time
+             */
+            reserved_at: string;
+            /** Reserved Device User Id */
+            reserved_device_user_id: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * EnrollmentTransitionResult
+         * @description Return of enrollment transition POSTs.
+         */
+        EnrollmentTransitionResult: {
+            /** Enrollment Id */
+            enrollment_id: number;
+            /** Status */
+            status: string;
+        };
+        /**
+         * EventTypesResponse
+         * @description Return of GET /api/v1/audit/event-types.
+         */
+        EventTypesResponse: {
+            /** Event Types */
+            event_types: string[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1071,6 +1124,14 @@ export interface components {
              * Format: date-time
              */
             timestamp: string;
+        };
+        /** Healthz */
+        Healthz: {
+            /**
+             * Status
+             * @default ok
+             */
+            status: string;
         };
         /** Human */
         Human: {
@@ -1630,7 +1691,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EventTypesResponse"];
                 };
             };
         };
@@ -1978,7 +2039,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnrollmentReserveResult"];
                 };
             };
             /** @description Validation Error */
@@ -2044,7 +2105,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnrollmentTransitionResult"];
                 };
             };
             /** @description Validation Error */
@@ -2079,7 +2140,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnrollmentTransitionResult"];
                 };
             };
             /** @description Validation Error */
@@ -2114,7 +2175,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnrollmentTransitionResult"];
                 };
             };
             /** @description Validation Error */
@@ -2184,7 +2245,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnrollmentTransitionResult"];
                 };
             };
             /** @description Validation Error */
@@ -2215,7 +2276,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnrollmentNextActions"];
                 };
             };
             /** @description Validation Error */
@@ -2250,7 +2311,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnrollmentTransitionResult"];
                 };
             };
             /** @description Validation Error */
@@ -2285,7 +2346,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnrollmentTransitionResult"];
                 };
             };
             /** @description Validation Error */
@@ -2647,7 +2708,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Healthz"];
                 };
             };
         };

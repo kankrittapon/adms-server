@@ -19,7 +19,13 @@ from pydantic import BaseModel, Field
 from app.api import repository
 from app.api.dependencies import get_cfg, pagination, require_role, require_writes
 from app.api.errors import ApiError, not_found
-from app.api.schemas import Enrollment, Page
+from app.api.schemas import (
+    Enrollment,
+    EnrollmentNextActions,
+    EnrollmentReserveResult,
+    EnrollmentTransitionResult,
+    Page,
+)
 from app.config import Config
 from app.enrollment import (
     ALLOWED_TRANSITIONS,
@@ -65,7 +71,10 @@ def get_enrollment_detail(enrollment_id: int, cfg: Config = Depends(get_cfg)):
     return row
 
 
-@router.get("/api/v1/enrollments/{enrollment_id}/next-actions")
+@router.get(
+    "/api/v1/enrollments/{enrollment_id}/next-actions",
+    response_model=EnrollmentNextActions,
+)
 def get_next_actions(enrollment_id: int, cfg: Config = Depends(get_cfg)):
     """Returns the valid next operator actions for an enrollment's current state.
 
@@ -112,6 +121,7 @@ class ReserveRequest(BaseModel):
 @router.post(
     "/api/v1/enrollments/reserve",
     status_code=201,
+    response_model=EnrollmentReserveResult,
     dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def reserve(payload: ReserveRequest, cfg: Config = Depends(get_cfg)):
@@ -166,6 +176,7 @@ def create_terminal_account(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/start-fingerprint-enrollment",
+    response_model=EnrollmentTransitionResult,
     dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def start_fingerprint(
@@ -182,6 +193,7 @@ def start_fingerprint(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/confirm-fingerprint",
+    response_model=EnrollmentTransitionResult,
     dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def confirm_fingerprint(
@@ -198,6 +210,7 @@ def confirm_fingerprint(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/start-controlled-scan",
+    response_model=EnrollmentTransitionResult,
     dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def start_scan_window(
@@ -214,6 +227,7 @@ def start_scan_window(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/confirm-controlled-scan",
+    response_model=EnrollmentTransitionResult,
     dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def confirm_scan(
@@ -232,6 +246,7 @@ def confirm_scan(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/mark-ready-for-mapping",
+    response_model=EnrollmentTransitionResult,
     dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def mark_ready(
@@ -248,6 +263,7 @@ def mark_ready(
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/cancel",
+    response_model=EnrollmentTransitionResult,
     dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def cancel(

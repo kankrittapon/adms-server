@@ -245,6 +245,40 @@ class Enrollment(BaseModel):
     device_name: Optional[str] = None
 
 
+class EnrollmentNextActions(BaseModel):
+    """Valid next operator actions for an enrollment's current state."""
+
+    enrollment_id: int
+    status: str
+    next_actions: List[
+        Dict[str, str]
+    ]  # [{action, target_status, requires_role}] — from the canonical state machine
+
+
+class EnrollmentReserveResult(BaseModel):
+    """Return of POST /api/v1/enrollments/reserve."""
+
+    enrollment_id: int
+    reserved_device_user_id: str
+    status: str
+    reserved_at: datetime
+    employee_id: str
+    device_id: int
+
+
+class EnrollmentTransitionResult(BaseModel):
+    """Return of enrollment transition POSTs."""
+
+    enrollment_id: int
+    status: str
+
+
+class EventTypesResponse(BaseModel):
+    """Return of GET /api/v1/audit/event-types."""
+
+    event_types: List[str]
+
+
 # --- Reference ------------------------------------------------------------
 
 

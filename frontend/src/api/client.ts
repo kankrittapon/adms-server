@@ -10,6 +10,7 @@ import type {
   EnrollmentNextActions,
   EnrollmentReserveResult,
   EnrollmentTransitionResult,
+  EventTypesResponse,
   HealthCheck,
   Healthz,
   Human,
@@ -20,6 +21,10 @@ import type {
   Page,
   RankReference,
   UnattributedAttendance,
+  BodyOf,
+  JsonResponse,
+  OperationsKey,
+  QueryOf,
 } from "./types";
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://192.168.1.248:8081";
@@ -101,6 +106,16 @@ async function requestAuth<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+function qs(params: QueryOf<OperationsKey> | undefined): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v === undefined || v === null) continue;
+    q.set(k, String(v));
+  }
+  const s = q.toString();
+  return s ? "?" + s : "";
+}
+
 export const api = {
   baseUrl: BASE_URL,
 
@@ -109,10 +124,17 @@ export const api = {
     requestAuth<LoginResponse>("/api/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password } satisfies BodyOf<"login_api_v1_auth_login_post">),
     }),
-  logout: () => request<unknown>("/api/v1/auth/logout", undefined, { method: "POST" }),
+  logout: () =>
+    request<JsonResponse<"logout_api_v1_auth_logout_post">>("/api/v1/auth/logout", undefined, { method: "POST" }),
   me: (signal?: AbortSignal) => request<MeResponse>("/api/v1/auth/me", signal),
+  changePassword: (current_password: string, new_password: string) =>
+    request<JsonResponse<"change_password_api_v1_auth_change_password_post">>("/api/v1/auth/change-password", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_password, new_password } satisfies BodyOf<"change_password_api_v1_auth_change_password_post">),
+    }),
 
   // System / health
   healthz: (signal?: AbortSignal) => request<Healthz>("/healthz", signal),
@@ -120,16 +142,8 @@ export const api = {
   dashboard: (signal?: AbortSignal) => request<DashboardSummary>("/api/v1/dashboard/summary", signal),
 
   // Humans
-  humans: (params: { limit?: number; offset?: number; production_scope?: boolean; search?: string; category?: string }, signal?: AbortSignal) => {
-    const q = new URLSearchParams();
-    if (params.limit !== undefined) q.set("limit", String(params.limit));
-    if (params.offset !== undefined) q.set("offset", String(params.offset));
-    if (params.production_scope !== undefined) q.set("production_scope", String(params.production_scope));
-    if (params.search) q.set("search", params.search);
-    if (params.category) q.set("category", params.category);
-    const qs = q.toString();
-    return request<Page<Human>>(`/api/v1/humans${qs ? "?" + qs : ""}`, signal);
-  },
+  humans: (params: QueryOf<"list_humans_api_v1_humans_get">, signal?: AbortSignal) =>
+    request<Page<Human>>(`/api/v1/humans${qs(params)}`, signal),
   human: (employeeId: string, signal?: AbortSignal) => request<Human>(`/api/v1/humans/${employeeId}`, signal),
 
   // Devices
@@ -137,50 +151,22 @@ export const api = {
   device: (deviceId: number, signal?: AbortSignal) => request<Device>(`/api/v1/devices/${deviceId}`, signal),
 
   // Device users
-  deviceUsers: (params: { device_id?: number; active?: boolean; limit?: number }, signal?: AbortSignal) => {
-    const q = new URLSearchParams();
-    if (params.device_id !== undefined) q.set("device_id", String(params.device_id));
-    if (params.active !== undefined) q.set("active", String(params.active));
-    if (params.limit !== undefined) q.set("limit", String(params.limit));
-    const qs = q.toString();
-    return request<Page<DeviceUser>>(`/api/v1/device-users${qs ? "?" + qs : ""}`, signal);
-  },
+  deviceUsers: (params: QueryOf<"list_device_users_api_v1_device_users_get">, signal?: AbortSignal) =>
+    request<Page<DeviceUser>>(`/api/v1/device-users${qs(params)}`, signal),
   deviceUser: (pk: number, signal?: AbortSignal) => request<DeviceUser>(`/api/v1/device-users/${pk}`, signal),
 
   // Attendance
-  attendance: (params: { limit?: number; offset?: number; status?: string; date_from?: string; date_to?: string; employee_id?: string; device_user_pk?: number }, signal?: AbortSignal) => {
-    const q = new URLSearchParams();
-    if (params.limit !== undefined) q.set("limit", String(params.limit));
-    if (params.offset !== undefined) q.set("offset", String(params.offset));
-    if (params.status) q.set("status", params.status);
-    if (params.date_from) q.set("date_from", params.date_from);
-    if (params.date_to) q.set("date_to", params.date_to);
-    if (params.employee_id) q.set("employee_id", params.employee_id);
-    if (params.device_user_pk !== undefined) q.set("device_user_pk", String(params.device_user_pk));
-    const qs = q.toString();
-    return request<Page<Attendance>>(`/api/v1/attendance${qs ? "?" + qs : ""}`, signal);
-  },
+  attendance: (params: QueryOf<"list_attendance_api_v1_attendance_get">, signal?: AbortSignal) =>
+    request<Page<Attendance>>(`/api/v1/attendance${qs(params)}`, signal),
   attendanceDetail: (id: number, signal?: AbortSignal) => request<AttendanceDetail>(`/api/v1/attendance/${id}`, signal),
 
   // Mappings
-  mappings: (params: { limit?: number; mapping_status?: string }, signal?: AbortSignal) => {
-    const q = new URLSearchParams();
-    if (params.limit !== undefined) q.set("limit", String(params.limit));
-    if (params.mapping_status) q.set("mapping_status", params.mapping_status);
-    const qs = q.toString();
-    return request<Page<Mapping>>(`/api/v1/mappings${qs ? "?" + qs : ""}`, signal);
-  },
+  mappings: (params: QueryOf<"list_mappings_api_v1_mappings_get">, signal?: AbortSignal) =>
+    request<Page<Mapping>>(`/api/v1/mappings${qs(params)}`, signal),
   mapping: (id: number, signal?: AbortSignal) => request<Mapping>(`/api/v1/mappings/${id}`, signal),
   mappingEligibility: (signal?: AbortSignal) =>
     request<MappingEligibility>("/api/v1/mappings/eligibility", signal),
-  createMapping: (payload: {
-    employee_id: string;
-    device_user_pk: number;
-    enrollment_id: number;
-    controlled_attendance_id: number;
-    verified_by: string;
-    verification_note: string;
-  }) =>
+  createMapping: (payload: BodyOf<"create_mapping_api_v1_mappings_post">) =>
     request<CreateMappingResult>("/api/v1/mappings", undefined, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -188,97 +174,89 @@ export const api = {
     }),
 
   // F4 reconciliation diagnostics (ADMIN)
-  unattributedAttendance: (
-    params: { limit?: number; offset?: number },
-    signal?: AbortSignal
-  ) => {
-    const q = new URLSearchParams();
-    if (params.limit !== undefined) q.set("limit", String(params.limit));
-    if (params.offset !== undefined) q.set("offset", String(params.offset));
-    const qs = q.toString();
-    return request<Page<UnattributedAttendance>>(
-      `/api/v1/attendance/unattributed${qs ? "?" + qs : ""}`,
-      signal
-    );
-  },
+  unattributedAttendance: (params: QueryOf<"unattributed_api_v1_attendance_unattributed_get">, signal?: AbortSignal) =>
+    request<Page<UnattributedAttendance>>(`/api/v1/attendance/unattributed${qs(params)}`, signal),
 
   // Enrollments
-  enrollments: (params: { limit?: number; status?: string }, signal?: AbortSignal) => {
-    const q = new URLSearchParams();
-    if (params.limit !== undefined) q.set("limit", String(params.limit));
-    if (params.status) q.set("status", params.status);
-    const qs = q.toString();
-    return request<Page<Enrollment>>(`/api/v1/enrollments${qs ? "?" + qs : ""}`, signal);
-  },
+  enrollments: (params: QueryOf<"list_enrollments_api_v1_enrollments_get">, signal?: AbortSignal) =>
+    request<Page<Enrollment>>(`/api/v1/enrollments${qs(params)}`, signal),
   enrollment: (id: number, signal?: AbortSignal) => request<Enrollment>(`/api/v1/enrollments/${id}`, signal),
   enrollmentNextActions: (id: number, signal?: AbortSignal) =>
     request<EnrollmentNextActions>(`/api/v1/enrollments/${id}/next-actions`, signal),
 
   // Enrollment workflow writes (gated server-side by API_WRITE_ENABLED + role)
-  reserveEnrollment: (payload: {
-    employee_id: string;
-    device_id: number;
-    operator: string;
-    roster_user_ids?: string[];
-  }) =>
+  reserveEnrollment: (payload: BodyOf<"reserve_api_v1_enrollments_reserve_post">) =>
     request<EnrollmentReserveResult>("/api/v1/enrollments/reserve", undefined, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),
   startFingerprintEnrollment: (id: number, operator: string, notes?: string) =>
-    enrollmentTransition(`/api/v1/enrollments/${id}/start-fingerprint-enrollment`, operator, notes),
+    enrollmentTransition<"start_fingerprint_api_v1_enrollments__enrollment_id__start_fingerprint_enrollment_post">(
+      id,
+      "start-fingerprint-enrollment",
+      operator,
+      notes
+    ),
   confirmFingerprintEnrolled: (id: number, operator: string, notes?: string) =>
-    enrollmentTransition(`/api/v1/enrollments/${id}/confirm-fingerprint`, operator, notes),
+    enrollmentTransition<"confirm_fingerprint_api_v1_enrollments__enrollment_id__confirm_fingerprint_post">(
+      id,
+      "confirm-fingerprint",
+      operator,
+      notes
+    ),
   startControlledScan: (id: number, operator: string, notes?: string) =>
-    enrollmentTransition(`/api/v1/enrollments/${id}/start-controlled-scan`, operator, notes),
-  confirmControlledScan: (id: number, operator: string, scanTime: string, notes?: string) =>
+    enrollmentTransition<"start_scan_window_api_v1_enrollments__enrollment_id__start_controlled_scan_post">(
+      id,
+      "start-controlled-scan",
+      operator,
+      notes
+    ),
+  confirmControlledScan: (id: number, operator: string, scanTime: string) =>
     request<EnrollmentTransitionResult>(`/api/v1/enrollments/${id}/confirm-controlled-scan`, undefined, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ operator, scan_time: scanTime, notes }),
+      body: JSON.stringify({
+        operator,
+        scan_time: scanTime,
+      } satisfies BodyOf<"confirm_scan_api_v1_enrollments__enrollment_id__confirm_controlled_scan_post">),
     }),
   markReadyForMapping: (id: number, operator: string, notes?: string) =>
-    enrollmentTransition(`/api/v1/enrollments/${id}/mark-ready-for-mapping`, operator, notes),
+    enrollmentTransition<"mark_ready_api_v1_enrollments__enrollment_id__mark_ready_for_mapping_post">(
+      id,
+      "mark-ready-for-mapping",
+      operator,
+      notes
+    ),
   cancelEnrollment: (id: number, operator: string, notes: string) =>
     request<EnrollmentTransitionResult>(`/api/v1/enrollments/${id}/cancel`, undefined, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ operator, notes }),
+      body: JSON.stringify({ operator, notes } satisfies BodyOf<"cancel_api_v1_enrollments__enrollment_id__cancel_post">),
     }),
 
   // Reference
   ranks: (signal?: AbortSignal) => request<RankReference[]>("/api/v1/reference/ranks", signal),
 
   // F5 hardening: audit trail (admin)
-  auditEvents: (params: { limit?: number; offset?: number; event_type?: string }, signal?: AbortSignal) => {
-    const q = new URLSearchParams();
-    if (params.limit !== undefined) q.set("limit", String(params.limit));
-    if (params.offset !== undefined) q.set("offset", String(params.offset));
-    if (params.event_type) q.set("event_type", params.event_type);
-    const qs = q.toString();
-    return request<Page<AuditEvent>>(`/api/v1/audit/events${qs ? "?" + qs : ""}`, signal);
-  },
+  auditEvents: (params: QueryOf<"list_events_api_v1_audit_events_get">, signal?: AbortSignal) =>
+    request<Page<AuditEvent>>(`/api/v1/audit/events${qs(params)}`, signal),
   auditEventTypes: (signal?: AbortSignal) =>
-    request<{ event_types: string[] }>("/api/v1/audit/event-types", signal),
-
-  // F5 hardening: password self-change
-  changePassword: (current_password: string, new_password: string) =>
-    request<{ changed: boolean; other_tokens_revoked: number }>("/api/v1/auth/change-password", undefined, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ current_password, new_password }),
-    }),
+    request<EventTypesResponse>("/api/v1/audit/event-types", signal),
 };
 
-function enrollmentTransition(
-  path: string,
+function enrollmentTransition<OpId extends OperationsKey>(
+  id: number,
+  action: string,
   operator: string,
   notes?: string
 ): Promise<EnrollmentTransitionResult> {
-  return request<EnrollmentTransitionResult>(path, undefined, {
+  return request<EnrollmentTransitionResult>(`/api/v1/enrollments/${id}/${action}`, undefined, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ operator, notes }),
+    body: JSON.stringify({
+      operator,
+      notes,
+    } satisfies BodyOf<OpId>),
   });
 }

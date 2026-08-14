@@ -22,6 +22,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.dependencies import require_role
 from app.api.errors import register_exception_handlers
+from app.api.schemas import Healthz
 from app.api.settings import ApiSettings, get_settings
 from app.api.routers import (
     attendance,
@@ -110,7 +111,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     app.state.settings = settings
 
     # Public process liveness for the Docker healthcheck (no auth).
-    @app.get("/healthz", tags=["system"])
+    @app.get("/healthz", tags=["system"], response_model=Healthz)
     def healthz():
         return {"status": "ok"}
 

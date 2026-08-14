@@ -1029,6 +1029,112 @@
         "title": "Enrollment",
         "type": "object"
       },
+      "EnrollmentNextActions": {
+        "description": "Valid next operator actions for an enrollment's current state.",
+        "properties": {
+          "enrollment_id": {
+            "title": "Enrollment Id",
+            "type": "integer"
+          },
+          "next_actions": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Next Actions",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enrollment_id",
+          "status",
+          "next_actions"
+        ],
+        "title": "EnrollmentNextActions",
+        "type": "object"
+      },
+      "EnrollmentReserveResult": {
+        "description": "Return of POST /api/v1/enrollments/reserve.",
+        "properties": {
+          "device_id": {
+            "title": "Device Id",
+            "type": "integer"
+          },
+          "employee_id": {
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "enrollment_id": {
+            "title": "Enrollment Id",
+            "type": "integer"
+          },
+          "reserved_at": {
+            "format": "date-time",
+            "title": "Reserved At",
+            "type": "string"
+          },
+          "reserved_device_user_id": {
+            "title": "Reserved Device User Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enrollment_id",
+          "reserved_device_user_id",
+          "status",
+          "reserved_at",
+          "employee_id",
+          "device_id"
+        ],
+        "title": "EnrollmentReserveResult",
+        "type": "object"
+      },
+      "EnrollmentTransitionResult": {
+        "description": "Return of enrollment transition POSTs.",
+        "properties": {
+          "enrollment_id": {
+            "title": "Enrollment Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enrollment_id",
+          "status"
+        ],
+        "title": "EnrollmentTransitionResult",
+        "type": "object"
+      },
+      "EventTypesResponse": {
+        "description": "Return of GET /api/v1/audit/event-types.",
+        "properties": {
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Event Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "event_types"
+        ],
+        "title": "EventTypesResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1085,6 +1191,17 @@
           "timestamp"
         ],
         "title": "HealthCheck",
+        "type": "object"
+      },
+      "Healthz": {
+        "properties": {
+          "status": {
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "Healthz",
         "type": "object"
       },
       "Human": {
@@ -2557,7 +2674,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EventTypesResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -3168,7 +3287,9 @@
           "201": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentReserveResult"
+                }
               }
             },
             "description": "Successful Response"
@@ -3260,7 +3381,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentTransitionResult"
+                }
               }
             },
             "description": "Successful Response"
@@ -3310,7 +3433,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentTransitionResult"
+                }
               }
             },
             "description": "Successful Response"
@@ -3360,7 +3485,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentTransitionResult"
+                }
               }
             },
             "description": "Successful Response"
@@ -3460,7 +3587,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentTransitionResult"
+                }
               }
             },
             "description": "Successful Response"
@@ -3501,7 +3630,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentNextActions"
+                }
               }
             },
             "description": "Successful Response"
@@ -3551,7 +3682,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentTransitionResult"
+                }
               }
             },
             "description": "Successful Response"
@@ -3601,7 +3734,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentTransitionResult"
+                }
               }
             },
             "description": "Successful Response"
@@ -4166,7 +4301,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/Healthz"
+                }
               }
             },
             "description": "Successful Response"

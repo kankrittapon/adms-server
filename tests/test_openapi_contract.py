@@ -72,5 +72,9 @@ def test_openapi_snapshot_shape() -> None:
         "DashboardSummary",
         "RankReference",
         "Page_Human_",
+        "EnrollmentNextActions",
+        "EnrollmentReserveResult",
+        "EnrollmentTransitionResult",
+        "EventTypesResponse",
     ):
         assert s in schemas, f"missing schema {s} in OpenAPI snapshot"
