@@ -1,5 +1,20 @@
-// Types mirroring the ADMS F1 API contract (docs/API_CONTRACT.md).
-// Generated-compatible with the OpenAPI schema at /openapi.json.
+// ADMS API client types.
+//
+// PromptID: ADMS-Frontend-Codegen-001
+//
+// Model types are DERIVED from the FastAPI OpenAPI schema (single source of
+// truth). Regenerate with `npm run codegen:api` (frontend/) after any backend
+// contract change; tests/test_openapi_contract.py fails if the committed
+// frontend/openapi.json snapshot is stale.
+//
+// Only types that do not exist in the schema (generic Page<T>, inline dict
+// returns from write/transition endpoints, API error envelope) are defined
+// locally here.
+import type { components } from "./generated";
+
+type Schemas = components["schemas"];
+
+// --- Local helpers (not in the OpenAPI schema) -----------------------------
 
 export interface ApiErrorBody {
   error: {
@@ -8,6 +23,7 @@ export interface ApiErrorBody {
   };
 }
 
+/** Generic pagination envelope; concrete Page_X_ types exist in the schema. */
 export interface Page<T> {
   items: T[];
   total: number;
@@ -19,158 +35,7 @@ export interface Healthz {
   status: string;
 }
 
-export interface CollectorSummary {
-  state?: string | null;
-  device_connected?: boolean | null;
-  db_status?: string | null;
-  mqtt_status?: string | null;
-  loop_alive?: boolean | null;
-  updated_at?: string | null;
-}
-
-export interface HealthCheck {
-  status: string;
-  database: string;
-  mqtt?: string | null;
-  collector?: CollectorSummary | null;
-  timestamp: string;
-}
-
-export interface DashboardSummary {
-  humans_total: number;
-  humans_production_eligible: number;
-  humans_excluded: number;
-  devices_total: number;
-  devices_active: number;
-  device_users_total: number;
-  device_users_active: number;
-  device_users_unmapped: number;
-  attendance_total: number;
-  attendance_today: number;
-  attendance_unattributed: number;
-  mappings_total: number;
-  mappings_verified_active: number;
-  enrollments_by_status: Record<string, number>;
-  collector?: CollectorSummary | null;
-}
-
-export interface RankMetadata {
-  rank_th_original: string;
-  rank_th_full?: string | null;
-  rank_th_abbreviation?: string | null;
-  rank_en?: string | null;
-  rank_en_abbreviation?: string | null;
-  rank_category?: string | null;
-  acting?: string | null;
-}
-
-export interface Human {
-  employee_id: string;
-  personnel_id?: string | null;
-  display_name: string;
-  rank?: string | null;
-  rank_metadata?: RankMetadata | null;
-  position?: string | null;
-  branch?: string | null;
-  category?: string | null;
-  notes?: string | null;
-  active: boolean;
-  production_scope: boolean;
-  source: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Device {
-  device_id: number;
-  serial_number: string;
-  device_name: string;
-  device_ip: string;
-  platform: string;
-  firmware_version?: string | null;
-  active: boolean;
-  first_seen_at: string;
-  last_seen_at: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface DeviceUser {
-  device_user_pk: number;
-  device_id: number;
-  device_user_id: string;
-  device_uid?: number | null;
-  device_display_name?: string | null;
-  privilege: number;
-  active: boolean;
-  first_seen_at: string;
-  last_seen_at: string;
-  roster_last_seen_at?: string | null;
-  inactive_at?: string | null;
-  account_incarnation: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Attendance {
-  id: number;
-  user_id: string;
-  device_ip: string;
-  scan_time: string;
-  punch_type?: string | null;
-  status: string;
-  device_id?: number | null;
-  device_user_pk?: number | null;
-  employee_id?: string | null;
-  created_at: string;
-}
-
-export interface AttendanceDetail extends Attendance {
-  device_name?: string | null;
-  device_user_id?: string | null;
-  employee_name?: string | null;
-}
-
-export interface Mapping {
-  mapping_id: number;
-  employee_id: string;
-  device_user_pk: number;
-  mapping_status: string;
-  mapping_source: string;
-  verified_by?: string | null;
-  verification_method?: string | null;
-  verification_note?: string | null;
-  valid_from: string;
-  valid_to?: string | null;
-  verified_at?: string | null;
-  created_at: string;
-  updated_at: string;
-  employee_name?: string | null;
-  device_user_id?: string | null;
-}
-
-export interface Enrollment {
-  enrollment_id: number;
-  employee_id: string;
-  device_id: number;
-  reserved_device_user_id: string;
-  status: string;
-  reserved_by: string;
-  reserved_at: string;
-  terminal_created_at?: string | null;
-  device_uid?: number | null;
-  fingerprint_confirmed_at?: string | null;
-  controlled_scan_window_until?: string | null;
-  controlled_scan_time?: string | null;
-  confirmed_by?: string | null;
-  confirmed_at?: string | null;
-  notes?: string | null;
-  created_at: string;
-  updated_at: string;
-  employee_name?: string | null;
-  device_name?: string | null;
-}
-
+/** Inline return of GET /api/v1/enrollments/{id}/next-actions. */
 export interface EnrollmentNextActions {
   enrollment_id: number;
   status: string;
@@ -181,6 +46,7 @@ export interface EnrollmentNextActions {
   }>;
 }
 
+/** Inline return of POST /api/v1/enrollments/reserve. */
 export interface EnrollmentReserveResult {
   enrollment_id: number;
   reserved_device_user_id: string;
@@ -190,79 +56,32 @@ export interface EnrollmentReserveResult {
   device_id: number;
 }
 
+/** Inline return of enrollment transition POSTs. */
 export interface EnrollmentTransitionResult {
   enrollment_id: number;
   status: string;
 }
 
-export interface MappingEligibilityItem {
-  enrollment_id: number;
-  employee_id: string;
-  device_id: number;
-  reserved_device_user_id: string;
-  controlled_scan_time?: string | null;
-  confirmed_by?: string | null;
-  confirmed_at?: string | null;
-  notes?: string | null;
-  employee_name?: string | null;
-  device_name?: string | null;
-  device_user_pk?: number | null;
-  device_user_id?: string | null;
-  device_user_active?: boolean | null;
-  controlled_attendance_id?: number | null;
-}
+// --- Model types derived from the OpenAPI schema ---------------------------
 
-export interface MappingEligibility {
-  items: MappingEligibilityItem[];
-  count: number;
-}
-
-export interface CreateMappingResult {
-  mapping_id: number;
-  employee_id: string;
-  device_user_pk: number;
-  mapping_status: string;
-  verification_method: string;
-  valid_from: string;
-  valid_to?: string | null;
-  verified_at: string;
-}
-
-export interface AttributionReasoning {
-  classification: string;
-  detail: string;
-  valid_from?: string | null;
-  valid_to?: string | null;
-  resolver_employee_id?: string | null;
-}
-
-export interface UnattributedAttendance {
-  id: number;
-  user_id: string;
-  device_ip: string;
-  scan_time: string;
-  punch_type?: string | null;
-  status: string;
-  device_id?: number | null;
-  device_user_pk?: number | null;
-  employee_id?: string | null;
-  created_at: string;
-  reasoning: AttributionReasoning;
-}
-
-export interface AuditEvent {
-  id: number;
-  device_ip?: string | null;
-  event_type: string;
-  message?: string | null;
-  created_at: string;
-}
-
-export interface RankReference {
-  rank_th_abbreviation: string;
-  rank_th_full: string;
-  rank_en: string;
-  rank_en_abbreviation: string;
-  rank_category: string;
-  source: string;
-}
+export type HealthCheck = Schemas["HealthCheck"];
+export type CollectorSummary = Schemas["CollectorSummary"];
+export type DashboardSummary = Schemas["DashboardSummary"];
+export type RankMetadata = Schemas["RankMetadata"];
+export type Human = Schemas["Human"];
+export type Device = Schemas["Device"];
+export type DeviceUser = Schemas["DeviceUser"];
+export type Attendance = Schemas["Attendance"];
+export type AttendanceDetail = Schemas["AttendanceDetail"];
+export type AttendanceRawPayload = Schemas["AttendanceRawPayload"];
+export type AttributionReasoning = Schemas["AttributionReasoning"];
+export type UnattributedAttendance = Schemas["UnattributedAttendance"];
+export type Mapping = Schemas["Mapping"];
+export type MappingEligibilityItem = Schemas["MappingEligibilityItem"];
+export type MappingEligibility = Schemas["MappingEligibility"];
+export type Enrollment = Schemas["Enrollment"];
+export type AuditEvent = Schemas["AuditEvent"];
+export type RankReference = Schemas["RankReference"];
+export type LoginResponse = Schemas["LoginResponse"];
+export type MeResponse = Schemas["MeResponse"];
+export type CreateMappingResult = Schemas["CreateMappingResponse"];

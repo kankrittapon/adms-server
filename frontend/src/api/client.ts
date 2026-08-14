@@ -13,8 +13,10 @@ import type {
   HealthCheck,
   Healthz,
   Human,
+  LoginResponse,
   Mapping,
   MappingEligibility,
+  MeResponse,
   Page,
   RankReference,
   UnattributedAttendance,
@@ -97,23 +99,6 @@ async function requestAuth<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiClientError(res.status, code, message);
   }
   return res.json();
-}
-
-export interface LoginResponse {
-  token: string;
-  token_type: string;
-  role: string;
-  expires_at: string;
-  operator_id: number;
-  username: string;
-  display_name: string;
-}
-
-export interface MeResponse {
-  operator_id: number;
-  username: string;
-  display_name: string;
-  role: string;
 }
 
 export const api = {

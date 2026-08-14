@@ -29,14 +29,6 @@ class Healthz(BaseModel):
     status: str = "ok"
 
 
-class HealthCheck(BaseModel):
-    status: str
-    database: str
-    mqtt: Optional[str] = None
-    collector: Optional[Dict[str, Any]] = None
-    timestamp: datetime
-
-
 class CollectorSummary(BaseModel):
     state: Optional[str] = None
     device_connected: Optional[bool] = None
@@ -44,6 +36,14 @@ class CollectorSummary(BaseModel):
     mqtt_status: Optional[str] = None
     loop_alive: Optional[bool] = None
     updated_at: Optional[datetime] = None
+
+
+class HealthCheck(BaseModel):
+    status: str
+    database: str
+    mqtt: Optional[str] = None
+    collector: Optional[CollectorSummary] = None
+    timestamp: datetime
 
 
 class DashboardSummary(BaseModel):

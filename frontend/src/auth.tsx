@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { api, getToken } from "./api/client";
-import type { MeResponse } from "./api/client";
+import type { MeResponse } from "./api/types";
 
 interface AuthState {
   me: MeResponse | null;
