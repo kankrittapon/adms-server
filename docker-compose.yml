@@ -48,6 +48,9 @@ services:
       MQTT_TOPIC: ${MQTT_TOPIC:-attendance/events}
       ON_TIME_START: ${ON_TIME_START:-05:00:00}
       ON_TIME_END: ${ON_TIME_END:-10:00:00}
+      HEALTH_FILE_PATH: ${HEALTH_FILE_PATH:-/var/run/adms/collector_health.json}
+    volumes:
+      - adms_collector_health:/var/run/adms
     healthcheck:
       test: ["CMD", "python", "-m", "app.healthcheck"]
       interval: 30s
@@ -82,6 +85,9 @@ services:
       API_GLOBAL_RATE_PER_MIN: ${API_GLOBAL_RATE_PER_MIN:-600}
       MQTT_HOST: mqtt
       MQTT_PORT: "1883"
+      HEALTH_FILE_PATH: ${HEALTH_FILE_PATH:-/var/run/adms/collector_health.json}
+    volumes:
+      - adms_collector_health:/var/run/adms:ro
     ports:
       - "192.168.1.248:8081:8081"
     healthcheck:
@@ -113,3 +119,4 @@ volumes:
   adms_postgres_data:
   adms_mqtt_data:
   adms_mqtt_log:
+  adms_collector_health:

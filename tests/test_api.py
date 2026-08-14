@@ -12,6 +12,7 @@ Authentication is simulated by patching the token lookup; F5 auth flows are
 covered in tests/test_api_auth.py.
 """
 
+import os
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -198,6 +199,34 @@ class TestHealth(ApiTestBase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["status"], "degraded")
         self.assertEqual(resp.json()["database"], "UNREACHABLE")
+
+    @patch("app.api.repository.check_database", return_value=True)
+    @patch("app.api.repository.check_mqtt", return_value="HEALTHY")
+    def test_health_surfaces_collector_from_env_file(self, mock_mqtt, mock_db):
+        """HealthCheck.collector is populated from the env-driven health file
+        (the shared volume bridge between listener and api containers)."""
+        import json
+        import tempfile
+
+        payload = {
+            "state": "LIVE",
+            "loop_alive": True,
+            "device_connected": True,
+            "db_status": "HEALTHY",
+            "mqtt_status": "HEALTHY",
+            "updated_at": "2026-08-14T12:00:00+00:00",
+        }
+        with tempfile.TemporaryDirectory() as td:
+            health_file = os.path.join(td, "collector_health.json")
+            with open(health_file, "w", encoding="utf-8") as f:
+                json.dump(payload, f)
+            with patch("app.api.routers.health._HEALTH_FILE_DEFAULT", health_file):
+                resp = self.client.get("/api/v1/health")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["collector"]["state"], "LIVE")
+        self.assertTrue(body["collector"]["device_connected"])
+        self.assertEqual(body["collector"]["db_status"], "HEALTHY")
 
 
 class TestDashboard(ApiTestBase):
