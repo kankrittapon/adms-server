@@ -85,6 +85,11 @@ Every error uses the envelope:
 | GET | `/api/v1/device-users` | `device_id`, `active` filters; includes `account_incarnation` (how many times the terminal account has been (re)created) |
 | GET | `/api/v1/device-users/{device_user_pk}` | lifecycle fields incl. `account_incarnation`; never biometric data |
 
+### Realtime stream (SSE)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/v1/stream/attendance` | **SSE** (VIEWER+) — live `ATTENDANCE_SCAN` events fan-out from the Collector's MQTT `attendance/events` topic; heartbeat `: ping` every 15s; **live-only (no replay)** — use the attendance GET endpoints for history; Bearer via `fetch` + ReadableStream (no token in URL) |
+
 ### Attendance
 | Method | Path | Notes |
 |---|---|---|
