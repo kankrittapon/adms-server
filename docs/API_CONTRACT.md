@@ -4,6 +4,7 @@
 **Status:** IMPLEMENTED / LIVE (backend foundation remains 100% COMPLETE)
 **Base URL:** `http://192.168.1.248:8081` (LAN-only)
 **OpenAPI:** `http://192.168.1.248:8081/openapi.json` · Swagger UI `/docs`
+**Frontend types (codegen):** committed snapshot `frontend/openapi.json` + `openapi-typescript` → `frontend/src/api/generated.ts`; `types.ts` re-exports generated components. Regenerate with `npm run codegen:api`; `tests/test_openapi_contract.py` fails when the snapshot is stale (`ADMS-Frontend-Codegen-001`).
 **Auth (F5):** DB-backed operator accounts, opaque Bearer tokens, roles VIEWER/OPERATOR/ADMIN — strict fail-closed (no/invalid token → 401, insufficient role → 403)
 **Write gate:** `API_WRITE_ENABLED=false` by default (defense-in-depth on top of role auth)
 
@@ -193,5 +194,8 @@ operator decision (`API_WRITE_ENABLED=true` in compose env).
   origin + rate limiting still future hardening.
 - **Realtime:** MQTT `attendance/events` → SSE bridge (read-only fan-out)
   or short polling on `GET /api/v1/attendance?from=last_id` (deferred).
+- **Codegen (DONE):** `npm run codegen:api` exports `app.openapi()` →
+  `frontend/openapi.json` and regenerates `frontend/src/api/generated.ts`;
+  `tests/test_openapi_contract.py` guards drift (`ADMS-Frontend-Codegen-001`).
 
 STOP.
