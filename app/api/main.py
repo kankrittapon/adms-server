@@ -36,6 +36,7 @@ from app.api.routers import (
     mappings,
     operators,
     reference,
+    stream,
 )
 
 log = logging.getLogger("app.api")
@@ -131,6 +132,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         mappings.router,
         enrollments.router,
         reference.router,
+        stream.router,
     ):
         app.include_router(router, dependencies=[VIEWER])
 

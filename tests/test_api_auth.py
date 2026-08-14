@@ -211,7 +211,10 @@ class TestRoleMatrix(unittest.TestCase):
 
         ctx = OperatorContext(1, "u", "U", role)
         p = patch("app.api.dependencies._load_token_context", return_value=ctx)
-        p.start()
+        # NOTE: do NOT p.start() here — the tests use `with p:` which starts
+        # and stops the patch. Calling start() first double-activates it so
+        # the single stop() from the context manager leaves the patch leaked
+        # into every subsequent test in the process (silent auth bypass).
         return client, p
 
     def test_operator_can_reserve(self):
@@ -304,7 +307,9 @@ class TestOperatorManagement(unittest.TestCase):
 
         ctx = OperatorContext(1, "admin", "Admin", "ADMIN")
         p = patch("app.api.dependencies._load_token_context", return_value=ctx)
-        p.start()
+        # NOTE: do NOT p.start() here — tests use `with self._admin_client():`
+        # which starts and stops the patch. Double-starting leaks the patch
+        # into every subsequent test in the process (silent auth bypass).
         return p
 
     def test_viewer_cannot_list_operators(self):

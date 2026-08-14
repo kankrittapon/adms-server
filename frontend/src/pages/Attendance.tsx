@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
+import { useAttendanceStream } from "../hooks/useAttendanceStream";
 import { ErrorBanner, Loading, StatusBadge } from "../components/Status";
 
 export function Attendance() {
@@ -10,16 +11,30 @@ export function Attendance() {
   const [status, setStatus] = useState("");
   const [limit, setLimit] = useState(50);
 
-  const { data, loading, error } = useApi(
+  const { data, loading, error, reload } = useApi(
     (s) => api.attendance({ limit, status: status || undefined }, s),
     [status, limit]
   );
+
+  // Realtime: live indicator + auto-refresh when a scan arrives via SSE.
+  const { status: streamStatus, lastEvent } = useAttendanceStream();
+  const [newScan, setNewScan] = useState<{ user_id: string; scan_time: string } | null>(null);
+  const bannerTimer = useRef<number | null>(null);
+  useEffect(() => {
+    if (lastEvent && lastEvent.event_type === "ATTENDANCE_SCAN") {
+      setNewScan({ user_id: lastEvent.user_id, scan_time: lastEvent.scan_time });
+      reload();
+      if (bannerTimer.current) window.clearTimeout(bannerTimer.current);
+      bannerTimer.current = window.setTimeout(() => setNewScan(null), 6000);
+    }
+  }, [lastEvent, reload]);
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Attendance</h1>
         <div className="flex items-center gap-3">
+          <LiveBadge status={streamStatus} />
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded border border-gray-300 px-3 py-1.5 text-sm">
             <option value="">All statuses</option>
             <option value="ON_TIME">ON_TIME</option>
@@ -33,6 +48,18 @@ export function Attendance() {
           </select>
         </div>
       </div>
+
+      {newScan && (
+        <div className="mb-3 flex items-center justify-between rounded border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          <span>
+            <span className="mr-1 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+            New scan detected — user <strong>{newScan.user_id}</strong> at <code className="font-mono text-xs">{newScan.scan_time.replace("T", " ")}</code>
+          </span>
+          <button onClick={() => reload()} className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700">
+            Refresh now
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <Loading />
@@ -142,6 +169,30 @@ function ReasoningBadge({ classification }: { classification: string }) {
   return (
     <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${REASONING_STYLES[classification] ?? "bg-gray-100 text-gray-700"}`}>
       {classification}
+    </span>
+  );
+}
+
+function LiveBadge({ status }: { status: "connecting" | "connected" | "disconnected" }) {
+  const styles: Record<string, string> = {
+    connected: "bg-emerald-100 text-emerald-700",
+    connecting: "bg-amber-100 text-amber-700",
+    disconnected: "bg-gray-100 text-gray-500",
+  };
+  const labels: Record<string, string> = {
+    connected: "LIVE",
+    connecting: "CONNECTING",
+    disconnected: "OFFLINE",
+  };
+  return (
+    <span
+      title={"Realtime stream via MQTT→SSE"}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${styles[status] ?? styles.disconnected}`}
+    >
+      <span
+        className={`inline-block h-2 w-2 rounded-full ${status === "connected" ? "animate-pulse bg-emerald-500" : "bg-current opacity-50"}`}
+      />
+      {labels[status] ?? "OFFLINE"}
     </span>
   );
 }
