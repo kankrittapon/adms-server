@@ -1,5 +1,9 @@
 # ADMS Historical Reports & Checkpoint Archive
 
+## 0. Latest Report
+
+- [**ADMS-FullSystem-P0P1-Hardening-007**](ADMS-FullSystem-P0P1-Hardening-007.md) — security correctness fixes, runtime write-session architecture, enrollment/UX hardening, i18n cleanup. Phases A–E complete in source; Phase F production deployment pending a separate owner gate. This report lives alongside this index (not in `archive/`) because it documents work not yet fully deployed — it will move to `archive/` once Phase F ships and a subsequent checkpoint supersedes it.
+
 ## 1. About Historical Reports
 
 The documents in this directory represent immutable verification records, execution checkpoints, and architectural audits conducted throughout the development and operational hardening of the ADMS platform.
@@ -47,3 +51,4 @@ All completed phase reports have been preserved in the [Archive](file:///d:/Dev/
 | `ADMS-Frontend-FullControlUX-002` | Hardware UX | Browser-driven terminal account creation via Command Bus | [ADMS-Frontend-FullControlUX-002](archive/) |
 | `ADMS-Frontend-DesignSystem-003` | Design System | Enterprise UI design system implementation across all pages | (Integrated into `frontend/`) |
 | `ADMS-Frontend-I18n-RBAC-Personnel-004` | I18n & RBAC | TH/EN localization, `ENROLLMENT_OPERATOR`, English name edit | (Integrated across codebase) |
+| `ADMS-FullSystem-P0P1-Hardening-007` | Security + UX Hardening | Two-layer write-session model, operator-management write-gate fix, alert/confirm removal, centralized i18n enum labels. Phase F deployment pending. | [ADMS-FullSystem-P0P1-Hardening-007.md](ADMS-FullSystem-P0P1-Hardening-007.md) *(kept alongside this index, not archived — see §0)* |

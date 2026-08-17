@@ -1,154 +1,231 @@
 # ADMS Server
 
-An enterprise Attendance Device Management System and identity reconciliation platform connecting physical ZKTeco biometric terminals to authoritative personnel rosters with temporal identity resolution.
+An Attendance Device Management System connecting physical ZKTeco biometric terminals to an authoritative personnel roster, with browser-driven enrollment, temporal identity verification, and role-based access control.
 
 ---
 
-## 1. What ADMS Is
+## Current Status
 
-ADMS manages the complete attendance and biometric identity lifecycle across:
-**Official Personnel Master → ZKTeco Biometric Terminal → Collector Ingestion Engine → PostgreSQL Database → REST API / SSE → Web Management Console**.
-
-It provides evidence-gated personnel enrollment, realtime attendance monitoring, temporal identity mapping, and fail-closed production write safety.
+- **Backend API**: implemented and running in production (FastAPI, PostgreSQL, MQTT).
+- **Frontend operational console**: implemented and running in production (React/TypeScript, Tailwind).
+- **TH/EN UI**: implemented, runtime-switchable, Thai default.
+- **Realtime attendance (SSE)**: implemented and running.
+- **Guided enrollment workflow**: implemented and running.
+- **VERIFIED temporal identity mapping**: implemented and running.
+- **Role-based access control (RBAC)**: implemented — `VIEWER`, `ENROLLMENT_OPERATOR`, `OPERATOR`, `ADMIN`.
+- **OpenAPI-generated TypeScript client**: implemented; `frontend/src/api/generated.ts` is derived from the live backend contract and drift-guarded by a test.
+- **Runtime write-session feature** (`ADMS-FullSystem-P0P1-Hardening-007`, Phases A–E): **implemented in source, merged to `main`. Not yet active in production.**
+  - Production **Phase F deployment has NOT occurred**.
+  - Migration `012_write_session_schema.sql` has **NOT been applied** to the production database.
+  - `API_WRITE_ENABLED` currently **remains `false`** in production, using the pre-existing infrastructure-only write gate.
+  - See [STATUS.md](STATUS.md) and [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md) for the full picture and the pending Phase F owner gate.
 
 ---
 
-## 2. System Architecture
+## Architecture
+
+Attendance ingestion (device → database):
 
 ```
-ZKTeco ZEM560_TFT (192.168.1.201:4370)
-  │
-  │ TCP 4370 (ZK Binary Protocol)
-  ▼
+ZKTeco Terminal
+      ↓
 Collector (adms_zkteco_listener)
-  ├── PostgreSQL (adms_postgres) — Relational persistence & temporal resolver
-  └── MQTT Broker (adms_mqtt) — Realtime events & Device Command Bus
-        │
-        ▼
-      FastAPI Backend (adms_api :8081)
-        │
-        ▼
-   Web Console (adms_web :8082) — React / TypeScript / Tailwind
+      ↓
+PostgreSQL / MQTT
+      ↓
+FastAPI (adms_api)
+      ↓
+React ADMS Console (adms_web)
 ```
 
----
+Terminal commands (browser → device), issued during enrollment:
 
-## 3. Key Features
+```
+Browser
+   ↓
+FastAPI
+   ↓
+DeviceCommandBus (MQTT)
+   ↓
+Collector
+   ↓
+ZKTeco Terminal
+```
 
-- **Human Master Registry**: Authoritative personnel roster with RTN rank normalization and conscript exclusion.
-- **Biometric Ingestion**: Realtime polling, historical backfill, deduplication, and UTC timestamp normalization.
-- **Temporal Identity Mapping**: Scans resolve against strict `[valid_from, valid_to)` validity intervals.
-- **Guided Enrollment Workspace**: 6-step guided UI for reserving IDs, creating device accounts, and confirming controlled scans.
-- **Browser-Driven Hardware Control**: Serialized `set_user()` account creation via MQTT Device Command Bus.
-- **Realtime Attendance SSE**: Instant scan alerts and live table updates via Server-Sent Events.
-- **Bilingual Localization**: Seamless runtime switching between Thai (`th`) and English (`en`).
-- **Role-Based Access Control (RBAC)**: Fine-grained permissions matrix with capability-limited roles.
-- **Personnel English Name Editing**: Admin-gated bilingual name management.
-- **System Audit Trail**: Complete append-only audit trail for authentication, rate limiting, and lifecycle events.
-
----
-
-## 4. Roles & Access Control
-
-| Role | Access Scope |
-| ---- | ------------ |
-| `VIEWER` | Read-only access to dashboard, personnel, devices, attendance, and mappings. |
-| `ENROLLMENT_OPERATOR` | **Capability-limited operational role.** Access is strictly confined to the Enrollment Workspace, personnel lookup, and realtime stream. Forbidden from general attendance, audit logs, and dashboard summaries. |
-| `OPERATOR` | General read access plus enrollment workflow execution. |
-| `ADMIN` | Full authority including `VERIFIED` mapping creation, operator account provisioning, personnel English name updates, and audit trail inspection. |
+**The frontend never connects directly to PostgreSQL or to the ZKTeco terminal.** All reads and writes go through the FastAPI HTTP/SSE API; all terminal commands are serialized through the Collector's single exclusive device connection via the MQTT-backed `DeviceCommandBus` — the API never opens a second connection to the terminal.
 
 ---
 
-## 5. Quick Start (Production)
+## Main Features
 
-To launch the complete multi-container stack:
+- **Dashboard** — operational overview: personnel, device, attendance, and mapping summaries; collector telemetry.
+- **Personnel** — Human Master roster (Thai + English names, rank, branch, production scope).
+- **Attendance** — historical scan log plus a realtime feed (SSE); Thailand local time is the primary display, UTC is preserved as the canonical stored value and available on hover.
+- **Devices** — registered terminal fleet and discovered terminal accounts.
+- **Enrollment** — guided, step-by-step workflow: reserve a terminal ID, create a terminal account, physical fingerprint enrollment, controlled verification scan, mark ready for mapping.
+- **Mapping** — ADMIN-only creation of `VERIFIED` temporal identity mappings from controlled-scan evidence, with a human-readable confirmation step (no raw ID dumps).
+- **Audit** — append-only security/operational event trail (ADMIN only).
+- **System** — service health, password change, operator account management, rank reference table, and the runtime write-session control panel.
+- **TH/EN language switching** — runtime toggle, Thai default, persisted per browser.
+- **Role-based UX** — navigation and available actions adapt to the signed-in role; backend RBAC remains the actual authorization boundary regardless of what the UI shows.
+- **Realtime attendance** — live scan detection during both normal monitoring and the enrollment controlled-scan step, with an explicit connection-status indicator and manual reconnect.
+- **Write-session architecture** — see below.
 
+---
+
+## Identity Model
+
+```
+Human Master
+    ↓
+Enrollment (reserve → terminal account → fingerprint → controlled scan)
+    ↓
+Device User (terminal account)
+    ↓
+Controlled Scan Evidence
+    ↓
+ADMIN-created VERIFIED Mapping
+    ↓
+Attendance Attribution
+```
+
+- **No fuzzy identity matching.** Identity is never inferred from name similarity, rank, or sequential/numeric ordering.
+- **No automatic VERIFIED mapping.** Every mapping is created by an explicit ADMIN action against a specific enrollment's controlled-scan evidence.
+- **Identity authority is the `VERIFIED` mapping**, not the enrollment or the terminal account alone — a terminal account never establishes identity by itself.
+- **The temporal `[valid_from, valid_to)` model remains authoritative** for attributing attendance scans to a person; a scan outside a mapping's valid interval is never attributed.
+- Terminal-account lifecycle protections are unchanged: a disappeared terminal account closes its open mapping, and a reappeared/recycled account never inherits the prior identity automatically.
+
+---
+
+## Roles
+
+| Role | What they can do |
+|---|---|
+| **VIEWER** | View-only access — dashboard, personnel, attendance, devices, mappings. |
+| **ENROLLMENT_OPERATOR** | Enroll personnel on the fingerprint terminal. Scope is strictly limited to the enrollment workflow, personnel lookup, and the realtime stream. |
+| **OPERATOR** | View operational data and manage enrollments (broader read access than ENROLLMENT_OPERATOR, plus the same enrollment-mutation capability). |
+| **ADMIN** | Manage the system, accounts, and confirm identity mappings — full administrative authority, including operator account management, `VERIFIED` mapping creation, and audit trail access. |
+
+These descriptions match the TH/EN copy shown in the console's operator-account creation screen.
+
+---
+
+## Write Safety Model
+
+ADMS uses a **two-layer write-control model**. Layer 2 exists in source as of Phases A–E; **production has not yet transitioned onto it (Phase F pending)**.
+
+**Layer 1 — Infrastructure master gate** (`API_WRITE_ENABLED`)
+Server-owner controlled, environment-variable driven, fail-closed. This is the pre-existing mechanism and is what production currently uses exclusively (`false` today).
+
+**Layer 2 — Runtime write session** (new, in source only)
+An ADMIN-opened, time-boxed permission window:
+- ADMIN-only open/close, from the browser.
+- Fixed 30-minute duration, no automatic renewal.
+- Auto-expiring; every open/close/expiry is audited.
+- At most one session active at a time.
+
+Effective write permission:
+
+```
+allow_write =
+    infrastructure_master_enabled (API_WRITE_ENABLED)
+    AND runtime_write_session_active
+    AND role_permits_action
+```
+
+Layer 1 unconditionally overrides Layer 2 — if the infrastructure gate is off, no runtime session can be opened or can authorize anything, regardless of its state in the database.
+
+**Current production reality:** because Phase F has not been deployed, production still runs the pre-existing Layer-1-only model — writes are enabled by a server owner editing `.env` and recreating the `api` container for the duration of a session, exactly as before. Once Phase F is approved and deployed, that step is replaced by an ADMIN opening a work session from the browser for routine enrollment sessions; the infrastructure flag becomes a rarely-touched emergency lock instead of a daily toggle.
+
+---
+
+## Enrollment Workflow
+
+The **target end-state** workflow (active once Phase F is deployed):
+
+1. ADMIN opens a work session from the browser (System page).
+2. Enrollment Operator selects the Human to enroll.
+3. Reserve a terminal ID.
+4. Create the terminal account on the device.
+5. Physical fingerprint enrollment at the terminal.
+6. Controlled attendance scan (live-detected via the realtime stream, with a manual fallback).
+7. Operator marks the enrollment ready for mapping.
+8. ADMIN reviews the human-readable evidence and creates the `VERIFIED` mapping.
+9. Work session closes (manually or by expiry) — no lingering write access.
+
+**Until Phase F is deployed**, step 1 is instead a server-owner action (`.env` edit + container recreate) — see [docs/ENROLLMENT_SESSION_RUNBOOK.md](docs/ENROLLMENT_SESSION_RUNBOOK.md) for the exact current procedure and its explicit production-state notice.
+
+The CLI-based terminal-account creation path (`app.enrollment_cli`) is **emergency/fallback tooling only** — used when the browser→Collector command path is unavailable — never the normal workflow.
+
+---
+
+## Development
+
+```bash
+# Backend tests
+pytest
+
+# Frontend
+cd frontend
+npm install
+npm run dev         # local dev server, :5173
+npm run typecheck   # tsc --noEmit
+npm run build        # tsc --noEmit && vite build
+
+# OpenAPI codegen (regenerate the typed client after any backend contract change)
+npm run codegen:api
+```
+
+`tests/test_openapi_contract.py` fails if the committed `frontend/openapi.json` snapshot drifts from the live backend contract — always regenerate and commit both `frontend/openapi.json` and `frontend/src/api/generated.ts` together with any backend schema change.
+
+Current verified baseline (see [STATUS.md](STATUS.md) for the authoritative up-to-date figures): backend tests passing, frontend `tsc --noEmit` and `vite build` passing, OpenAPI drift guard passing.
+
+---
+
+## Deployment
+
+Services (`docker-compose.yml`):
+
+| Service | Container | Purpose |
+|---|---|---|
+| `adms-postgres` | `adms_postgres` | PostgreSQL persistence |
+| `mqtt` | `adms_mqtt` | MQTT broker — realtime events + Device Command Bus |
+| `listener` | `adms_zkteco_listener` | Collector — owns the single ZKTeco terminal connection |
+| `api` | `adms_api` | FastAPI backend |
+| `web` | `adms_web` | Nginx-served React console |
+
+**Normal deploy:**
 ```bash
 docker compose up -d
 ```
 
-### Access URLs
-- **Web Management Console**: `http://192.168.1.248:8082` (or `http://localhost:8082`)
-- **API Documentation (Swagger)**: `http://192.168.1.248:8081/docs`
-- **API Health Check**: `http://192.168.1.248:8081/api/v1/healthz`
+**Database migration:** apply new `sql/NNN_*.sql` files against `adms_postgres` following the procedure in [docs/DATABASE_MIGRATIONS.md](docs/DATABASE_MIGRATIONS.md) — always take a `pg_dump` backup first.
+
+**Emergency infrastructure write lock:** a server owner can unconditionally block all domain writes at any time by setting `API_WRITE_ENABLED=false` in `.env` and recreating the `api` container — this overrides any runtime write session once Phase F is live, and is the mechanism today regardless.
+
+No secrets, passwords, or tokens are stored in this repository or its documentation — configure them via `.env` (see `.env.example`; never commit `.env`).
 
 ---
 
-## 6. Configuration
+## Documentation
 
-Configure runtime parameters via `.env` in the project root:
-
-```bash
-# Database Settings
-POSTGRES_DB=adms
-POSTGRES_USER=adms
-POSTGRES_PASSWORD=<SECURE_DB_PASSWORD>
-POSTGRES_HOST=adms_postgres
-POSTGRES_PORT=5432
-
-# ZKTeco Hardware Settings
-ZKTECO_DEVICE_IP=192.168.1.201
-ZKTECO_DEVICE_PORT=4370
-ZKTECO_COMM_KEY=600
-
-# Production Write Gate (Fail-closed by default)
-API_WRITE_ENABLED=false
-
-# Security & Tokens
-API_TOKEN_SECRET=<SECRET_TOKEN_SALT>
-API_TOKEN_TTL_HOURS=12
-```
-
-> [!IMPORTANT]
-> `API_WRITE_ENABLED=false` is a fail-closed safety gate. All state mutations and device writes are blocked until explicitly enabled for an operational session.
+- [Current Status Checkpoint](STATUS.md)
+- [System Architecture](docs/ARCHITECTURE.md)
+- [API Contract](docs/API_CONTRACT.md)
+- [Security & RBAC](docs/SECURITY_RBAC.md)
+- [Enrollment Session Runbook](docs/ENROLLMENT_SESSION_RUNBOOK.md)
+- [Database Schema & Migrations](docs/DATABASE_MIGRATIONS.md)
+- [Deployment & Infrastructure Guide](docs/DEPLOYMENT.md)
+- [Operations & Troubleshooting](docs/OPERATIONS.md)
+- [P0/P1 Hardening Engineering Report](docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md) — the write-session architecture, security fixes, and UX hardening described above
+- [Historical Reports Archive](docs/reports/README.md)
 
 ---
 
-## 7. Production Physical Enrollment
+## Operational Safety Invariants
 
-To conduct an on-site physical fingerprint enrollment session, follow the authoritative runbook:
-👉 [Enrollment Session Runbook](file:///d:/Dev/adms-server/docs/ENROLLMENT_SESSION_RUNBOOK.md) (`docs/ENROLLMENT_SESSION_RUNBOOK.md`)
-
----
-
-## 8. Development & Testing
-
-### Backend Automated Test Suite
-```bash
-pytest
-```
-*Current test suite baseline: **408 passed / 0 failed** across 21 test modules.*
-
-### Frontend Development
-```bash
-cd frontend
-npm install
-npm run dev        # Launch local dev server on :5173
-npm run typecheck  # TypeScript strict type checking
-npm run build      # Vite production build
-```
-
-### OpenAPI Codegen
-```bash
-npm run codegen:api
-```
-
----
-
-## 9. Canonical Documentation
-
-- [System Architecture](file:///d:/Dev/adms-server/docs/ARCHITECTURE.md) (`docs/ARCHITECTURE.md`)
-- [Deployment & Infrastructure Guide](file:///d:/Dev/adms-server/docs/DEPLOYMENT.md) (`docs/DEPLOYMENT.md`)
-- [Security & RBAC Matrix](file:///d:/Dev/adms-server/docs/SECURITY_RBAC.md) (`docs/SECURITY_RBAC.md`)
-- [Database Schema & Migrations](file:///d:/Dev/adms-server/docs/DATABASE_MIGRATIONS.md) (`docs/DATABASE_MIGRATIONS.md`)
-- [Operations & Troubleshooting](file:///d:/Dev/adms-server/docs/OPERATIONS.md) (`docs/OPERATIONS.md`)
-- [Historical Reports Archive](file:///d:/Dev/adms-server/docs/reports/README.md) (`docs/reports/README.md`)
-
----
-
-## 10. Operational Safety Invariants
-
-1. **Zero Automatic Human Mapping**: No automatic assumption that sequential hardware IDs correspond to Human Master entries.
-2. **VERIFIED Mapping Authority**: Scans are attributed strictly when supported by explicit temporal interval mappings (`[valid_from, valid_to)`).
-3. **Hardware Lifecycle Protection**: Terminal account disappearance closes active mappings; reappearance increments `account_incarnation`.
-4. **Biometric Security**: Biometric templates remain on hardware; templates are never extracted or stored in software databases.
+1. **Zero automatic Human mapping** — no assumption that sequential or numeric hardware IDs correspond to Human Master entries.
+2. **VERIFIED mapping authority** — scans are attributed strictly within an explicit temporal interval mapping (`[valid_from, valid_to)`).
+3. **Hardware lifecycle protection** — a terminal account's disappearance closes its active mapping; reappearance increments `account_incarnation` without inheriting the prior identity.
+4. **Biometric security** — biometric templates remain on hardware; they are never extracted, transmitted, or stored in application databases.
+5. **RBAC enforcement is server-side.** Any frontend role-aware UI (navigation, disabled buttons, access-denied screens) is UX only — the backend role/write-gate checks are the actual authorization boundary.
