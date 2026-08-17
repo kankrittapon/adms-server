@@ -129,12 +129,14 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
     if (!item || item.device_user_pk == null || item.controlled_attendance_id == null) return;
     setBusy(true);
     setError(null);
+    // ADMS-FullEnrollment-E2E-Closure-017: the server derives employee_id,
+    // device_user_pk, and controlled_attendance_id itself from
+    // enrollment_id — the frontend never reconstructs security-critical
+    // mapping evidence. This is the ADMIN's actual input: which
+    // enrollment, and why.
     api
       .createMapping({
-        employee_id: item.employee_id,
-        device_user_pk: item.device_user_pk,
         enrollment_id: item.enrollment_id,
-        controlled_attendance_id: item.controlled_attendance_id,
         verified_by: verifiedBy.trim(),
         verification_note: note.trim(),
       })

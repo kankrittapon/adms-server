@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from app.config import Config
 from app.db import get_db_connection, ensure_device_user, log_sync_event
+from app.mapping_evidence import resolve_controlled_attendance_id
 
 log = logging.getLogger(__name__)
 
@@ -846,10 +847,45 @@ def mark_ready_for_mapping(
     """
     Explicit operator confirmation that the controlled scan belongs to the
     reserved Human. Reaching READY_FOR_MAPPING requires a recorded
-    controlled_scan_time (enforced here and by the DB). No mapping is created.
+    controlled_scan_time AND a resolvable controlled-scan attendance
+    evidence row (enforced here — ADMS-FullEnrollment-E2E-Closure-017). No
+    mapping is created.
+
+    A broken evidence chain must fail HERE, at Step 5, not silently survive
+    until an ADMIN clicks Step 6 and hits an evidence-derivation error —
+    the whole point of this state is "evidence is provably complete."
     """
     if not operator or not str(operator).strip():
         raise EnrollmentError("operator is required to confirm identity")
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            enroll = _fetch_enrollment(cur, enrollment_id)
+            scan_time = enroll.get("controlled_scan_time")
+            if scan_time is None:
+                raise EnrollmentError(
+                    "enrollment %s has no controlled_scan_time — controlled scan "
+                    "evidence missing" % enrollment_id
+                )
+            cur.execute(
+                "SELECT device_user_pk FROM device_users "
+                "WHERE device_id = %s AND device_user_id = %s;",
+                (enroll["device_id"], enroll["reserved_device_user_id"]),
+            )
+            du = cur.fetchone()
+            if du is None:
+                raise EnrollmentError(
+                    "enrollment %s has no terminal account on record — cannot "
+                    "resolve controlled-scan evidence" % enrollment_id
+                )
+            device_user_pk = du[0]
+            attendance_id = resolve_controlled_attendance_id(cur, device_user_pk, scan_time)
+            if attendance_id is None:
+                raise EnrollmentError(
+                    "enrollment %s: no controlled-scan attendance evidence resolves "
+                    "for device_user_pk=%s at controlled_scan_time=%s — cannot mark "
+                    "ready for identity verification without it"
+                    % (enrollment_id, device_user_pk, scan_time.isoformat())
+                )
     return _transition(
         cfg,
         enrollment_id,
@@ -871,12 +907,23 @@ def cancel_enrollment(
     """Safely cancels an enrollment. Requires a reason (notes)."""
     if not notes or not str(notes).strip():
         raise EnrollmentError("cancellation requires a reason (notes)")
-    return _transition(
+    result = _transition(
         cfg,
         enrollment_id,
         "CANCELLED",
         notes="cancelled by %s: %s" % (operator, notes),
     )
+    # ADMS-FullEnrollment-E2E-Closure-017 Phase 12: closes the previously
+    # confirmed audit gap (ADMS-Enrollment2-CancelAudit-015 found no
+    # ENROLLMENT_CANCELLED event existed anywhere, forcing that
+    # investigation to rely on updated_at/commit-timestamp correlation
+    # instead of a direct audit record).
+    log_sync_event(
+        cfg,
+        "ENROLLMENT_CANCELLED",
+        "enrollment_id=%s cancelled_by=%s reason=%s" % (enrollment_id, operator, notes),
+    )
+    return result
 
 
 def retire_enrollment(

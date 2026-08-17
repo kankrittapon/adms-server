@@ -31,6 +31,7 @@ from typing import Any, Dict, Optional
 
 from app.config import Config
 from app.db import get_db_connection, log_sync_event
+from app.mapping_evidence import resolve_controlled_attendance_id
 
 log = logging.getLogger(__name__)
 
@@ -50,23 +51,30 @@ def _fetch_row(cur: Any, sql: str, params: tuple) -> Optional[tuple]:
 
 def create_verified_mapping(
     cfg: Config,
-    employee_id: str,
-    device_user_pk: int,
     enrollment_id: int,
-    controlled_attendance_id: int,
     verified_by: str,
     verification_note: str,
 ) -> Dict[str, Any]:
     """
-    Creates exactly ONE VERIFIED temporal mapping.
+    Creates exactly ONE VERIFIED temporal mapping from a READY_FOR_MAPPING
+    enrollment.
+
+    ADMS-FullEnrollment-E2E-Closure-017: `employee_id`, `device_user_pk`,
+    and `controlled_attendance_id` are ALL derived server-side from the
+    enrollment row itself — the caller (an ADMIN confirming Step 6) never
+    supplies them. This closes the entire "frontend reconstructs
+    security-critical identity evidence from stale/nullable data" bug
+    class: there is no longer any client-suppliable field this function
+    would have to independently re-validate against a second, potentially
+    drifting piece of client input. controlled_attendance_id resolution
+    uses the single canonical resolver (app.mapping_evidence), the same
+    one app.api.repository.mapping_eligibility() uses to advertise
+    eligibility in the first place — never two independently-drifting
+    implementations of "which attendance row is the evidence."
 
     Args:
         cfg: application Config (DB connection).
-        employee_id: the owner-confirmed pilot Human (UUID).
-        device_user_pk: the device_users primary key for the production account.
         enrollment_id: the READY_FOR_MAPPING enrollment row.
-        controlled_attendance_id: the controlled-scan attendance event id that
-            constitutes the physical identity evidence.
         verified_by: explicit operator/owner identity.
         verification_note: audit note; must reference the pilot evidence.
 
@@ -79,35 +87,7 @@ def create_verified_mapping(
 
     with get_db_connection(cfg) as conn:
         with conn.cursor() as cur:
-            # 1. Device user must exist and be active.
-            du = _fetch_row(
-                cur,
-                "SELECT device_user_id, device_id, active "
-                "FROM device_users WHERE device_user_pk = %s;",
-                (device_user_pk,),
-            )
-            if du is None:
-                raise MappingError(
-                    "device_user_pk %s does not exist" % device_user_pk
-                )
-            device_user_id, device_id, du_active = du
-            if not du_active:
-                raise MappingError(
-                    "device_user_pk %s is inactive — mapping not allowed" % device_user_pk
-                )
-
-            # 2. Human must exist and be active.
-            hm = _fetch_row(
-                cur,
-                "SELECT active FROM human_employees WHERE employee_id = %s;",
-                (employee_id,),
-            )
-            if hm is None:
-                raise MappingError("Human %s does not exist" % employee_id)
-            if not hm[0]:
-                raise MappingError("Human %s is inactive — mapping not allowed" % employee_id)
-
-            # 3. Enrollment must be READY_FOR_MAPPING and match this Human/device.
+            # 1. Enrollment must exist and be READY_FOR_MAPPING.
             enroll = _fetch_row(
                 cur,
                 "SELECT employee_id, device_id, reserved_device_user_id, status, "
@@ -118,9 +98,9 @@ def create_verified_mapping(
             if enroll is None:
                 raise MappingError("enrollment %s does not exist" % enrollment_id)
             (
-                enroll_employee_id,
-                enroll_device_id,
-                enroll_terminal_id,
+                employee_id,
+                device_id,
+                reserved_device_user_id,
                 enroll_status,
                 enroll_scan_time,
                 enroll_confirmed_by,
@@ -129,22 +109,6 @@ def create_verified_mapping(
                 raise MappingError(
                     "enrollment %s is in state %s, expected READY_FOR_MAPPING"
                     % (enrollment_id, enroll_status)
-                )
-            if str(enroll_employee_id) != str(employee_id):
-                raise MappingError(
-                    "enrollment %s belongs to a different Human — mapping refused"
-                    % enrollment_id
-                )
-            if enroll_device_id != device_id:
-                raise MappingError(
-                    "enrollment %s is on a different device — mapping refused"
-                    % enrollment_id
-                )
-            if str(enroll_terminal_id) != str(device_user_id):
-                raise MappingError(
-                    "enrollment terminal account %s does not match device user %s "
-                    "(pk %s) — mapping refused"
-                    % (enroll_terminal_id, device_user_id, device_user_pk)
                 )
             if enroll_scan_time is None:
                 raise MappingError(
@@ -158,28 +122,49 @@ def create_verified_mapping(
                     % enrollment_id
                 )
 
-            # 4. Controlled-scan attendance evidence must still exist and match.
-            att = _fetch_row(
+            # 2. Device user must exist and be active — derived from the
+            # enrollment's own (device_id, reserved_device_user_id), not
+            # supplied by the caller.
+            du = _fetch_row(
                 cur,
-                "SELECT id, device_user_pk, scan_time, employee_id "
-                "FROM attendance_logs WHERE id = %s;",
-                (controlled_attendance_id,),
+                "SELECT device_user_pk, active FROM device_users "
+                "WHERE device_id = %s AND device_user_id = %s;",
+                (device_id, reserved_device_user_id),
             )
-            if att is None:
+            if du is None:
                 raise MappingError(
-                    "controlled attendance id %s does not exist" % controlled_attendance_id
+                    "no device_users row for enrollment %s's terminal account "
+                    "(device_id=%s, device_user_id=%s) — was it ever created?"
+                    % (enrollment_id, device_id, reserved_device_user_id)
                 )
-            att_id, att_pk, att_scan_time, att_employee_id = att
-            if att_pk != device_user_pk:
+            device_user_pk, du_active = du
+            if not du_active:
                 raise MappingError(
-                    "attendance id %s is for device_user_pk %s, expected %s"
-                    % (att_id, att_pk, device_user_pk)
+                    "device_user_pk %s is inactive — mapping not allowed" % device_user_pk
                 )
-            if att_scan_time != valid_from:
+
+            # 3. Human must exist and be active.
+            hm = _fetch_row(
+                cur,
+                "SELECT active FROM human_employees WHERE employee_id = %s;",
+                (employee_id,),
+            )
+            if hm is None:
+                raise MappingError("Human %s does not exist" % employee_id)
+            if not hm[0]:
+                raise MappingError("Human %s is inactive — mapping not allowed" % employee_id)
+
+            # 4. Controlled-scan attendance evidence must resolve via the
+            # canonical resolver — same matcher mapping_eligibility() used
+            # to advertise this enrollment as eligible in the first place.
+            controlled_attendance_id = resolve_controlled_attendance_id(
+                cur, device_user_pk, valid_from
+            )
+            if controlled_attendance_id is None:
                 raise MappingError(
-                    "attendance id %s scan_time %s does not match enrollment "
-                    "controlled_scan_time %s"
-                    % (att_id, att_scan_time.isoformat(), valid_from.isoformat())
+                    "no controlled-scan attendance evidence resolves for enrollment "
+                    "%s (device_user_pk=%s, controlled_scan_time=%s) — cannot verify "
+                    "identity without it" % (enrollment_id, device_user_pk, valid_from.isoformat())
                 )
 
             # 5. No conflicting VERIFIED mapping for this device user.

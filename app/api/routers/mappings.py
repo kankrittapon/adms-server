@@ -83,12 +83,18 @@ def get_mapping(mapping_id: int, cfg: Config = Depends(get_cfg)):
 
 
 class CreateMappingRequest(BaseModel):
-    employee_id: str = Field(description="owner-confirmed Human UUID")
-    device_user_pk: int = Field(description="device_users primary key")
+    """ADMS-FullEnrollment-E2E-Closure-017: employee_id, device_user_pk, and
+    controlled_attendance_id are all derived server-side from the
+    enrollment row (see app.mapping.create_verified_mapping) — the ADMIN
+    confirming Step 6 supplies only which enrollment and why. This is a
+    breaking API change (previously required 4 caller-supplied identity
+    fields); every caller in this repository (Mappings.tsx, tests) is
+    updated in the same change. It permanently closes the "frontend
+    reconstructs security-critical mapping evidence from stale/nullable
+    data" bug class that produced 422s at Step 6.
+    """
+
     enrollment_id: int = Field(description="READY_FOR_MAPPING enrollment id")
-    controlled_attendance_id: int = Field(
-        description="controlled-scan attendance event id (identity evidence)"
-    )
     verified_by: str = Field(description="explicit operator/owner identity")
     verification_note: str = Field(description="audit note referencing pilot evidence")
 
@@ -117,10 +123,7 @@ class CreateMappingResponse(BaseModel):
 def create_mapping(payload: CreateMappingRequest, cfg: Config = Depends(get_cfg)):
     result = create_verified_mapping(
         cfg,
-        employee_id=payload.employee_id,
-        device_user_pk=payload.device_user_pk,
         enrollment_id=payload.enrollment_id,
-        controlled_attendance_id=payload.controlled_attendance_id,
         verified_by=payload.verified_by,
         verification_note=payload.verification_note,
     )

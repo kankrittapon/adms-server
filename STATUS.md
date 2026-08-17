@@ -1,6 +1,6 @@
 # ADMS Current Status
 
-**Latest PromptID**: `ADMS-DeviceCommandBus-TimeoutMargin-010` (deployed to production — see [docs/reports/ADMS-DeviceCommandBus-TimeoutMargin-010.md](docs/reports/ADMS-DeviceCommandBus-TimeoutMargin-010.md))
+**Latest PromptID**: `ADMS-FullEnrollment-E2E-Closure-017` (committed, **NOT yet deployed** — pending owner deployment gate; see [docs/reports/ADMS-FullEnrollment-E2E-Closure-017.md](docs/reports/ADMS-FullEnrollment-E2E-Closure-017.md)). Fixes the root cause of the recurring Step 6 "Attendance ID #?" / 422 failure (a second, independent exact-timestamp-equality check inside `create_verified_mapping()` that PromptID-016's eligibility-query fix never touched); adds a single canonical controlled-scan evidence resolver used by both the eligibility listing and mapping creation; gates `READY_FOR_MAPPING` on resolvable evidence so a broken evidence chain fails at Step 5, not Step 6; simplifies `POST /api/v1/mappings` to `{enrollment_id, verified_by, verification_note}` (server derives the rest); adds a full Step 1→6→post-mapping-attendance E2E test. Deployed most recently before this: `ADMS-DeviceCommandBus-TimeoutMargin-010` (see [docs/reports/ADMS-DeviceCommandBus-TimeoutMargin-010.md](docs/reports/ADMS-DeviceCommandBus-TimeoutMargin-010.md)).
 
 **Incident record correction (010)**: Terminal User 1002's earlier disappearance from the terminal roster was **not** a firmware/software persistence failure. The OWNER manually deleted User 1002 from the physical terminal after an earlier browser operation reported an error (itself a real, separately-fixed bug — see PromptID `ADMS-ZEM560-TerminalAccount-Idempotency-Recovery-008`). This is the authoritative account; no further hardware investigation is open on this incident.
 
@@ -37,7 +37,7 @@ Full engineering detail: [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](do
 
 - **Repository HEAD**: see `git log -1` (this checkpoint's commits are recorded in the Phase F report)
 - **Database Migrations Applied to Production**: through `012_write_session_schema.sql` (12 migrations, additive-only — applied during Phase F, verified pre/post backups taken).
-- **Automated Test Baseline**: **467 passed / 0 failed** (`pytest tests/`, includes the write-session, terminal-account-idempotency, and DeviceCommandBus timeout-margin matrices)
+- **Automated Test Baseline**: **534 passed / 0 failed** (`pytest tests/`, includes the write-session, terminal-account-idempotency, DeviceCommandBus timeout-margin, single-owner device I/O, mapping-evidence, and full Step 1→6 E2E matrices)
 - **Frontend Typecheck & Build**: `tsc --noEmit` PASS (0 errors), `vite build` PASS
 - **OpenAPI Drift Guard**: PASS (`tests/test_openapi_contract.py`, covers the `/write-session` endpoints)
 - **Production write-control verification**: full two-layer matrix (Layer-1-only block, role enforcement, session open/close/idempotent-close, expiry-does-not-block-reopen, Layer-1-overrides-Layer-2) verified live against production via temporary, fully-cleaned-up test-fixture accounts — see the Phase F report.

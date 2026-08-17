@@ -1,18 +1,24 @@
 """
-Tests for controlled VERIFIED mapping creation (ADMS-Data-HumanDeviceMapping-003).
+Tests for controlled VERIFIED mapping creation (ADMS-Data-HumanDeviceMapping-003,
+simplified contract per ADMS-FullEnrollment-E2E-Closure-017).
 
 Covers:
   - Happy path: exactly one VERIFIED mapping with valid_from =
     controlled_scan_time, valid_to NULL, CONTROLLED_SCAN method
-  - Precondition failures: missing/inactive device user, missing/inactive
-    Human, enrollment not READY_FOR_MAPPING / wrong Human / wrong device /
-    terminal mismatch / missing evidence, attendance evidence missing or
-    mismatched, conflicting VERIFIED mapping
+  - employee_id/device_user_pk/controlled_attendance_id are ALL derived
+    server-side from enrollment_id — the caller supplies only
+    (enrollment_id, verified_by, verification_note)
+  - Precondition failures: enrollment missing/wrong state/missing evidence,
+    missing/inactive device user, missing/inactive Human, unresolvable
+    controlled-scan attendance evidence, conflicting VERIFIED mapping
   - Safety: no attendance mutation, no terminal access, no bulk/auto mapping,
     verified_by and note required
 
 No physical device or database is required — DB access is mocked at the
-app.mapping boundary (same convention as tests/test_enrollment.py).
+app.mapping boundary (same convention as tests/test_enrollment.py). The
+FakeCursor here supports both fetchone() (five sequential precondition/
+insert reads) and fetchall() (the canonical evidence resolver's bounded
+candidate query, called exactly once per create_verified_mapping call).
 """
 
 import unittest
@@ -23,6 +29,8 @@ from app.config import Config
 from app.mapping import MappingError, create_verified_mapping
 
 PILOT_EMPLOYEE_ID = "039c4486-b30f-4ce1-b780-783cd268858d"
+DEVICE_ID = 1
+RESERVED_DEVICE_USER_ID = "1001"
 DEVICE_USER_PK = 7
 ENROLLMENT_ID = 1
 ATTENDANCE_ID = 12
@@ -31,20 +39,26 @@ NOW = datetime(2026, 8, 12, 12, 0, 0, tzinfo=timezone.utc)
 
 
 class FakeCursor:
-    """Records executed SQL and serves canned fetchone results."""
+    """Records executed SQL; serves canned fetchone() results in order and
+    a single canned fetchall() result (the evidence resolver's candidate
+    rows)."""
 
-    def __init__(self, fetchone_queue=None, rowcount=1):
+    def __init__(self, fetchone_queue=None, fetchall_result=None, rowcount=1):
         self.executed = []
-        self._queue = list(fetchone_queue or [])
+        self._fetchone_queue = list(fetchone_queue or [])
+        self._fetchall_result = list(fetchall_result if fetchall_result is not None else [])
         self.rowcount = rowcount
 
     def execute(self, sql, params=None):
         self.executed.append((sql, params))
 
     def fetchone(self):
-        if self._queue:
-            return self._queue.pop(0)
+        if self._fetchone_queue:
+            return self._fetchone_queue.pop(0)
         return None
+
+    def fetchall(self):
+        return self._fetchall_result
 
     def sql(self):
         return [s for s, _ in self.executed]
@@ -64,18 +78,30 @@ def make_db(mock_conn_fn, cur):
     return mock_conn
 
 
-def happy_path_queue(employee_id=PILOT_EMPLOYEE_ID, status="READY_FOR_MAPPING",
-                     scan_time=SCAN_TIME, attendance_pk=DEVICE_USER_PK,
-                     attendance_scan_time=SCAN_TIME, conflict=None):
-    """Builds the fetchone queue for a precondition-passing run."""
+def happy_path_queue(
+    employee_id=PILOT_EMPLOYEE_ID,
+    status="READY_FOR_MAPPING",
+    scan_time=SCAN_TIME,
+    device_user_active=True,
+    human_active=True,
+    conflict=None,
+):
+    """Builds the fetchone() queue matching create_verified_mapping's actual
+    call order: enrollment -> device_users -> human_employees -> [resolver
+    uses fetchall(), not fetchone()] -> conflict-check -> INSERT RETURNING."""
     return [
-        ("1001", 1, True),            # device_users (id, device_id, active)
-        (True,),                      # human_employees (active)
-        (employee_id, 1, "1001", status, scan_time, "owner-krittaphol"),  # enrollment
-        (ATTENDANCE_ID, attendance_pk, attendance_scan_time, None),  # attendance
-        conflict,                     # conflicting VERIFIED mapping?
-        (1, scan_time, NOW),          # INSERT RETURNING
+        (employee_id, DEVICE_ID, RESERVED_DEVICE_USER_ID, status, scan_time, "owner-krittaphol"),  # enrollment
+        (DEVICE_USER_PK, device_user_active),  # device_users
+        (human_active,),                       # human_employees
+        conflict,                              # conflicting VERIFIED mapping?
+        (1, scan_time, NOW),                   # INSERT RETURNING
     ]
+
+
+def happy_path_attendance_candidates(attendance_id=ATTENDANCE_ID, scan_time=SCAN_TIME):
+    """The evidence resolver's fetchall() result — a single exact-match
+    candidate within the window."""
+    return [(attendance_id, scan_time)]
 
 
 class TestMappingHappyPath(unittest.TestCase):
@@ -83,22 +109,22 @@ class TestMappingHappyPath(unittest.TestCase):
         self.cfg = Config.from_env()
         self.note = (
             "Pilot evidence: production account 1001, physical fingerprint "
-            "enrollment, controlled attendance id 12, explicit owner "
+            "enrollment, controlled attendance evidence, explicit owner "
             "confirmation, PromptID ADMS-Data-DeviceEnrollmentPilot-001"
         )
 
     @patch("app.mapping.log_sync_event")
     @patch("app.mapping.get_db_connection")
     def test_creates_exactly_one_verified_mapping(self, mock_conn_fn, mock_log):
-        cur = FakeCursor(fetchone_queue=happy_path_queue())
+        cur = FakeCursor(
+            fetchone_queue=happy_path_queue(),
+            fetchall_result=happy_path_attendance_candidates(),
+        )
         conn = make_db(mock_conn_fn, cur)
 
         result = create_verified_mapping(
             self.cfg,
-            employee_id=PILOT_EMPLOYEE_ID,
-            device_user_pk=DEVICE_USER_PK,
             enrollment_id=ENROLLMENT_ID,
-            controlled_attendance_id=ATTENDANCE_ID,
             verified_by="owner-krittaphol",
             verification_note=self.note,
         )
@@ -120,7 +146,6 @@ class TestMappingHappyPath(unittest.TestCase):
         self.assertEqual(params[4], "CONTROLLED_SCAN")  # verification_method
         self.assertEqual(params[5], self.note)
         self.assertEqual(params[6], SCAN_TIME)  # valid_from
-        # valid_to must be NULL — the INSERT passes only 7 params + NULL literal.
         self.assertIn("NULL", inserts[0].split("VALUES")[1].split(")")[0])
 
         conn.commit.assert_called()
@@ -129,210 +154,127 @@ class TestMappingHappyPath(unittest.TestCase):
 
     @patch("app.mapping.get_db_connection")
     def test_verified_by_required(self, mock_conn_fn):
-        cur = FakeCursor(fetchone_queue=happy_path_queue())
+        cur = FakeCursor(fetchone_queue=happy_path_queue(), fetchall_result=happy_path_attendance_candidates())
         make_db(mock_conn_fn, cur)
         with self.assertRaises(MappingError):
             create_verified_mapping(
-                self.cfg, employee_id=PILOT_EMPLOYEE_ID, device_user_pk=DEVICE_USER_PK,
-                enrollment_id=ENROLLMENT_ID, controlled_attendance_id=ATTENDANCE_ID,
-                verified_by="  ", verification_note="note",
+                self.cfg, enrollment_id=ENROLLMENT_ID, verified_by="  ", verification_note="note",
             )
 
     @patch("app.mapping.get_db_connection")
     def test_verification_note_required(self, mock_conn_fn):
-        cur = FakeCursor(fetchone_queue=happy_path_queue())
+        cur = FakeCursor(fetchone_queue=happy_path_queue(), fetchall_result=happy_path_attendance_candidates())
         make_db(mock_conn_fn, cur)
         with self.assertRaises(MappingError):
             create_verified_mapping(
-                self.cfg, employee_id=PILOT_EMPLOYEE_ID, device_user_pk=DEVICE_USER_PK,
-                enrollment_id=ENROLLMENT_ID, controlled_attendance_id=ATTENDANCE_ID,
-                verified_by="owner", verification_note="  ",
+                self.cfg, enrollment_id=ENROLLMENT_ID, verified_by="owner", verification_note="  ",
             )
+
+    @patch("app.mapping.get_db_connection")
+    def test_evidence_matched_within_minute_precision_gap(self, mock_conn_fn):
+        """Regression: the operator-recorded controlled_scan_time (minute
+        precision) and the real attendance_logs.scan_time (full precision)
+        differ by tens of seconds — the canonical resolver must still find
+        it, unlike the old exact-equality check that produced the
+        'Attendance ID #?' / 422 class of failure."""
+        near_scan_time = SCAN_TIME.replace(second=22, microsecond=417000)
+        cur = FakeCursor(
+            fetchone_queue=happy_path_queue(scan_time=SCAN_TIME),
+            fetchall_result=[(ATTENDANCE_ID, near_scan_time)],
+        )
+        make_db(mock_conn_fn, cur)
+        with patch("app.mapping.log_sync_event"):
+            result = create_verified_mapping(
+                self.cfg, enrollment_id=ENROLLMENT_ID, verified_by="owner", verification_note="note",
+            )
+        self.assertEqual(result["mapping_id"], 1)
 
 
 class TestMappingPreconditions(unittest.TestCase):
     def setUp(self):
         self.cfg = Config.from_env()
 
-    def _run(self, queue, **kwargs):
-        cur = FakeCursor(fetchone_queue=queue)
+    def _run(self, fetchone_queue, fetchall_result=None, **kwargs):
+        cur = FakeCursor(fetchone_queue=fetchone_queue, fetchall_result=fetchall_result)
         make_db(kwargs.pop("_conn_fn"), cur)
         args = dict(
-            employee_id=PILOT_EMPLOYEE_ID,
-            device_user_pk=DEVICE_USER_PK,
             enrollment_id=ENROLLMENT_ID,
-            controlled_attendance_id=ATTENDANCE_ID,
             verified_by="owner-krittaphol",
             verification_note="note referencing pilot evidence",
         )
         args.update(kwargs)
-        return create_verified_mapping(self.cfg, **args)
+        with patch("app.mapping.log_sync_event"):
+            return create_verified_mapping(self.cfg, **args)
 
-    def test_device_user_missing(self):
+    def test_enrollment_missing(self):
         with patch("app.mapping.get_db_connection") as m:
             with self.assertRaisesRegex(MappingError, "does not exist"):
                 self._run([None], _conn_fn=m)
 
+    def test_enrollment_wrong_state(self):
+        with patch("app.mapping.get_db_connection") as m:
+            with self.assertRaisesRegex(MappingError, "expected READY_FOR_MAPPING"):
+                self._run(
+                    [(PILOT_EMPLOYEE_ID, DEVICE_ID, RESERVED_DEVICE_USER_ID, "RESERVED", SCAN_TIME, "owner")],
+                    _conn_fn=m,
+                )
+
+    def test_enrollment_missing_scan_time(self):
+        with patch("app.mapping.get_db_connection") as m:
+            with self.assertRaisesRegex(MappingError, "controlled_scan_time"):
+                self._run(
+                    [(PILOT_EMPLOYEE_ID, DEVICE_ID, RESERVED_DEVICE_USER_ID, "READY_FOR_MAPPING", None, "owner")],
+                    _conn_fn=m,
+                )
+
+    def test_enrollment_missing_confirmed_by(self):
+        with patch("app.mapping.get_db_connection") as m:
+            with self.assertRaisesRegex(MappingError, "confirmed_by"):
+                self._run(
+                    [(PILOT_EMPLOYEE_ID, DEVICE_ID, RESERVED_DEVICE_USER_ID, "READY_FOR_MAPPING", SCAN_TIME, None)],
+                    _conn_fn=m,
+                )
+
+    def test_device_user_missing(self):
+        with patch("app.mapping.get_db_connection") as m:
+            with self.assertRaisesRegex(MappingError, "no device_users row"):
+                self._run(happy_path_queue()[:1] + [None], _conn_fn=m)
+
     def test_device_user_inactive(self):
         with patch("app.mapping.get_db_connection") as m:
             with self.assertRaisesRegex(MappingError, "inactive"):
-                self._run([("1001", 1, False)], _conn_fn=m)
+                self._run(happy_path_queue()[:1] + [(DEVICE_USER_PK, False)], _conn_fn=m)
 
     def test_human_missing(self):
         with patch("app.mapping.get_db_connection") as m:
-            with self.assertRaisesRegex(MappingError, "Human"):
-                self._run([("1001", 1, True), None], _conn_fn=m)
+            with self.assertRaisesRegex(MappingError, "does not exist"):
+                self._run(happy_path_queue()[:2] + [None], _conn_fn=m)
 
     def test_human_inactive(self):
         with patch("app.mapping.get_db_connection") as m:
             with self.assertRaisesRegex(MappingError, "inactive"):
-                self._run([("1001", 1, True), (False,)], _conn_fn=m)
+                self._run(happy_path_queue()[:2] + [(False,)], _conn_fn=m)
 
-    def test_enrollment_missing(self):
+    def test_no_controlled_attendance_evidence_resolves(self):
+        """The evidence resolver's fetchall() returns nothing within the
+        window — must fail with a clear evidence-missing message, not a
+        generic error, and must never fall back to guessing."""
         with patch("app.mapping.get_db_connection") as m:
-            with self.assertRaisesRegex(MappingError, "enrollment"):
-                self._run([("1001", 1, True), (True,), None], _conn_fn=m)
+            with self.assertRaisesRegex(MappingError, "no controlled-scan attendance evidence resolves"):
+                self._run(
+                    happy_path_queue()[:3],
+                    fetchall_result=[],  # no candidates at all
+                    _conn_fn=m,
+                )
 
-    def test_enrollment_not_ready(self):
+    def test_conflicting_verified_mapping_blocks(self):
         with patch("app.mapping.get_db_connection") as m:
-            with self.assertRaisesRegex(MappingError, "READY_FOR_MAPPING"):
-                self._run(happy_path_queue(status="CONTROLLED_SCAN_CONFIRMED"), _conn_fn=m)
-
-    def test_enrollment_wrong_human(self):
-        with patch("app.mapping.get_db_connection") as m:
-            with self.assertRaisesRegex(MappingError, "different Human"):
-                self._run(happy_path_queue(employee_id="00000000-0000-0000-0000-000000000000"), _conn_fn=m)
-
-    def test_enrollment_wrong_device(self):
-        with patch("app.mapping.get_db_connection") as m:
-            queue = [
-                ("1001", 1, True),
-                (True,),
-                (PILOT_EMPLOYEE_ID, 2, "1001", "READY_FOR_MAPPING", SCAN_TIME, "owner"),
-                (ATTENDANCE_ID, DEVICE_USER_PK, SCAN_TIME, None),
-                None,
-                (1, SCAN_TIME, NOW),
-            ]
-            with self.assertRaisesRegex(MappingError, "different device"):
-                self._run(queue, _conn_fn=m)
-
-    def test_enrollment_terminal_mismatch(self):
-        with patch("app.mapping.get_db_connection") as m:
-            queue = [
-                ("1001", 1, True),
-                (True,),
-                (PILOT_EMPLOYEE_ID, 1, "1002", "READY_FOR_MAPPING", SCAN_TIME, "owner"),
-                (ATTENDANCE_ID, DEVICE_USER_PK, SCAN_TIME, None),
-                None,
-                (1, SCAN_TIME, NOW),
-            ]
-            with self.assertRaisesRegex(MappingError, "does not match device user"):
-                self._run(queue, _conn_fn=m)
-
-    def test_missing_controlled_scan_time(self):
-        with patch("app.mapping.get_db_connection") as m:
-            with self.assertRaisesRegex(MappingError, "controlled_scan_time"):
-                self._run(happy_path_queue(scan_time=None), _conn_fn=m)
-
-    def test_missing_confirmed_by(self):
-        with patch("app.mapping.get_db_connection") as m:
-            queue = [
-                ("1001", 1, True),
-                (True,),
-                (PILOT_EMPLOYEE_ID, 1, "1001", "READY_FOR_MAPPING", SCAN_TIME, None),
-                (ATTENDANCE_ID, DEVICE_USER_PK, SCAN_TIME, None),
-                None,
-                (1, SCAN_TIME, NOW),
-            ]
-            with self.assertRaisesRegex(MappingError, "confirmed_by"):
-                self._run(queue, _conn_fn=m)
-
-    def test_attendance_evidence_missing(self):
-        with patch("app.mapping.get_db_connection") as m:
-            queue = happy_path_queue()
-            queue[3] = None  # attendance row missing
-            with self.assertRaisesRegex(MappingError, "does not exist"):
-                self._run(queue, _conn_fn=m)
-
-    def test_attendance_wrong_device_user(self):
-        with patch("app.mapping.get_db_connection") as m:
-            with self.assertRaisesRegex(MappingError, "device_user_pk"):
-                self._run(happy_path_queue(attendance_pk=99), _conn_fn=m)
-
-    def test_attendance_scan_time_mismatch(self):
-        with patch("app.mapping.get_db_connection") as m:
-            wrong = datetime(2026, 8, 12, 9, 0, 0, tzinfo=timezone.utc)
-            with self.assertRaisesRegex(MappingError, "does not match"):
-                self._run(happy_path_queue(attendance_scan_time=wrong), _conn_fn=m)
-
-    def test_conflicting_open_ended_verified_mapping(self):
-        with patch("app.mapping.get_db_connection") as m:
-            with self.assertRaisesRegex(MappingError, "conflicting"):
-                self._run(happy_path_queue(conflict=(9,)), _conn_fn=m)
-
-
-class TestMappingSafety(unittest.TestCase):
-    def setUp(self):
-        self.cfg = Config.from_env()
-
-    @patch("app.mapping.log_sync_event")
-    @patch("app.mapping.get_db_connection")
-    def test_no_attendance_mutation(self, mock_conn_fn, mock_log):
-        cur = FakeCursor(fetchone_queue=happy_path_queue())
-        make_db(mock_conn_fn, cur)
-        create_verified_mapping(
-            self.cfg, employee_id=PILOT_EMPLOYEE_ID, device_user_pk=DEVICE_USER_PK,
-            enrollment_id=ENROLLMENT_ID, controlled_attendance_id=ATTENDANCE_ID,
-            verified_by="owner", verification_note="pilot evidence",
-        )
-        for sql in cur.sql():
-            self.assertNotIn("UPDATE attendance_logs", sql)
-            self.assertNotIn("DELETE FROM attendance_logs", sql)
-
-    @patch("app.mapping.log_sync_event")
-    @patch("app.mapping.get_db_connection")
-    def test_only_one_mapping_insert(self, mock_conn_fn, mock_log):
-        cur = FakeCursor(fetchone_queue=happy_path_queue())
-        make_db(mock_conn_fn, cur)
-        create_verified_mapping(
-            self.cfg, employee_id=PILOT_EMPLOYEE_ID, device_user_pk=DEVICE_USER_PK,
-            enrollment_id=ENROLLMENT_ID, controlled_attendance_id=ATTENDANCE_ID,
-            verified_by="owner", verification_note="pilot evidence",
-        )
-        inserts = [s for s in cur.sql() if "INSERT INTO employee_device_mappings" in s]
-        self.assertEqual(len(inserts), 1)
-
-    @patch("app.mapping.log_sync_event")
-    @patch("app.mapping.get_db_connection")
-    def test_no_human_master_or_enrollment_mutation(self, mock_conn_fn, mock_log):
-        cur = FakeCursor(fetchone_queue=happy_path_queue())
-        make_db(mock_conn_fn, cur)
-        create_verified_mapping(
-            self.cfg, employee_id=PILOT_EMPLOYEE_ID, device_user_pk=DEVICE_USER_PK,
-            enrollment_id=ENROLLMENT_ID, controlled_attendance_id=ATTENDANCE_ID,
-            verified_by="owner", verification_note="pilot evidence",
-        )
-        for sql in cur.sql():
-            self.assertNotIn("INSERT INTO human_employees", sql)
-            self.assertNotIn("UPDATE device_user_enrollments", sql)
-            self.assertNotIn("UPDATE device_users", sql)
-
-    def test_no_mapping_based_on_rank_or_name(self):
-        # The SQL must be keyed by device_user_pk and employee_id only.
-        cur = FakeCursor(fetchone_queue=happy_path_queue())
-        with patch("app.mapping.get_db_connection") as m:
-            make_db(m, cur)
-            create_verified_mapping(
-                self.cfg, employee_id=PILOT_EMPLOYEE_ID, device_user_pk=DEVICE_USER_PK,
-                enrollment_id=ENROLLMENT_ID, controlled_attendance_id=ATTENDANCE_ID,
-                verified_by="owner", verification_note="pilot evidence",
-            )
-        insert_sql = [s for s in cur.sql() if "INSERT INTO employee_device_mappings" in s][0]
-        lowered = insert_sql.lower()
-        self.assertNotIn("rank", lowered)
-        self.assertNotIn("display_name", lowered)
-        self.assertNotIn("excel", lowered)
-        self.assertNotIn("source_record_key", lowered)
+            with self.assertRaisesRegex(MappingError, "conflicting VERIFIED mapping"):
+                self._run(
+                    happy_path_queue(conflict=(1,)),
+                    fetchall_result=happy_path_attendance_candidates(),
+                    _conn_fn=m,
+                )
 
 
 if __name__ == "__main__":

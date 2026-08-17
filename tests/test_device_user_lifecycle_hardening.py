@@ -301,15 +301,17 @@ class TestReenrollmentRequiresFreshMapping(unittest.TestCase):
     def test_open_mapping_blocks_new_verified_mapping(self):
         """Open VERIFIED mapping (valid_to IS NULL) blocks re-enrollment."""
         from tests.test_mapping_creation import (
-            happy_path_queue, make_db, FakeCursor, PILOT_EMPLOYEE_ID,
+            happy_path_queue, happy_path_attendance_candidates, make_db, FakeCursor,
         )
         with patch("app.mapping.get_db_connection") as m:
-            cur = FakeCursor(fetchone_queue=happy_path_queue(conflict=(9,)))
+            cur = FakeCursor(
+                fetchone_queue=happy_path_queue(conflict=(9,)),
+                fetchall_result=happy_path_attendance_candidates(),
+            )
             make_db(m, cur)
             with self.assertRaisesRegex(MappingError, "conflicting"):
                 create_verified_mapping(
-                    self.cfg, employee_id=PILOT_EMPLOYEE_ID, device_user_pk=7,
-                    enrollment_id=1, controlled_attendance_id=12,
+                    self.cfg, enrollment_id=1,
                     verified_by="operator", verification_note=self.note,
                 )
 
@@ -318,14 +320,16 @@ class TestReenrollmentRequiresFreshMapping(unittest.TestCase):
         VERIFIED mapping can be created — same Human re-enrollment is possible,
         but only through the full controlled evidence path."""
         from tests.test_mapping_creation import (
-            happy_path_queue, make_db, FakeCursor, PILOT_EMPLOYEE_ID,
+            happy_path_queue, happy_path_attendance_candidates, make_db, FakeCursor,
         )
         with patch("app.mapping.get_db_connection") as m:
-            cur = FakeCursor(fetchone_queue=happy_path_queue(conflict=None))
+            cur = FakeCursor(
+                fetchone_queue=happy_path_queue(conflict=None),
+                fetchall_result=happy_path_attendance_candidates(),
+            )
             make_db(m, cur)
             result = create_verified_mapping(
-                self.cfg, employee_id=PILOT_EMPLOYEE_ID, device_user_pk=7,
-                enrollment_id=1, controlled_attendance_id=12,
+                self.cfg, enrollment_id=1,
                 verified_by="operator", verification_note=self.note,
             )
             self.assertEqual(result["mapping_status"], "VERIFIED")

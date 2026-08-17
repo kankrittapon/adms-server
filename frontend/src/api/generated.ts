@@ -858,23 +858,19 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
-        /** CreateMappingRequest */
+        /**
+         * CreateMappingRequest
+         * @description ADMS-FullEnrollment-E2E-Closure-017: employee_id, device_user_pk, and
+         *     controlled_attendance_id are all derived server-side from the
+         *     enrollment row (see app.mapping.create_verified_mapping) — the ADMIN
+         *     confirming Step 6 supplies only which enrollment and why. This is a
+         *     breaking API change (previously required 4 caller-supplied identity
+         *     fields); every caller in this repository (Mappings.tsx, tests) is
+         *     updated in the same change. It permanently closes the "frontend
+         *     reconstructs security-critical mapping evidence from stale/nullable
+         *     data" bug class that produced 422s at Step 6.
+         */
         CreateMappingRequest: {
-            /**
-             * Controlled Attendance Id
-             * @description controlled-scan attendance event id (identity evidence)
-             */
-            controlled_attendance_id: number;
-            /**
-             * Device User Pk
-             * @description device_users primary key
-             */
-            device_user_pk: number;
-            /**
-             * Employee Id
-             * @description owner-confirmed Human UUID
-             */
-            employee_id: string;
             /**
              * Enrollment Id
              * @description READY_FOR_MAPPING enrollment id

@@ -449,32 +449,24 @@ def mapping_eligibility(cfg: Config) -> List[Dict[str, Any]]:
     offered (mirrors create_verified_mapping step 5) — no duplicate mapping
     can be proposed.
 
-    ADMS-OperatorUX-Fingerprint-Rank-Mapping-016: `controlled_attendance_id`
-    is correlated against attendance_logs by NEAREST scan_time within a
-    bounded window, not exact equality. e.controlled_scan_time is an
-    operator-entered/SSE-prefilled estimate that round-trips through an HTML
-    `datetime-local` input (minute granularity, no seconds) — it will almost
-    never bit-for-bit equal the terminal's full-precision recorded
-    attendance_logs.scan_time, even when it was auto-filled from that exact
-    event. An exact-equality match silently returned NULL here, which the
-    frontend's non-null-asserted payload then sent as a missing required
-    field — the confirmed root cause of the reported 422 on POST /mappings.
-    A ±2 minute window (well inside the 5-minute controlled-scan window
-    itself) with closest-match tie-break is used instead.
+    ADMS-FullEnrollment-E2E-Closure-017: `controlled_attendance_id` is
+    resolved via the single canonical resolver (app.mapping_evidence),
+    the same one app.mapping.create_verified_mapping() uses to
+    independently re-verify evidence — there is exactly one definition of
+    "the correct controlled-scan evidence row" in the system, not two
+    drifting SQL implementations. (PromptID-016 first fixed this query's
+    own exact-equality bug with an inline bounded-window subquery; 017
+    found create_verified_mapping()'s own separate exact-equality re-check
+    could still reject the same evidence, reproducing the "Attendance ID
+    #?" failure at Step 6 — hence the shared resolver.)
     """
-    return _fetch_all(
+    rows = _fetch_all(
         cfg,
         """
         SELECT e.enrollment_id, e.employee_id, e.device_id, e.reserved_device_user_id,
                e.controlled_scan_time, e.confirmed_by, e.confirmed_at, e.notes,
                h.display_name AS employee_name, d.device_name,
-               du.device_user_pk, du.device_user_id, du.active AS device_user_active,
-               (SELECT a.id FROM attendance_logs a
-                 WHERE a.device_user_pk = du.device_user_pk
-                   AND a.scan_time BETWEEN e.controlled_scan_time - INTERVAL '2 minutes'
-                                        AND e.controlled_scan_time + INTERVAL '2 minutes'
-                 ORDER BY ABS(EXTRACT(EPOCH FROM (a.scan_time - e.controlled_scan_time)))
-                 LIMIT 1) AS controlled_attendance_id
+               du.device_user_pk, du.device_user_id, du.active AS device_user_active
         FROM device_user_enrollments e
         LEFT JOIN human_employees h ON h.employee_id = e.employee_id
         LEFT JOIN devices d ON d.device_id = e.device_id
@@ -490,6 +482,24 @@ def mapping_eligibility(cfg: Config) -> List[Dict[str, Any]]:
         ORDER BY e.enrollment_id;
         """,
     )
+    for row in rows:
+        row["controlled_attendance_id"] = None
+        if row.get("device_user_pk") is not None and row.get("controlled_scan_time") is not None:
+            row["controlled_attendance_id"] = _resolve_controlled_attendance_id(
+                cfg, row["device_user_pk"], row["controlled_scan_time"]
+            )
+    return rows
+
+
+def _resolve_controlled_attendance_id(cfg: Config, device_user_pk: int, controlled_scan_time: Any) -> Optional[int]:
+    """Thin DB-connection wrapper around the canonical resolver — see
+    app.mapping_evidence.resolve_controlled_attendance_id for the actual
+    matching invariant."""
+    from app.mapping_evidence import resolve_controlled_attendance_id
+
+    with _connect(cfg) as conn:
+        with conn.cursor() as cur:
+            return resolve_controlled_attendance_id(cur, device_user_pk, controlled_scan_time)
 
 
 LEGACY_TEST_USER_IDS = frozenset({"1", "2"})

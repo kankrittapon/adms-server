@@ -743,7 +743,16 @@ class TestEnrollmentFlow(unittest.TestCase):
 
     @patch("app.enrollment.get_db_connection")
     def test_ready_for_mapping_records_confirmer(self, mock_conn_fn):
-        cur = self._flow_cursor("CONTROLLED_SCAN_CONFIRMED", controlled_scan_time=NOW)
+        # ADMS-FullEnrollment-E2E-Closure-017: mark_ready_for_mapping now
+        # pre-checks resolvable controlled-scan evidence before allowing
+        # the transition — one extra enrollment fetch (the evidence
+        # pre-check), a device_users lookup, and the resolver's fetchall,
+        # THEN _transition's own internal enrollment fetch.
+        row = make_enrollment_tuple(status="CONTROLLED_SCAN_CONFIRMED", controlled_scan_time=NOW)
+        cur = FakeCursor(
+            fetchone_queue=[row, (7, True), row],
+            fetchall_result=[(12, NOW)],
+        )
         make_db(mock_conn_fn, cur)
         result = mark_ready_for_mapping(self.cfg, 1, "owner")
         self.assertEqual(result["status"], "READY_FOR_MAPPING")
@@ -777,6 +786,22 @@ class TestEnrollmentFlow(unittest.TestCase):
         update = [p for s, p in cur.executed if s.startswith("UPDATE")][0]
         # params = [status, notes, enrollment_id]
         self.assertIn("wrong person selected", update[1])
+
+    @patch("app.enrollment.log_sync_event")
+    @patch("app.enrollment.get_db_connection")
+    def test_cancel_emits_enrollment_cancelled_audit_event_exactly_once(self, mock_conn_fn, mock_log):
+        # ADMS-FullEnrollment-E2E-Closure-017 Phase 12 / 16: closes the
+        # audit gap found during ADMS-Enrollment2-CancelAudit-015 (no
+        # ENROLLMENT_CANCELLED event existed anywhere).
+        cur = self._flow_cursor("RESERVED")
+        make_db(mock_conn_fn, cur)
+        cancel_enrollment(self.cfg, 1, "op", notes="duplicate test enrollment")
+        mock_log.assert_called_once()
+        event_type = mock_log.call_args[0][1]
+        message = mock_log.call_args[0][2]
+        self.assertEqual(event_type, "ENROLLMENT_CANCELLED")
+        self.assertIn("enrollment_id=1", message)
+        self.assertIn("duplicate test enrollment", message)
 
     @patch("app.enrollment.get_db_connection")
     def test_retire_from_scan_confirmed(self, mock_conn_fn):
@@ -862,9 +887,17 @@ class TestSafetyInvariants(unittest.TestCase):
                     extra = {"controlled_scan_window_until": NOW + timedelta(minutes=5)}
                 if cursor_state == "CONTROLLED_SCAN_CONFIRMED":
                     extra = {"controlled_scan_time": NOW + timedelta(seconds=10)}
-                cur = FakeCursor(
-                    fetchone_queue=[make_enrollment_tuple(status=cursor_state, **extra)]
-                )
+                row = make_enrollment_tuple(status=cursor_state, **extra)
+                if cursor_state == "CONTROLLED_SCAN_CONFIRMED":
+                    # mark_ready_for_mapping's evidence pre-check (enrollment
+                    # fetch, device_users lookup, resolver fetchall) runs
+                    # before _transition's own internal enrollment fetch.
+                    cur = FakeCursor(
+                        fetchone_queue=[row, (7, True), row],
+                        fetchall_result=[(12, NOW + timedelta(seconds=10))],
+                    )
+                else:
+                    cur = FakeCursor(fetchone_queue=[row])
                 make_db(mn, cur)
                 fn(self.cfg, 1, "op")
                 all_sql.extend(cur.sql())

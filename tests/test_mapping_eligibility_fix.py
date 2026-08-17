@@ -66,18 +66,30 @@ class TestMappingEligibilitySqlFix(unittest.TestCase):
 
         src = inspect.getsource(repository.mapping_eligibility)
         self.assertNotIn("a.scan_time = e.controlled_scan_time", src)
-        self.assertIn("BETWEEN", src)
-        self.assertIn("controlled_scan_time", src)
 
-    def test_uses_bounded_window_with_deterministic_tiebreak(self):
+    def test_delegates_to_the_single_canonical_resolver(self):
+        # ADMS-FullEnrollment-E2E-Closure-017: this query no longer embeds
+        # its own bounded-window SQL — it delegates to the single canonical
+        # resolver shared with app.mapping.create_verified_mapping, so
+        # there is exactly one definition of "the correct controlled-scan
+        # evidence row," not two independently-drifting SQL
+        # implementations (which is what caused create_verified_mapping's
+        # own separate exact-equality check to still reject evidence the
+        # eligibility endpoint had already resolved).
         import app.api.repository as repository
 
         src = inspect.getsource(repository.mapping_eligibility)
-        self.assertIn("INTERVAL '2 minutes'", src)
-        # Deterministic nearest-match ordering, not an arbitrary LIMIT 1
-        # over an unordered set.
-        self.assertIn("ORDER BY", src)
-        self.assertIn("LIMIT 1", src)
+        self.assertIn("_resolve_controlled_attendance_id", src)
+        wrapper_src = inspect.getsource(repository._resolve_controlled_attendance_id)
+        self.assertIn("from app.mapping_evidence import resolve_controlled_attendance_id", wrapper_src)
+
+    def test_mapping_creation_uses_the_same_resolver_module(self):
+        import app.mapping as mapping_mod
+
+        src = inspect.getsource(mapping_mod)
+        self.assertIn("from app.mapping_evidence import resolve_controlled_attendance_id", src)
+        # The old exact-equality re-check must be gone.
+        self.assertNotIn("att_scan_time != valid_from", src)
 
 
 class TestMappingRequestValidation(unittest.TestCase):
@@ -96,22 +108,54 @@ class TestMappingRequestValidation(unittest.TestCase):
         self.addCleanup(patcher.stop)
         return client
 
-    def test_item1_missing_controlled_attendance_id_is_422_not_500(self):
+    def test_item1_missing_enrollment_id_is_422_not_500(self):
+        """ADMS-FullEnrollment-E2E-Closure-017: controlled_attendance_id /
+        device_user_pk / employee_id are no longer part of the request
+        contract at all (server-derived) — the only field whose absence
+        can legitimately 422 now is enrollment_id itself."""
         client = self.make_write_client()
         resp = client.post(
             "/api/v1/mappings",
             json={
-                "employee_id": PILOT_EMPLOYEE_ID,
-                "device_user_pk": 7,
-                "enrollment_id": 1,
-                # controlled_attendance_id omitted — exactly what the
-                # frontend used to send for `undefined`.
+                # enrollment_id omitted
                 "verified_by": "tester",
                 "verification_note": "test",
             },
         )
         self.assertEqual(resp.status_code, 422)
         self.assertEqual(resp.json()["error"]["code"], "VALIDATION_ERROR")
+
+    def test_extra_legacy_fields_are_ignored_not_required(self):
+        """A client still sending the old (now-removed) fields must not be
+        required to — Pydantic ignores unknown fields, and the request must
+        succeed purely from enrollment_id/verified_by/verification_note."""
+        with patch("app.api.routers.mappings.create_verified_mapping") as mock_mapping:
+            mock_mapping.return_value = {
+                "mapping_id": 3, "employee_id": PILOT_EMPLOYEE_ID,
+                "device_user_pk": 7, "mapping_status": "VERIFIED",
+                "verification_method": "CONTROLLED_SCAN",
+                "valid_from": datetime(2026, 8, 13, 8, 0, 0, tzinfo=timezone.utc),
+                "valid_to": None,
+                "verified_at": datetime(2026, 8, 13, 9, 0, 0, tzinfo=timezone.utc),
+            }
+            client = self.make_write_client()
+            resp = client.post(
+                "/api/v1/mappings",
+                json={
+                    "employee_id": PILOT_EMPLOYEE_ID, "device_user_pk": 7,
+                    "controlled_attendance_id": 12,  # legacy fields, must be ignored
+                    "enrollment_id": 1,
+                    "verified_by": "tester", "verification_note": "test",
+                },
+            )
+            self.assertEqual(resp.status_code, 201)
+            # The router must call create_verified_mapping with ONLY the
+            # new signature — never forwarding the legacy fields.
+            mock_mapping.assert_called_once()
+            _, call_kwargs = mock_mapping.call_args
+            self.assertEqual(call_kwargs, {
+                "enrollment_id": 1, "verified_by": "tester", "verification_note": "test",
+            })
 
     @patch("app.api.routers.mappings.create_verified_mapping")
     def test_item4_complete_evidence_succeeds(self, mock_mapping):

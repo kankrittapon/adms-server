@@ -434,22 +434,8 @@
         "type": "object"
       },
       "CreateMappingRequest": {
+        "description": "ADMS-FullEnrollment-E2E-Closure-017: employee_id, device_user_pk, and\ncontrolled_attendance_id are all derived server-side from the\nenrollment row (see app.mapping.create_verified_mapping) \u2014 the ADMIN\nconfirming Step 6 supplies only which enrollment and why. This is a\nbreaking API change (previously required 4 caller-supplied identity\nfields); every caller in this repository (Mappings.tsx, tests) is\nupdated in the same change. It permanently closes the \"frontend\nreconstructs security-critical mapping evidence from stale/nullable\ndata\" bug class that produced 422s at Step 6.",
         "properties": {
-          "controlled_attendance_id": {
-            "description": "controlled-scan attendance event id (identity evidence)",
-            "title": "Controlled Attendance Id",
-            "type": "integer"
-          },
-          "device_user_pk": {
-            "description": "device_users primary key",
-            "title": "Device User Pk",
-            "type": "integer"
-          },
-          "employee_id": {
-            "description": "owner-confirmed Human UUID",
-            "title": "Employee Id",
-            "type": "string"
-          },
           "enrollment_id": {
             "description": "READY_FOR_MAPPING enrollment id",
             "title": "Enrollment Id",
@@ -467,10 +453,7 @@
           }
         },
         "required": [
-          "employee_id",
-          "device_user_pk",
           "enrollment_id",
-          "controlled_attendance_id",
           "verified_by",
           "verification_note"
         ],
