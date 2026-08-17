@@ -992,6 +992,28 @@
             ],
             "title": "Notes"
           },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "rank_metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RankMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical RTN rank metadata (ADMS-OperatorUX-Fingerprint-Rank-Mapping-016) \u2014 presentation only, used to build the terminal display-name preview (rank_en_abbreviation + english_name). Never an identity authority."
+          },
           "reserved_at": {
             "format": "date-time",
             "title": "Reserved At",

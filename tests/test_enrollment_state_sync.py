@@ -181,13 +181,17 @@ class TestFrontendDisplayNameSync(unittest.TestCase):
         self.assertIn("enrollment.enrollment_id !== lastSyncedEnrollmentId", self.src)
 
     def test_item4_and_5_blank_when_no_english_name_no_thai_fallback(self):
-        # The only source of the initial/synced value must be
-        # enrollment.english_name — never employee_name/display_name
-        # (the Thai field), and it must fall back to "" not undefined.
-        self.assertIn('enrollment.english_name ?? ""', self.src)
+        # The synced value is derived via computeTerminalNamePreview(), whose
+        # own contract (frontend/src/lib/terminalName.ts) guarantees "" when
+        # english_name is absent and never falls back to the Thai name — the
+        # page itself must only ever feed it enrollment.english_name, never
+        # employee_name/display_name (the Thai field).
+        self.assertIn("computeTerminalNamePreview(enrollment.english_name, enrollment.rank_metadata)", self.src)
         # Regression guard: no code path assigns the Thai name into the
         # terminal display-name state.
         self.assertNotIn("setDisplayName(enrollment.employee_name", self.src)
+        preview_src = _read("lib/terminalName.ts")
+        self.assertIn('return { value: "", rankOmittedForLength: false };', preview_src)
 
     def test_item6_touched_flag_prevents_clobbering_an_active_manual_edit(self):
         self.assertIn("displayNameTouched", self.src)

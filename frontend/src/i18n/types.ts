@@ -153,6 +153,10 @@ export interface Translations {
     step4Button: string;
     step5Title: string;
     step5Desc: string;
+    step5Button: string;
+    step5ChecklistTerminalAccount: string;
+    step5ChecklistFingerprint: string;
+    step5ChecklistScan: string;
     step6Title: string;
     step6Desc: string;
     step6Button: string;
@@ -174,6 +178,7 @@ export interface Translations {
     writeSessionLockedBody: string;
     writeSessionExpiredMidWorkflow: string;
     terminalNameNoEnglishHint: string;
+    terminalNameRankOmittedHint: string;
     creatingOrVerifying: string;
     verifyReconcileButton: string;
     terminalConflictTitle: string;
@@ -188,6 +193,13 @@ export interface Translations {
     enrollmentConflictBody: string;
     alreadyCancelledBody: string;
     cancelSuccessMessage: string;
+    reserveSuccessMessage: string;
+    fingerprintWindowActiveMessage: string;
+    fingerprintConfirmedMessage: string;
+    scanWindowStartedMessage: string;
+    scanConfirmedMessage: string;
+    readyForMappingSuccessMessage: string;
+    startScanWindowButton: string;
   };
   attendance: {
     title: string;
@@ -240,6 +252,9 @@ export interface Translations {
     confirmScanLabel: string;
     confirmEffectiveLabel: string;
     confirmWarning: string;
+    evidenceIncompleteBody: string;
+    mappingConflictBody: string;
+    alreadyMappedBody: string;
   };
   audit: {
     title: string;

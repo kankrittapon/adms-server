@@ -7,6 +7,7 @@ import { useAttendanceStream } from "../hooks/useAttendanceStream";
 import { ErrorBanner, Loading, StatusBadge, StreamStatusBadge } from "../components/Status";
 import { WriteSessionBadge } from "../components/WriteSessionControl";
 import { useTranslation } from "../i18n";
+import { computeTerminalNamePreview } from "../lib/terminalName";
 import type { Enrollment, EnrollmentNextActions } from "../api/types";
 
 function getStepIndex(status: string): number {
@@ -119,7 +120,7 @@ export function Enrollments() {
         canMutate={canMutate}
         onReserved={(newId) => {
           setActionError(null);
-          setActionSuccess("Enrollment reserved successfully.");
+          setActionSuccess(t.enrollment.reserveSuccessMessage);
           list.reload();
           setSelectedId(newId);
         }}
@@ -221,19 +222,19 @@ export function Enrollments() {
                     setTerminalAccountUncertain(false);
                   } else if (action === "start-fingerprint-enrollment") {
                     await api.startFingerprintEnrollment(selected.enrollment_id, me?.username ?? "operator");
-                    setActionSuccess("Fingerprint enrollment window active.");
+                    setActionSuccess(t.enrollment.fingerprintWindowActiveMessage);
                   } else if (action === "confirm-fingerprint") {
                     await api.confirmFingerprintEnrolled(selected.enrollment_id, me?.username ?? "operator");
-                    setActionSuccess("Fingerprint confirmed.");
+                    setActionSuccess(t.enrollment.fingerprintConfirmedMessage);
                   } else if (action === "start-controlled-scan") {
                     await api.startControlledScan(selected.enrollment_id, me?.username ?? "operator");
-                    setActionSuccess("Controlled scan window started.");
+                    setActionSuccess(t.enrollment.scanWindowStartedMessage);
                   } else if (action === "confirm-controlled-scan") {
                     await api.confirmControlledScan(selected.enrollment_id, me?.username ?? "operator", payload.scan_time as string);
-                    setActionSuccess("Controlled scan confirmed.");
+                    setActionSuccess(t.enrollment.scanConfirmedMessage);
                   } else if (action === "mark-ready-for-mapping") {
                     await api.markReadyForMapping(selected.enrollment_id, me?.username ?? "operator");
-                    setActionSuccess("Marked READY_FOR_MAPPING.");
+                    setActionSuccess(t.enrollment.readyForMappingSuccessMessage);
                   } else if (action === "cancel") {
                     await api.cancelEnrollment(selected.enrollment_id, me?.username ?? "operator", payload.notes as string);
                     setActionSuccess(t.enrollment.cancelSuccessMessage);
@@ -489,10 +490,13 @@ function ActiveEnrollmentInspector({
 }) {
   const { t } = useTranslation();
   const currentStep = getStepIndex(enrollment.status);
-  // Prefer the canonical terminal-safe English name; never default to the
-  // Thai display name, which would always fail the ASCII guard and forces
-  // operators to hand-type an ad hoc transliteration every time.
-  const [displayName, setDisplayName] = useState(enrollment.english_name ?? "");
+  // Prefer the canonical terminal-safe English name, prefixed with the
+  // canonical rank abbreviation when it fits (ADMS-OperatorUX-Fingerprint-
+  // Rank-Mapping-016) — never the Thai display name, which would always
+  // fail the ASCII guard and forces operators to hand-type an ad hoc
+  // transliteration every time.
+  const namePreview = computeTerminalNamePreview(enrollment.english_name, enrollment.rank_metadata);
+  const [displayName, setDisplayName] = useState(namePreview.value);
   // Tracks whether the operator has hand-edited the field during the
   // current enrollment selection — used to decide whether a canonical
   // refetch (e.g. english_name updated in Personnel) is allowed to
@@ -510,9 +514,9 @@ function ActiveEnrollmentInspector({
   if (enrollment.enrollment_id !== lastSyncedEnrollmentId) {
     setLastSyncedEnrollmentId(enrollment.enrollment_id);
     setDisplayNameTouched(false);
-    setDisplayName(enrollment.english_name ?? "");
-  } else if (!displayNameTouched && displayName !== (enrollment.english_name ?? "")) {
-    setDisplayName(enrollment.english_name ?? "");
+    setDisplayName(namePreview.value);
+  } else if (!displayNameTouched && displayName !== namePreview.value) {
+    setDisplayName(namePreview.value);
   }
 
   const [scanTime, setScanTime] = useState("");
@@ -658,6 +662,9 @@ function ActiveEnrollmentInspector({
               {!enrollment.english_name && (
                 <p className="mt-1 text-[11px] text-blue-800/80 leading-snug">{t.enrollment.terminalNameNoEnglishHint}</p>
               )}
+              {namePreview.rankOmittedForLength && (
+                <p className="mt-1 text-[11px] text-blue-800/80 leading-snug">{t.enrollment.terminalNameRankOmittedHint}</p>
+              )}
             </div>
             <button
               onClick={() => onRunAction("create-terminal-account", { display_name: displayName.trim() })}
@@ -724,7 +731,7 @@ function ActiveEnrollmentInspector({
             disabled={!canMutate || busyAction === "start-controlled-scan"}
             className="rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {busyAction === "start-controlled-scan" ? t.common.saving : "Start Controlled Scan Window"}
+            {busyAction === "start-controlled-scan" ? t.common.saving : t.enrollment.startScanWindowButton}
           </button>
         </div>
       )}
@@ -800,11 +807,19 @@ function ActiveEnrollmentInspector({
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-emerald-950">{t.enrollment.step5Title}</span>
-            <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
-              Web Action
-            </span>
           </div>
-          <p className="text-xs text-emerald-900 leading-relaxed">
+          <ul className="space-y-1 text-xs text-emerald-900">
+            <li className="flex items-center gap-1.5">
+              <span className="text-emerald-600">✓</span> {t.enrollment.step5ChecklistTerminalAccount}
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span className="text-emerald-600">✓</span> {t.enrollment.step5ChecklistFingerprint}
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span className="text-emerald-600">✓</span> {t.enrollment.step5ChecklistScan}
+            </li>
+          </ul>
+          <p className="text-xs font-semibold text-emerald-900 leading-relaxed">
             {t.enrollment.step5Desc}
           </p>
           <button
@@ -812,7 +827,7 @@ function ActiveEnrollmentInspector({
             disabled={!canMutate || busyAction === "mark-ready-for-mapping"}
             className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {busyAction === "mark-ready-for-mapping" ? t.common.saving : "Mark Ready for Mapping"}
+            {busyAction === "mark-ready-for-mapping" ? t.common.saving : t.enrollment.step5Button}
           </button>
         </div>
       )}

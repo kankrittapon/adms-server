@@ -251,6 +251,13 @@ class Enrollment(BaseModel):
         None, description="Canonical terminal-safe (ASCII) name, when set on the Human Master record."
     )
     device_name: Optional[str] = None
+    rank: Optional[str] = None
+    rank_metadata: Optional[RankMetadata] = Field(
+        None,
+        description="Canonical RTN rank metadata (ADMS-OperatorUX-Fingerprint-Rank-Mapping-016) — "
+        "presentation only, used to build the terminal display-name preview "
+        "(rank_en_abbreviation + english_name). Never an identity authority.",
+    )
 
 
 class EnrollmentNextActions(BaseModel):

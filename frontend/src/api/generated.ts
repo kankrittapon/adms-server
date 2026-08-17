@@ -1090,6 +1090,10 @@ export interface components {
             fingerprint_confirmed_at?: string | null;
             /** Notes */
             notes?: string | null;
+            /** Rank */
+            rank?: string | null;
+            /** @description Canonical RTN rank metadata (ADMS-OperatorUX-Fingerprint-Rank-Mapping-016) — presentation only, used to build the terminal display-name preview (rank_en_abbreviation + english_name). Never an identity authority. */
+            rank_metadata?: components["schemas"]["RankMetadata"] | null;
             /**
              * Reserved At
              * Format: date-time

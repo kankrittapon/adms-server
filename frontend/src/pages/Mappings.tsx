@@ -109,20 +109,32 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
       setError("Select an eligible enrollment, and fill verified_by + note.");
       return;
     }
+    // Evidence completeness guard (ADMS-OperatorUX-Fingerprint-Rank-
+    // Mapping-016): device_user_pk / controlled_attendance_id are Optional
+    // in MappingEligibilityItem — a still-null value here means the
+    // backend genuinely can't correlate the evidence yet (e.g. the
+    // terminal account or the controlled-scan attendance record isn't
+    // resolvable within the matching window). Never send `undefined` for
+    // a required field and let the server 422 speak for itself — tell the
+    // operator plainly instead, before even opening the confirm modal.
+    if (item.device_user_pk == null || item.controlled_attendance_id == null) {
+      setError(t.mappings.evidenceIncompleteBody);
+      return;
+    }
     setError(null);
     setConfirmOpen(true);
   }
 
   function confirmSubmit() {
-    if (!item) return;
+    if (!item || item.device_user_pk == null || item.controlled_attendance_id == null) return;
     setBusy(true);
     setError(null);
     api
       .createMapping({
         employee_id: item.employee_id,
-        device_user_pk: item.device_user_pk!,
+        device_user_pk: item.device_user_pk,
         enrollment_id: item.enrollment_id,
-        controlled_attendance_id: item.controlled_attendance_id!,
+        controlled_attendance_id: item.controlled_attendance_id,
         verified_by: verifiedBy.trim(),
         verification_note: note.trim(),
       })
@@ -139,6 +151,14 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
           setError(t.enrollment.writeSessionLockedBody);
         } else if (e instanceof ApiClientError && e.code === "WRITE_SESSION_EXPIRED") {
           setError(t.enrollment.writeSessionExpiredMidWorkflow);
+        } else if (e instanceof ApiClientError && e.code === "VALIDATION_ERROR") {
+          setError(t.mappings.evidenceIncompleteBody);
+        } else if (e instanceof ApiClientError && e.code === "MAPPING_CONFLICT") {
+          setError(
+            e.message.toLowerCase().includes("already") || e.message.toLowerCase().includes("verified")
+              ? t.mappings.alreadyMappedBody
+              : t.mappings.mappingConflictBody
+          );
         } else if (e instanceof ApiClientError) {
           setError(`${e.code}: ${e.message}`);
         } else {
