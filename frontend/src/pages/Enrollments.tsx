@@ -36,6 +36,12 @@ export function Enrollments() {
   const { me, serverWriteEnabled, writeSessionActive, canMutate } = useAuth();
   const { t } = useTranslation();
   const list = useApi((s) => api.enrollments({ limit: 100 }, s), []);
+  // Active Enrollment Queue policy: terminal states never appear in the
+  // active queue. CANCELLED and RETIRED are both terminal (ALLOWED_
+  // TRANSITIONS in app/enrollment.py maps both to an empty transition
+  // set) — filter every terminal state here, not just CANCELLED.
+  const TERMINAL_STATUSES = new Set(["CANCELLED", "RETIRED"]);
+  const activeItems = (list.data?.items ?? []).filter((e) => !TERMINAL_STATUSES.has(e.status));
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -51,13 +57,19 @@ export function Enrollments() {
     { id: "RETIRED", label: t.enrollment.step6Title },
   ];
 
-  // Auto-select the first or newest enrollment if none selected
+  // Auto-select the first or newest active (non-terminal) enrollment if
+  // none is selected. Also fires after a cancel clears selectedId, so the
+  // workspace lands on another active session instead of staying empty.
   useEffect(() => {
-    if (selectedId === null && list.data?.items && list.data.items.length > 0) {
-      setSelectedId(list.data.items[0].enrollment_id);
+    if (selectedId === null && activeItems.length > 0) {
+      setSelectedId(activeItems[0].enrollment_id);
     }
-  }, [list.data, selectedId]);
+  }, [activeItems, selectedId]);
 
+  // The selected session must itself be looked up from the full list (not
+  // activeItems) so a just-cancelled session already showing in the
+  // inspector can still render its terminal state for one final frame
+  // before selectedId is cleared — see the cancel success handler below.
   const selected: Enrollment | null =
     list.data?.items.find((e) => e.enrollment_id === selectedId) ?? null;
 
@@ -119,7 +131,7 @@ export function Enrollments() {
         <div className="lg:col-span-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              {t.enrollment.activeQueue} ({list.data?.total ?? 0})
+              {t.enrollment.activeQueue} ({activeItems.length})
             </h2>
             <button
               onClick={() => list.reload()}
@@ -133,13 +145,13 @@ export function Enrollments() {
             <Loading />
           ) : list.error ? (
             <ErrorBanner message={list.error} />
-          ) : (list.data?.items.length ?? 0) === 0 ? (
+          ) : activeItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
               {t.enrollment.noActiveSessions}
             </div>
           ) : (
             <div className="space-y-2">
-              {list.data?.items.map((e) => {
+              {activeItems.map((e) => {
                 const isSelected = selectedId === e.enrollment_id;
                 const stepIdx = getStepIndex(e.status);
                 return (
@@ -224,7 +236,12 @@ export function Enrollments() {
                     setActionSuccess("Marked READY_FOR_MAPPING.");
                   } else if (action === "cancel") {
                     await api.cancelEnrollment(selected.enrollment_id, me?.username ?? "operator", payload.notes as string);
-                    setActionSuccess("Enrollment cancelled.");
+                    setActionSuccess(t.enrollment.cancelSuccessMessage);
+                    // The session is now terminal — clear selection so the
+                    // workspace lands on the next active session instead of
+                    // continuing to show a now-frozen inspector, and it can
+                    // no longer be re-selected once activeItems excludes it.
+                    setSelectedId(null);
                   }
                   list.reload();
                   nextActions.reload();
@@ -252,6 +269,15 @@ export function Enrollments() {
                       setActionError(t.enrollment.writeSessionExpiredMidWorkflow);
                     } else if (err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_DISABLED") {
                       setActionError(t.enrollment.writeSessionLockedBody);
+                    } else if (err.code === "ENROLLMENT_CONFLICT") {
+                      // Never surface the raw transition-engine string (e.g.
+                      // "invalid enrollment transition CANCELLED -> CANCELLED")
+                      // to the operator — always a friendly, localized message.
+                      setActionError(
+                        err.message.includes("-> CANCELLED") || err.message.includes("CANCELLED ->")
+                          ? t.enrollment.alreadyCancelledBody
+                          : t.enrollment.enrollmentConflictBody
+                      );
                     } else {
                       setActionError(`${err.code}: ${err.message}`);
                     }
@@ -259,15 +285,23 @@ export function Enrollments() {
                     setActionError(t.enrollment.writeSessionExpiredMidWorkflow);
                   } else if (err instanceof ApiClientError && (err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_DISABLED")) {
                     setActionError(t.enrollment.writeSessionLockedBody);
+                  } else if (err instanceof ApiClientError && err.code === "ENROLLMENT_CONFLICT") {
+                    // Same friendly mapping as above, for every other action
+                    // (cancel included) — the exact case reported in Bug B.
+                    setActionError(
+                      err.message.includes("-> CANCELLED") || err.message.includes("CANCELLED ->")
+                        ? t.enrollment.alreadyCancelledBody
+                        : t.enrollment.enrollmentConflictBody
+                    );
                   } else if (err instanceof ApiClientError) {
                     setActionError(`${err.code}: ${err.message}`);
                   } else {
                     setActionError(err instanceof Error ? err.message : String(err));
                   }
-                  if (action === "create-terminal-account") {
-                    // Outcome may be uncertain (timeout/unconfirmed/in-progress) —
-                    // refresh from the server so the UI reflects ground truth if
-                    // the backend actually committed despite the error response.
+                  if (action === "create-terminal-account" || action === "cancel") {
+                    // Outcome may be uncertain, or the frontend's cached state
+                    // may simply be stale (Bug B) — refresh from the server so
+                    // the UI reflects ground truth rather than a frozen view.
                     list.reload();
                     nextActions.reload();
                   }
@@ -448,6 +482,28 @@ function ActiveEnrollmentInspector({
   // Thai display name, which would always fail the ASCII guard and forces
   // operators to hand-type an ad hoc transliteration every time.
   const [displayName, setDisplayName] = useState(enrollment.english_name ?? "");
+  // Tracks whether the operator has hand-edited the field during the
+  // current enrollment selection — used to decide whether a canonical
+  // refetch (e.g. english_name updated in Personnel) is allowed to
+  // overwrite it. Reset whenever the selected enrollment changes.
+  const [displayNameTouched, setDisplayNameTouched] = useState(false);
+  const [lastSyncedEnrollmentId, setLastSyncedEnrollmentId] = useState(enrollment.enrollment_id);
+
+  // Deterministic sync, not a mount-only default: whenever the selected
+  // enrollment changes, always reset from its canonical english_name
+  // (PromptID-012 Bug A — this component is not remounted on selection
+  // change, so a useState initializer alone goes stale). While the same
+  // enrollment stays selected, a canonical refetch (list/detail reload)
+  // is only allowed to overwrite the field if the operator hasn't
+  // touched it yet — an active manual edit is never clobbered.
+  if (enrollment.enrollment_id !== lastSyncedEnrollmentId) {
+    setLastSyncedEnrollmentId(enrollment.enrollment_id);
+    setDisplayNameTouched(false);
+    setDisplayName(enrollment.english_name ?? "");
+  } else if (!displayNameTouched && displayName !== (enrollment.english_name ?? "")) {
+    setDisplayName(enrollment.english_name ?? "");
+  }
+
   const [scanTime, setScanTime] = useState("");
   const [scanTimeError, setScanTimeError] = useState(false);
   const [cancelNotes, setCancelNotes] = useState("");
@@ -554,9 +610,10 @@ function ActiveEnrollmentInspector({
               }
               onRunAction("cancel", { notes: cancelNotes.trim() });
             }}
-            className="rounded-md bg-rose-600 px-3 py-1 font-bold text-white hover:bg-rose-700"
+            disabled={!canMutate || busyAction === "cancel"}
+            className="rounded-md bg-rose-600 px-3 py-1 font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {t.common.confirm}
+            {busyAction === "cancel" ? t.common.saving : t.common.confirm}
           </button>
         </div>
       )}
@@ -580,7 +637,10 @@ function ActiveEnrollmentInspector({
               <input
                 type="text"
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={(e) => {
+                  setDisplayNameTouched(true);
+                  setDisplayName(e.target.value);
+                }}
                 disabled={!canMutate || busyAction === "create-terminal-account"}
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
               />

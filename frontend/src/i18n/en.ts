@@ -186,6 +186,9 @@ export const en: Translations = {
     terminalUnavailableBody: "No account was created or changed — the system could not read the terminal's account list before attempting anything. It's safe to try again once the terminal is reachable.",
     terminalReconciledSuccess: "Terminal account verified — it already existed on the device and now matches this enrollment.",
     terminalCreatedSuccess: "Terminal account created on device.",
+    enrollmentConflictBody: "This enrollment has already changed state. Refresh the latest status before trying again.",
+    alreadyCancelledBody: "This enrollment was already cancelled.",
+    cancelSuccessMessage: "Enrollment cancelled.",
   },
   attendance: {
     title: "Attendance Monitor",

@@ -185,6 +185,9 @@ export interface Translations {
     terminalUnavailableBody: string;
     terminalReconciledSuccess: string;
     terminalCreatedSuccess: string;
+    enrollmentConflictBody: string;
+    alreadyCancelledBody: string;
+    cancelSuccessMessage: string;
   };
   attendance: {
     title: string;
