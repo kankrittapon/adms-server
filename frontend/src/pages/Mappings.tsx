@@ -10,44 +10,75 @@ export function Mappings() {
   const { data, loading, error, reload } = useApi((s) => api.mappings({ limit: 100 }, s), []);
 
   return (
-    <div>
-      <h1 className="mb-4 text-xl font-semibold">Mapping</h1>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Identity Mapping Authority</h1>
+          <p className="text-xs text-slate-500">
+            Temporal Human ↔ Terminal User identity bindings verified by system administrators.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-2xs">
+            {data ? `${data.total} Active Mappings` : "Loading..."}
+          </span>
+        </div>
+      </div>
+
       {isAdmin && <CreateMappingPanel onCreated={reload} />}
+
+      {/* Main Mappings Table */}
       {loading ? (
         <Loading />
       ) : error ? (
         <ErrorBanner message={error} />
       ) : (
-        <table className="w-full border-collapse bg-white text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
-              <th className="px-3 py-2">mapping_id</th>
-              <th className="px-3 py-2">Human</th>
-              <th className="px-3 py-2">device_user</th>
-              <th className="px-3 py-2">status</th>
-              <th className="px-3 py-2">valid_from</th>
-              <th className="px-3 py-2">valid_to</th>
-              <th className="px-3 py-2">method</th>
-              <th className="px-3 py-2">verified_by</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.items.map((m) => (
-              <tr key={m.mapping_id} className="border-b border-gray-100">
-                <td className="px-3 py-2 font-mono text-xs">{m.mapping_id}</td>
-                <td className="px-3 py-2">{m.employee_name ?? m.employee_id.slice(0, 8)}</td>
-                <td className="px-3 py-2 font-mono text-xs">{m.device_user_id ?? m.device_user_pk}</td>
-                <td className="px-3 py-2">
-                  <StatusBadge status={m.mapping_status} />
-                </td>
-                <td className="px-3 py-2 font-mono text-xs">{fmt(m.valid_from)}</td>
-                <td className="px-3 py-2 font-mono text-xs">{m.valid_to ? fmt(m.valid_to) : "—"}</td>
-                <td className="px-3 py-2">{m.verification_method}</td>
-                <td className="px-3 py-2">{m.verified_by}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xs">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-xs table-dense">
+              <thead>
+                <tr>
+                  <th className="w-16">Map ID</th>
+                  <th>Verified Human Identity</th>
+                  <th>Terminal User</th>
+                  <th>Mapping Status</th>
+                  <th>Valid From (UTC)</th>
+                  <th>Valid To (UTC)</th>
+                  <th>Verification Method</th>
+                  <th>Verified By</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {data?.items.map((m) => (
+                  <tr key={m.mapping_id} className="transition-colors hover:bg-slate-50/80">
+                    <td className="font-mono font-bold text-blue-600">#{m.mapping_id}</td>
+                    <td className="font-semibold text-slate-900">
+                      {m.employee_name ?? m.employee_id.slice(0, 8)}
+                    </td>
+                    <td className="font-mono text-slate-700">{m.device_user_id ?? m.device_user_pk}</td>
+                    <td>
+                      <StatusBadge status={m.mapping_status} />
+                    </td>
+                    <td className="font-mono text-slate-700 whitespace-nowrap">{fmt(m.valid_from)}</td>
+                    <td className="font-mono text-slate-500 whitespace-nowrap">
+                      {m.valid_to ? fmt(m.valid_to) : "— (Permanent)"}
+                    </td>
+                    <td>
+                      <span className="inline-block rounded bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700 border border-purple-200">
+                        {m.verification_method}
+                      </span>
+                    </td>
+                    <td className="font-medium text-slate-800">{m.verified_by}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2 text-[11px] text-slate-500">
+            Temporal interval logic: <code>[valid_from, valid_to)</code> — historical scans evaluate strictly against interval validity.
+          </div>
+        </div>
       )}
     </div>
   );
@@ -74,12 +105,14 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
       setError("Select an eligible enrollment, and fill verified_by + note.");
       return;
     }
-    if (!window.confirm(
-      `Create VERIFIED mapping?\n\nHuman: ${item.employee_name} (${item.employee_id})\n` +
-        `Terminal account: ${item.device_user_id} (pk ${item.device_user_pk})\n` +
-        `Controlled scan: ${item.controlled_scan_time ?? "—"} (attendance id ${item.controlled_attendance_id ?? "?"})\n` +
-        `Enrollment #${item.enrollment_id} will be consumed (retired).`
-    )) {
+    if (
+      !window.confirm(
+        `Create VERIFIED mapping?\n\nHuman: ${item.employee_name} (${item.employee_id})\n` +
+          `Terminal account: ${item.device_user_id} (pk ${item.device_user_pk})\n` +
+          `Controlled scan: ${item.controlled_scan_time ?? "—"} (attendance id ${item.controlled_attendance_id ?? "?"})\n` +
+          `Enrollment #${item.enrollment_id} will be consumed (retired).`
+      )
+    ) {
       return;
     }
     setBusy(true);
@@ -115,90 +148,108 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-2xs">
-      <h2 className="mb-1 text-base font-bold text-slate-900">Create VERIFIED mapping (Admin)</h2>
-      <p className="mb-3 max-w-3xl text-xs text-slate-500">
-        Choose a <code>READY_FOR_MAPPING</code> enrollment with completed controlled-scan
-        evidence. Creating the mapping consumes (retires) the enrollment. This is the only
-        path to a VERIFIED temporal identity — no automatic matching ever.
-      </p>
+    <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-5 shadow-2xs space-y-4">
+      <div className="flex items-center justify-between border-b border-purple-100 pb-3">
+        <div>
+          <h2 className="text-sm font-bold text-slate-900">Create VERIFIED Mapping (Admin Authority)</h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Choose a <code>READY_FOR_MAPPING</code> enrollment with completed controlled-scan evidence.
+            Creating the mapping consumes (retires) the enrollment.
+          </p>
+        </div>
+        <span className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-purple-800">
+          Admin Action
+        </span>
+      </div>
+
       {!serverWriteEnabled && (
-        <div className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-          🔒 <strong>Writes disabled:</strong> <code>API_WRITE_ENABLED=false</code> — Server writes are currently locked.
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+          🔒 Writes Locked: <code>API_WRITE_ENABLED=false</code> — Mapping creation is read-only.
         </div>
       )}
+
       {error && <ErrorBanner message={error} />}
+
       {elig.loading ? (
         <Loading />
       ) : elig.error ? (
         <ErrorBanner message={elig.error} />
       ) : elig.data?.items.length === 0 ? (
         <p className="text-xs text-slate-500">
-          No eligible enrollments — no <code>READY_FOR_MAPPING</code> enrollment without an
-          existing VERIFIED mapping.
+          No eligible enrollments — no <code>READY_FOR_MAPPING</code> enrollment awaiting activation.
         </p>
       ) : (
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col text-xs text-slate-600 font-medium">
-            Enrollment (READY_FOR_MAPPING)
-            <select
-              value={selectedId ?? ""}
-              onChange={(e) => {
-                setSelectedId(e.target.value ? Number(e.target.value) : null);
-                setError(null);
-              }}
-              disabled={!serverWriteEnabled || busy}
-              className="mt-1 w-80 rounded border border-slate-300 px-2 py-1.5 text-xs text-slate-900 bg-white disabled:bg-slate-100"
-            >
-              <option value="">— select —</option>
-              {elig.data?.items.map((e) => (
-                <option key={e.enrollment_id} value={e.enrollment_id}>
-                  #{e.enrollment_id} · {e.employee_name ?? e.employee_id.slice(0, 8)} · terminal {e.reserved_device_user_id}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700">
+                Eligible Enrollment (READY_FOR_MAPPING)
+              </label>
+              <select
+                value={selectedId ?? ""}
+                onChange={(e) => {
+                  setSelectedId(e.target.value ? Number(e.target.value) : null);
+                  setError(null);
+                }}
+                disabled={!serverWriteEnabled || busy}
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 disabled:bg-slate-100"
+              >
+                <option value="">— Select eligible session —</option>
+                {elig.data?.items.map((e) => (
+                  <option key={e.enrollment_id} value={e.enrollment_id}>
+                    #{e.enrollment_id} · {e.employee_name ?? e.employee_id.slice(0, 8)} · Terminal User {e.reserved_device_user_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700">Verified By (Admin Signer)</label>
+              <input
+                type="text"
+                value={verifiedBy}
+                disabled={!serverWriteEnabled || busy}
+                onChange={(e) => setVerifiedBy(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 disabled:bg-slate-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700">Audit Verification Note</label>
+              <input
+                type="text"
+                value={note}
+                disabled={!serverWriteEnabled || busy}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Reference evidence log & physical check"
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 disabled:bg-slate-100"
+              />
+            </div>
+          </div>
+
           {item && (
-            <div className="rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+            <div className="rounded-lg border border-purple-200 bg-white p-3.5 text-xs text-purple-950 shadow-2xs space-y-1">
               <div>
-                Human: <strong>{item.employee_name}</strong> · terminal{" "}
-                <strong>{item.device_user_id}</strong> (pk {item.device_user_pk})
+                <strong>Human:</strong> {item.employee_name} (<code className="font-mono">{item.employee_id}</code>)
               </div>
               <div>
-                Controlled scan: {item.controlled_scan_time ? fmt(item.controlled_scan_time) : "—"} ·
-                attendance id <strong>{item.controlled_attendance_id ?? "?"}</strong>
+                <strong>Terminal Account:</strong> User ID {item.device_user_id} (PK {item.device_user_pk}) · Device: {item.device_name}
               </div>
-              <div>Confirmed by: {item.confirmed_by ?? "—"} · device: {item.device_name}</div>
+              <div>
+                <strong>Controlled Scan Evidence:</strong> Scan at {item.controlled_scan_time ? fmt(item.controlled_scan_time) : "—"} · Attendance ID #{item.controlled_attendance_id ?? "?"}
+              </div>
             </div>
           )}
-          <label className="flex flex-col text-xs text-slate-600 font-medium">
-            Verified by
-            <input
-              type="text"
-              value={verifiedBy}
-              disabled={!serverWriteEnabled || busy}
-              onChange={(e) => setVerifiedBy(e.target.value)}
-              className="mt-1 w-44 rounded border border-slate-300 px-2 py-1.5 text-xs text-slate-900 bg-white disabled:bg-slate-100"
-            />
-          </label>
-          <label className="flex flex-col text-xs text-slate-600 font-medium">
-            Verification note
-            <input
-              type="text"
-              value={note}
-              disabled={!serverWriteEnabled || busy}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="audit note referencing evidence"
-              className="mt-1 w-72 rounded border border-slate-300 px-2 py-1.5 text-xs text-slate-900 bg-white disabled:bg-slate-100"
-            />
-          </label>
-          <button
-            onClick={submit}
-            disabled={!serverWriteEnabled || busy || !selectedId}
-            className="rounded bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {busy ? "Creating…" : "Create VERIFIED mapping"}
-          </button>
+
+          <div className="pt-1">
+            <button
+              onClick={submit}
+              disabled={!serverWriteEnabled || busy || !selectedId}
+              className="rounded-md bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+            >
+              {busy ? "Activating Mapping..." : "Create VERIFIED Mapping"}
+            </button>
+          </div>
         </div>
       )}
     </div>

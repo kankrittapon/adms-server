@@ -12,66 +12,85 @@ export function Audit() {
   );
 
   return (
-    <div>
-      <h1 className="mb-4 text-xl font-semibold">Audit trail (admin)</h1>
-      <p className="mb-4 max-w-3xl text-sm text-gray-500">
-        Read-only event log from <code>sync_events</code>: authentication (login, failed
-        login, logout, password change), operator management, enrollment and mapping actions,
-        and rate-limit triggers. Nothing here is modified.
-      </p>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Security & Operational Audit Trail</h1>
+          <p className="text-xs text-slate-500">
+            Immutable administrative event log capturing authentication, enrollment transitions, mappings, and system mutations.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-2xs">
+            {data ? `${data.total} Total Events` : "Loading..."}
+          </span>
+        </div>
+      </div>
 
-      <div className="mb-4 flex items-center gap-3">
-        <select
-          value={eventType}
-          onChange={(e) => setEventType(e.target.value)}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm"
-        >
-          <option value="">All event types</option>
-          {types.data?.event_types.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+      {/* Filter Toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[240px]">
+          <select
+            value={eventType}
+            onChange={(e) => setEventType(e.target.value)}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+          >
+            <option value="">All Security & Operational Event Types</option>
+            {types.data?.event_types.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           onClick={reload}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
         >
-          Refresh
+          Refresh Log
         </button>
       </div>
 
+      {/* Event Table */}
       {loading ? (
         <Loading />
       ) : error ? (
         <ErrorBanner message={error} />
       ) : (
-        <table className="w-full border-collapse bg-white text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
-              <th className="px-3 py-2">time (UTC)</th>
-              <th className="px-3 py-2">event</th>
-              <th className="px-3 py-2">ip</th>
-              <th className="px-3 py-2">details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.items.map((e) => (
-              <tr key={e.id} className="border-b border-gray-100 align-top">
-                <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">
-                  {e.created_at.replace("T", " ").slice(0, 19)}
-                </td>
-                <td className="px-3 py-2">
-                  <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">
-                    {e.event_type}
-                  </span>
-                </td>
-                <td className="px-3 py-2 font-mono text-xs">{e.device_ip ?? "—"}</td>
-                <td className="px-3 py-2 text-xs text-gray-600">{e.message ?? ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xs">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-xs table-dense">
+              <thead>
+                <tr>
+                  <th className="w-44">Timestamp (UTC)</th>
+                  <th className="w-48">Event Category</th>
+                  <th className="w-32">Origin IP</th>
+                  <th>Event Message & Payload Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {data?.items.map((e) => (
+                  <tr key={e.id} className="align-top transition-colors hover:bg-slate-50/80">
+                    <td className="font-mono text-slate-700 whitespace-nowrap">
+                      {e.created_at.replace("T", " ").slice(0, 19)}
+                    </td>
+                    <td>
+                      <span className="inline-block rounded border border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-700">
+                        {e.event_type}
+                      </span>
+                    </td>
+                    <td className="font-mono text-slate-500">{e.device_ip ?? "—"}</td>
+                    <td className="text-slate-800 leading-relaxed font-sans">{e.message ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2 text-[11px] text-slate-500">
+            Showing latest {data?.items.length ?? 0} events from <code>sync_events</code>.
+          </div>
+        </div>
       )}
     </div>
   );

@@ -4,7 +4,7 @@ import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
 import { useAttendanceStream } from "../hooks/useAttendanceStream";
-import { ErrorBanner, Loading, StatusBadge } from "../components/Status";
+import { ErrorBanner, Loading, StatusBadge, WriteGateStatusBadge } from "../components/Status";
 import type { Enrollment, EnrollmentNextActions } from "../api/types";
 
 const STEPS = [
@@ -73,30 +73,20 @@ export function Enrollments() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {serverWriteEnabled ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Writes Active (LIVE)
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800" title="API_WRITE_ENABLED=false">
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
-              Writes Locked (READ-ONLY)
-            </span>
-          )}
+          <WriteGateStatusBadge writeEnabled={serverWriteEnabled} />
         </div>
       </div>
 
       {/* Proactive Write Gate Banner */}
       {!serverWriteEnabled && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-900 shadow-2xs">
+        <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 shadow-2xs">
           <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 font-bold text-amber-900">
             !
           </div>
           <div>
-            <div className="font-bold">Production Writes Locked (API_WRITE_ENABLED=false)</div>
-            <div className="mt-0.5 text-amber-800">
-              The ADMS server is operating in safety read-only mode. All mutation controls (Reservation, Terminal Account Creation, State Confirmations) are viewable below but disabled until an administrator enables server writes.
+            <div className="font-bold">Production Writes Locked (Safe Mode)</div>
+            <div className="mt-0.5 text-amber-800 leading-relaxed">
+              The ADMS server is operating in safety read-only mode (<code>API_WRITE_ENABLED=false</code>). All mutation controls (Reservation, Terminal Account Creation, State Confirmations) are viewable below but disabled until an administrator enables server writes.
             </div>
           </div>
         </div>
@@ -125,7 +115,7 @@ export function Enrollments() {
 
       {/* Main Workspace Split: Enrollment List & Active Step Inspector */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Col: Enrollment Queue (4 cols) */}
+        {/* Left Col: Enrollment Queue (5 cols) */}
         <div className="lg:col-span-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -144,7 +134,7 @@ export function Enrollments() {
           ) : list.error ? (
             <ErrorBanner message={list.error} />
           ) : (list.data?.items.length ?? 0) === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+            <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
               No enrollment sessions recorded. Use the form above to reserve the first terminal ID.
             </div>
           ) : (
@@ -160,9 +150,9 @@ export function Enrollments() {
                       setActionError(null);
                       setActionSuccess(null);
                     }}
-                    className={`cursor-pointer rounded-lg border p-3 text-xs transition-all ${
+                    className={`cursor-pointer rounded-lg border p-3.5 text-xs transition-all ${
                       isSelected
-                        ? "border-blue-500 bg-blue-50/50 shadow-xs ring-1 ring-blue-500"
+                        ? "border-blue-500 bg-blue-50/60 shadow-xs ring-1 ring-blue-500"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70"
                     }`}
                   >
@@ -317,29 +307,29 @@ function ReserveCard({
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+    <div className="rounded-lg border border-blue-200 bg-blue-50/30 p-4 shadow-2xs">
+      <div className="flex items-center justify-between border-b border-blue-100 pb-3">
         <div className="flex items-center gap-2">
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 font-mono text-[11px] font-bold text-white">
             1
           </span>
           <h2 className="text-sm font-bold text-slate-900">Step 1: Start New Enrollment (Reserve Terminal ID)</h2>
         </div>
-        <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+        <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700">
           Browser Action
         </span>
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4 md:items-end">
         <div>
-          <label className="block text-[11px] font-semibold text-slate-700">
+          <label className="block text-[11px] font-bold text-slate-700">
             Human (Production Scope: {eligible.data?.total ?? "..."})
           </label>
           <select
             value={employeeId}
             disabled={!canMutate || busy}
             onChange={(e) => setEmployeeId(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-500"
           >
             <option value="">— Select Personnel —</option>
             {eligible.data?.items.map((h) => (
@@ -351,12 +341,12 @@ function ReserveCard({
         </div>
 
         <div>
-          <label className="block text-[11px] font-semibold text-slate-700">Target Terminal Device</label>
+          <label className="block text-[11px] font-bold text-slate-700">Target Terminal Device</label>
           <select
             value={deviceId}
             disabled={!canMutate || busy}
             onChange={(e) => setDeviceId(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-500"
           >
             {devices.data?.items.map((d) => (
               <option key={d.device_id} value={d.device_id}>
@@ -367,13 +357,13 @@ function ReserveCard({
         </div>
 
         <div>
-          <label className="block text-[11px] font-semibold text-slate-700">Operator</label>
+          <label className="block text-[11px] font-bold text-slate-700">Operator</label>
           <input
             type="text"
             value={operator}
             disabled={!canMutate || busy}
             onChange={(e) => setOperator(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-500"
           />
         </div>
 
@@ -381,7 +371,7 @@ function ReserveCard({
           <button
             onClick={submit}
             disabled={!canMutate || busy || !employeeId}
-            className="w-full rounded bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+            className="w-full rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
           >
             {busy ? "Reserving..." : "Reserve Terminal ID"}
           </button>
@@ -393,12 +383,12 @@ function ReserveCard({
           ℹ️ Logged in as <strong>VIEWER</strong>. Reservation requires OPERATOR or ADMIN role.
         </div>
       ) : !serverWriteEnabled ? (
-        <div className="mt-2 text-[11px] text-amber-700">
+        <div className="mt-2 text-[11px] text-amber-800">
           🔒 Reservation disabled: Server writes are locked (<code>API_WRITE_ENABLED=false</code>).
         </div>
       ) : null}
 
-      {error && <div className="mt-2 text-xs font-medium text-red-600">{error}</div>}
+      {error && <div className="mt-2 text-xs font-semibold text-rose-700">{error}</div>}
     </div>
   );
 }
@@ -458,7 +448,7 @@ function ActiveEnrollmentInspector({
         {canMutate && enrollment.status !== "RETIRED" && enrollment.status !== "CANCELLED" && (
           <button
             onClick={() => setShowCancel(!showCancel)}
-            className="text-xs text-red-600 hover:underline"
+            className="text-xs font-semibold text-rose-600 hover:underline"
           >
             {showCancel ? "Close cancel" : "Cancel session"}
           </button>
@@ -466,7 +456,7 @@ function ActiveEnrollmentInspector({
       </div>
 
       {/* Stepper Progress Bar */}
-      <div className="rounded-lg bg-slate-50 p-3">
+      <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
         <div className="grid grid-cols-6 gap-1 text-center">
           {STEPS.map((s, idx) => {
             const isCompleted = currentStep > idx;
@@ -499,21 +489,21 @@ function ActiveEnrollmentInspector({
 
       {/* Cancellation Drawer if active */}
       {showCancel && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-xs space-y-2">
-          <div className="font-semibold text-red-900">Cancel Enrollment Session</div>
+        <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs space-y-2">
+          <div className="font-bold text-rose-900">Cancel Enrollment Session</div>
           <input
             type="text"
             placeholder="Cancellation reason (required)"
             value={cancelNotes}
             onChange={(e) => setCancelNotes(e.target.value)}
-            className="w-full rounded border border-red-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
+            className="w-full rounded-md border border-rose-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
           />
           <button
             onClick={() => {
               if (!cancelNotes.trim()) return alert("Enter a cancellation reason.");
               onRunAction("cancel", { notes: cancelNotes.trim() });
             }}
-            className="rounded bg-red-600 px-3 py-1 font-semibold text-white hover:bg-red-700"
+            className="rounded-md bg-rose-600 px-3 py-1 font-bold text-white hover:bg-rose-700"
           >
             Confirm Cancellation
           </button>
@@ -522,32 +512,32 @@ function ActiveEnrollmentInspector({
 
       {/* Dynamic Action & Guidance Panes based on State */}
       {enrollment.status === "RESERVED" && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4 space-y-3">
+        <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-blue-900">Step 2: Create Terminal Account on Device</span>
-            <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800">
+            <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
               Browser Action
             </span>
           </div>
-          <p className="text-xs text-blue-900/80 leading-relaxed">
+          <p className="text-xs text-blue-900/90 leading-relaxed">
             Writes the reserved terminal ID <strong className="font-mono text-blue-950">{enrollment.reserved_device_user_id}</strong> to the physical terminal <strong>ADMS-ZEM560</strong> with NORMAL user privilege. This establishes the terminal record without requiring terminal menu access or SSH.
           </p>
 
           <div className="flex flex-wrap items-end gap-3 pt-1">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-[11px] font-semibold text-blue-950">Terminal Display Name (ASCII)</label>
+              <label className="block text-[11px] font-bold text-blue-950">Terminal Display Name (ASCII)</label>
               <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 disabled={!canMutate || busyAction === "create-terminal-account"}
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
               />
             </div>
             <button
               onClick={() => onRunAction("create-terminal-account", { display_name: displayName.trim() || enrollment.employee_name })}
               disabled={!canMutate || busyAction === "create-terminal-account" || !displayName.trim()}
-              className="rounded bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {busyAction === "create-terminal-account" ? "Writing to terminal..." : "Create Terminal Account on Device"}
             </button>
@@ -565,7 +555,7 @@ function ActiveEnrollmentInspector({
                 Physical Action at ZEM560
               </span>
             </div>
-            <ol className="list-inside list-decimal space-y-1 text-xs text-indigo-900 leading-relaxed">
+            <ol className="list-inside list-decimal space-y-1.5 text-xs text-indigo-950 leading-relaxed">
               <li>Take the person to terminal <strong>ADMS-ZEM560 (192.168.1.201)</strong>.</li>
               <li>Press <strong>Menu</strong> → select <strong>User Mgt</strong> → <strong>Manage</strong>.</li>
               <li>Find User ID <strong className="font-mono text-indigo-950">{enrollment.reserved_device_user_id}</strong> and press OK.</li>
@@ -577,13 +567,13 @@ function ActiveEnrollmentInspector({
           {/* Web Confirmation Action */}
           <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3.5">
             <div>
-              <div className="text-xs font-semibold text-slate-900">Confirm Biometric Template Enrolled</div>
+              <div className="text-xs font-bold text-slate-900">Confirm Biometric Template Enrolled</div>
               <div className="text-[11px] text-slate-500">Click once the fingerprint is successfully enrolled at the physical terminal.</div>
             </div>
             <button
               onClick={() => onRunAction("confirm-fingerprint", {})}
               disabled={!canMutate || busyAction === "confirm-fingerprint"}
-              className="rounded bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {busyAction === "confirm-fingerprint" ? "Confirming..." : "Confirm Fingerprint Enrolled"}
             </button>
@@ -592,20 +582,20 @@ function ActiveEnrollmentInspector({
       )}
 
       {enrollment.status === "FINGERPRINT_ENROLLED" && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4 space-y-3">
+        <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-blue-900">Step 4a: Initiate Controlled Scan Window</span>
-            <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800">
+            <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
               Browser Action
             </span>
           </div>
-          <p className="text-xs text-blue-900/80 leading-relaxed">
+          <p className="text-xs text-blue-900/90 leading-relaxed">
             Opens a 5-minute controlled scan window. During this window, the person will scan their newly enrolled finger to verify that the attendance logging engine captures their scan.
           </p>
           <button
             onClick={() => onRunAction("start-controlled-scan", {})}
             disabled={!canMutate || busyAction === "start-controlled-scan"}
-            className="rounded bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {busyAction === "start-controlled-scan" ? "Starting..." : "Start 5-Minute Controlled Scan Window"}
           </button>
@@ -622,11 +612,11 @@ function ActiveEnrollmentInspector({
                 Physical Action at ZEM560
               </span>
             </div>
-            <p className="text-xs text-indigo-900 leading-relaxed">
+            <p className="text-xs text-indigo-950 leading-relaxed">
               Ask <strong>{enrollment.employee_name}</strong> to place their finger on the ADMS-ZEM560 terminal sensor right now. The live attendance engine will detect the event automatically.
             </p>
             {enrollment.controlled_scan_window_until && (
-              <div className="text-[11px] font-mono text-indigo-800">
+              <div className="text-[11px] font-mono text-indigo-900 font-semibold">
                 Window expires at: {new Date(enrollment.controlled_scan_window_until).toLocaleTimeString()}
               </div>
             )}
@@ -650,20 +640,20 @@ function ActiveEnrollmentInspector({
           {/* Controlled Scan Confirmation Form */}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-900">Step 4c: Submit Controlled Scan Confirmation</span>
-              <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-700">
+              <span className="text-xs font-bold text-slate-900">Step 4c: Submit Controlled Scan Confirmation</span>
+              <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
                 Web Confirmation
               </span>
             </div>
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[200px]">
-                <label className="block text-[11px] font-semibold text-slate-700">Scan Timestamp (Local / ISO)</label>
+                <label className="block text-[11px] font-bold text-slate-700">Scan Timestamp (Local / ISO)</label>
                 <input
                   type="datetime-local"
                   value={scanTime}
                   onChange={(e) => setScanTime(e.target.value)}
                   disabled={!canMutate || busyAction === "confirm-controlled-scan"}
-                  className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                 />
               </div>
               <button
@@ -672,7 +662,7 @@ function ActiveEnrollmentInspector({
                   onRunAction("confirm-controlled-scan", { scan_time: new Date(scanTime).toISOString() });
                 }}
                 disabled={!canMutate || busyAction === "confirm-controlled-scan" || !scanTime}
-                className="rounded bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {busyAction === "confirm-controlled-scan" ? "Submitting..." : "Confirm Controlled Scan"}
               </button>
@@ -685,7 +675,7 @@ function ActiveEnrollmentInspector({
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-emerald-950">Step 5: Mark Ready for Mapping</span>
-            <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+            <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
               Web Action
             </span>
           </div>
@@ -695,7 +685,7 @@ function ActiveEnrollmentInspector({
           <button
             onClick={() => onRunAction("mark-ready-for-mapping", {})}
             disabled={!canMutate || busyAction === "mark-ready-for-mapping"}
-            className="rounded bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {busyAction === "mark-ready-for-mapping" ? "Advancing..." : "Mark Ready for Mapping"}
           </button>
@@ -715,7 +705,7 @@ function ActiveEnrollmentInspector({
           </p>
           <Link
             to="/mappings"
-            className="inline-flex items-center gap-1.5 rounded bg-purple-700 px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-purple-800"
+            className="inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-purple-800"
           >
             Go to Mapping Management →
           </Link>
@@ -749,7 +739,7 @@ function ActiveEnrollmentInspector({
 function MetaItem({ dt, dd, mono }: { dt: string; dd: string; mono?: boolean }) {
   return (
     <div className="py-1">
-      <dt className="text-[10px] font-medium uppercase text-slate-400">{dt}</dt>
+      <dt className="text-[10px] font-bold uppercase text-slate-400">{dt}</dt>
       <dd className={`truncate text-slate-800 ${mono ? "font-mono text-[11px]" : ""}`}>{dd}</dd>
     </div>
   );

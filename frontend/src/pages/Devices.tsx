@@ -11,63 +11,128 @@ export function Devices() {
   if (users.error) return <ErrorBanner message={users.error} />;
 
   return (
-    <div>
-      <h1 className="mb-4 text-xl font-semibold">Devices</h1>
-      {devices.data?.items.map((d) => (
-        <div key={d.device_id} className="mb-6 rounded-lg border border-gray-200 bg-white p-4 text-sm">
-          <div className="flex items-center justify-between">
-            <div className="font-semibold">{d.device_name}</div>
-            <StatusBadge status={d.active ? "HEALTHY" : "INACTIVE"} />
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col justify-between gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Biometric Terminal Devices</h1>
+          <p className="text-xs text-slate-500">
+            Physical hardware endpoints, network status, and discovered on-device user records.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-2xs">
+            {devices.data?.items.length ?? 0} Terminals Online
+          </span>
+        </div>
+      </div>
+
+      {/* Terminal Cards */}
+      <div className="grid grid-cols-1 gap-4">
+        {devices.data?.items.map((d) => (
+          <div
+            key={d.device_id}
+            className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs space-y-3"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 font-bold text-blue-700 text-xs border border-blue-200">
+                  ZK
+                </div>
+                <div>
+                  <div className="font-bold text-slate-900">{d.device_name}</div>
+                  <div className="text-[11px] text-slate-500 font-mono">ID #{d.device_id}</div>
+                </div>
+              </div>
+              <StatusBadge status={d.active ? "LIVE" : "INACTIVE"} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-xs md:grid-cols-4 pt-1">
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-slate-400">Terminal IP</span>
+                <span className="font-mono font-semibold text-slate-800">{d.device_ip}:4370</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-slate-400">Serial Number</span>
+                <span className="font-mono text-slate-800">{d.serial_number}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-slate-400">Hardware Platform</span>
+                <span className="text-slate-800 font-medium">{d.platform}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-slate-400">Firmware Version</span>
+                <span className="font-mono text-slate-800">{d.firmware_version ?? "—"}</span>
+              </div>
+            </div>
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-2 text-gray-600 md:grid-cols-4">
-            <div><span className="text-gray-400">serial</span> {d.serial_number}</div>
-            <div><span className="text-gray-400">ip</span> {d.device_ip}</div>
-            <div><span className="text-gray-400">platform</span> {d.platform}</div>
-            <div><span className="text-gray-400">firmware</span> {d.firmware_version ?? "—"}</div>
+        ))}
+      </div>
+
+      {/* Device Users Table */}
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+            Discovered Device Accounts ({users.data?.total ?? 0})
+          </h2>
+          <span className="text-[11px] text-slate-400">Synced via Collector Roster Ingestion</span>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xs">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-xs table-dense">
+              <thead>
+                <tr>
+                  <th className="w-14">PK</th>
+                  <th>Terminal User ID</th>
+                  <th>Terminal UID</th>
+                  <th>Display Name</th>
+                  <th>Privilege</th>
+                  <th>Account State</th>
+                  <th>Incarnation</th>
+                  <th>Last Roster Sync</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {users.data?.items.map((u) => (
+                  <tr key={u.device_user_pk} className="transition-colors hover:bg-slate-50/80">
+                    <td className="font-mono text-slate-400">#{u.device_user_pk}</td>
+                    <td className="font-mono font-bold text-slate-900">{u.device_user_id}</td>
+                    <td className="font-mono text-slate-600">{u.device_uid ?? "—"}</td>
+                    <td className="font-medium text-slate-800">{u.device_display_name ?? "—"}</td>
+                    <td>
+                      <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                        {u.privilege}
+                      </span>
+                    </td>
+                    <td>
+                      {u.active ? (
+                        <StatusBadge status="ACTIVE" />
+                      ) : (
+                        <span className="text-slate-400">
+                          Inactive {u.inactive_at ? `(since ${fmt(u.inactive_at)})` : ""}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {u.account_incarnation > 1 ? (
+                        <span className="inline-block rounded bg-amber-100 px-1.5 py-0.2 font-mono text-[11px] font-bold text-amber-800">
+                          v{u.account_incarnation} (Recycled)
+                        </span>
+                      ) : (
+                        <span className="font-mono text-slate-500">v{u.account_incarnation}</span>
+                      )}
+                    </td>
+                    <td className="font-mono text-slate-500 whitespace-nowrap">
+                      {u.roster_last_seen_at ? fmt(u.roster_last_seen_at) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      ))}
-
-      <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">
-        Device Users ({users.data?.total ?? 0})
-      </h2>
-      <table className="w-full border-collapse bg-white text-sm">
-        <thead>
-          <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
-            <th className="px-3 py-2">pk</th>
-            <th className="px-3 py-2">user_id</th>
-            <th className="px-3 py-2">uid</th>
-            <th className="px-3 py-2">display name</th>
-            <th className="px-3 py-2">privilege</th>
-            <th className="px-3 py-2">state</th>
-            <th className="px-3 py-2">incarn.</th>
-            <th className="px-3 py-2">last seen</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.data?.items.map((u) => (
-            <tr key={u.device_user_pk} className="border-b border-gray-100">
-              <td className="px-3 py-2 font-mono text-xs">{u.device_user_pk}</td>
-              <td className="px-3 py-2 font-mono text-xs">{u.device_user_id}</td>
-              <td className="px-3 py-2">{u.device_uid ?? "—"}</td>
-              <td className="px-3 py-2">{u.device_display_name ?? "—"}</td>
-              <td className="px-3 py-2">{u.privilege}</td>
-              <td className="px-3 py-2">
-                {u.active ? <StatusBadge status="HEALTHY" /> : <StatusBadge status="INACTIVE" />}
-                {u.inactive_at ? <span className="ml-1 text-xs text-gray-400">since {fmt(u.inactive_at)}</span> : null}
-              </td>
-              <td className="px-3 py-2">
-                {u.account_incarnation > 1 ? (
-                  <span className="font-semibold text-amber-600">{u.account_incarnation}</span>
-                ) : (
-                  <span className="text-gray-500">{u.account_incarnation}</span>
-                )}
-              </td>
-              <td className="px-3 py-2 text-xs text-gray-500">{u.roster_last_seen_at ? fmt(u.roster_last_seen_at) : "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      </div>
     </div>
   );
 }
