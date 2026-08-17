@@ -5,9 +5,11 @@ import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
 import { useAttendanceStream } from "../hooks/useAttendanceStream";
 import { ErrorBanner, Loading, StatusBadge } from "../components/Status";
+import { useTranslation } from "../i18n";
 
 export function Attendance() {
   const { isAdmin } = useAuth();
+  const { t } = useTranslation();
   const [status, setStatus] = useState("");
   const [limit, setLimit] = useState(50);
 
@@ -34,10 +36,8 @@ export function Attendance() {
       {/* Header & Controls */}
       <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Attendance Monitoring</h1>
-          <p className="text-xs text-slate-500">
-            Realtime biometric attendance stream and verified Human identity event log.
-          </p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">{t.attendance.title}</h1>
+          <p className="text-xs text-slate-500">{t.attendance.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <LiveBadge status={streamStatus} />
@@ -46,10 +46,10 @@ export function Attendance() {
             onChange={(e) => setStatus(e.target.value)}
             className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
           >
-            <option value="">All statuses</option>
-            <option value="ON_TIME">ON_TIME</option>
-            <option value="LATE">LATE</option>
-            <option value="UNKNOWN">UNKNOWN</option>
+            <option value="">{t.common.all}</option>
+            <option value="ON_TIME">{t.attendance.onTime} (ON_TIME)</option>
+            <option value="LATE">{t.attendance.late} (LATE)</option>
+            <option value="UNKNOWN">{t.attendance.unknown} (UNKNOWN)</option>
           </select>
           <select
             value={limit}
@@ -64,7 +64,7 @@ export function Attendance() {
             onClick={() => reload()}
             className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-slate-900"
           >
-            Refresh
+            {t.common.refresh}
           </button>
         </div>
       </div>
@@ -75,15 +75,15 @@ export function Attendance() {
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
             <span>
-              <strong>Live Scan Detected:</strong> Terminal User <strong>{newScan.user_id}</strong> scanned at{" "}
-              <code className="font-mono text-xs">{newScan.scan_time.replace("T", " ")}</code>.
+              <strong>{t.attendance.liveStreamBadge}:</strong> Terminal User <strong>{newScan.user_id}</strong> @{" "}
+              <code className="font-mono text-xs">{newScan.scan_time.replace("T", " ")}</code>
             </span>
           </div>
           <button
             onClick={() => reload()}
             className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white shadow-xs hover:bg-emerald-700"
           >
-            Refresh View
+            {t.common.refresh}
           </button>
         </div>
       )}
@@ -100,11 +100,11 @@ export function Attendance() {
               <thead>
                 <tr>
                   <th className="w-16">Log ID</th>
-                  <th>Scan Time (UTC)</th>
-                  <th>Terminal User</th>
+                  <th>{t.attendance.timeColumn} (UTC)</th>
+                  <th>{t.attendance.terminalIdColumn}</th>
                   <th>Device User PK</th>
-                  <th>Human Employee Attribution</th>
-                  <th>Attendance Status</th>
+                  <th>{t.attendance.personColumn}</th>
+                  <th>{t.attendance.statusColumn}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -140,7 +140,7 @@ export function Attendance() {
             </table>
           </div>
           <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2 text-[11px] text-slate-500">
-            Showing {data?.items.length ?? 0} of {data?.total ?? 0} recorded attendance logs.
+            {t.common.showing} {data?.items.length ?? 0} {t.common.of} {data?.total ?? 0} {t.common.results}
           </div>
         </div>
       )}
@@ -151,15 +151,15 @@ export function Attendance() {
 }
 
 function ReconciliationSection() {
+  const { t } = useTranslation();
   const { data, loading, error } = useApi((s) => api.unattributedAttendance({ limit: 200 }, s), []);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-2xs space-y-3">
       <div className="border-b border-slate-100 pb-3">
-        <h2 className="text-sm font-bold text-slate-900">Reconciliation Diagnostics (Admin Only)</h2>
+        <h2 className="text-sm font-bold text-slate-900">{t.attendance.reconciliationTitle}</h2>
         <p className="mt-0.5 max-w-3xl text-xs text-slate-500 leading-relaxed">
-          Unattributed attendance rows with per-row reasoning from the canonical temporal resolver.
-          Read-only — no row is modified here. Identity authority stays with the VERIFIED temporal mapping.
+          {t.attendance.reconciliationDesc}
         </p>
       </div>
 
@@ -259,10 +259,11 @@ function LiveBadge({ status }: { status: "connecting" | "connected" | "disconnec
 }
 
 export function AttendanceDetail() {
+  const { t } = useTranslation();
   return (
     <div className="space-y-4">
       <Link to="/attendance" className="text-xs font-semibold text-blue-600 hover:underline">
-        ← Back to Attendance Monitor
+        ← {t.common.back} {t.attendance.title}
       </Link>
     </div>
   );

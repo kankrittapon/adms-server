@@ -15,15 +15,15 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from app.api.auth import ROLE_LEVEL, hash_password
-from app.api.dependencies import OperatorContext, get_cfg, require_role
+from app.api.auth import ROLES_ADMIN_ONLY, VALID_ROLES, hash_password
+from app.api.dependencies import OperatorContext, get_cfg, require_roles
 from app.api.errors import ApiError, not_found
 from app.config import Config
 from app.db import get_db_connection, log_sync_event
 
 router = APIRouter(tags=["operators"])
 
-admin_only = require_role("ADMIN")
+admin_only = require_roles(ROLES_ADMIN_ONLY)
 
 
 class CreateOperatorRequest(BaseModel):
@@ -83,7 +83,7 @@ def create_operator(
     cfg: Config = Depends(get_cfg),
 ):
     role = payload.role.upper()
-    if role not in ROLE_LEVEL:
+    if role not in VALID_ROLES:
         raise ApiError(422, "VALIDATION_ERROR", "invalid role: %s" % payload.role)
     if role != "ADMIN" and ctx.role != "ADMIN":
         # Only an ADMIN may create any operator; this branch is defensive.

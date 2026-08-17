@@ -110,7 +110,7 @@ def dashboard_summary(cfg: Config) -> Dict[str, Any]:
 
 
 HUMAN_COLUMNS = (
-    "employee_id, personnel_id, display_name, rank, position, branch, category, "
+    "employee_id, personnel_id, display_name, english_name, rank, position, branch, category, "
     "notes, active, production_scope, source, created_at, updated_at"
 )
 
@@ -129,9 +129,9 @@ def list_humans(
         where.append("production_scope = %s")
         params.append(production_scope)
     if search:
-        where.append("(display_name ILIKE %s OR personnel_id ILIKE %s OR rank ILIKE %s)")
+        where.append("(display_name ILIKE %s OR english_name ILIKE %s OR personnel_id ILIKE %s OR rank ILIKE %s)")
         like = f"%{search}%"
-        params.extend([like, like, like])
+        params.extend([like, like, like, like])
     if category:
         where.append("category = %s")
         params.append(category)
@@ -161,6 +161,45 @@ def get_human(cfg: Config, employee_id: str) -> Optional[Dict[str, Any]]:
         meta = normalize_rtn_rank(row.get("rank") or "")
         row["rank_metadata"] = meta
     return row
+
+
+def update_human_english_name(
+    cfg: Config,
+    employee_id: str,
+    english_name: Optional[str],
+    operator_username: str,
+) -> Optional[Dict[str, Any]]:
+    current = get_human(cfg, employee_id)
+    if current is None:
+        return None
+    old_name = current.get("english_name") or ""
+    new_name = english_name.strip() if english_name else None
+
+    with _connect(cfg) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE human_employees SET english_name = %s, updated_at = now() "
+                f"WHERE employee_id = %s RETURNING {HUMAN_COLUMNS};",
+                (new_name, employee_id),
+            )
+            row = cur.fetchone()
+            if row is None:
+                conn.rollback()
+                return None
+            cols = [d[0] for d in cur.description]
+            updated_dict = dict(zip(cols, row))
+            conn.commit()
+
+    from app.db import log_sync_event
+
+    log_sync_event(
+        cfg,
+        "HUMAN_ENGLISH_NAME_UPDATED",
+        f"employee_id={employee_id} old={old_name} new={new_name or ''} by={operator_username}",
+    )
+    meta = normalize_rtn_rank(updated_dict.get("rank") or "")
+    updated_dict["rank_metadata"] = meta
+    return updated_dict
 
 
 # --- Devices --------------------------------------------------------------

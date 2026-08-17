@@ -1,8 +1,10 @@
 import { api } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ErrorBanner, Loading, StatusBadge } from "../components/Status";
+import { useTranslation } from "../i18n";
 
 export function Devices() {
+  const { t } = useTranslation();
   const devices = useApi((s) => api.devices(s), []);
   const users = useApi((s) => api.deviceUsers({ limit: 100 }, s), []);
 
@@ -15,14 +17,12 @@ export function Devices() {
       {/* Header */}
       <div className="flex flex-col justify-between gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Biometric Terminal Devices</h1>
-          <p className="text-xs text-slate-500">
-            Physical hardware endpoints, network status, and discovered on-device user records.
-          </p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">{t.devices.title}</h1>
+          <p className="text-xs text-slate-500">{t.devices.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-2xs">
-            {devices.data?.items.length ?? 0} Terminals Online
+            {devices.data?.items.length ?? 0} {t.nav.devices}
           </span>
         </div>
       </div>
@@ -49,19 +49,19 @@ export function Devices() {
 
             <div className="grid grid-cols-2 gap-4 text-xs md:grid-cols-4 pt-1">
               <div>
-                <span className="block text-[10px] font-bold uppercase text-slate-400">Terminal IP</span>
+                <span className="block text-[10px] font-bold uppercase text-slate-400">{t.devices.deviceIp}</span>
                 <span className="font-mono font-semibold text-slate-800">{d.device_ip}:4370</span>
               </div>
               <div>
-                <span className="block text-[10px] font-bold uppercase text-slate-400">Serial Number</span>
+                <span className="block text-[10px] font-bold uppercase text-slate-400">{t.devices.serial}</span>
                 <span className="font-mono text-slate-800">{d.serial_number}</span>
               </div>
               <div>
-                <span className="block text-[10px] font-bold uppercase text-slate-400">Hardware Platform</span>
+                <span className="block text-[10px] font-bold uppercase text-slate-400">{t.devices.platform}</span>
                 <span className="text-slate-800 font-medium">{d.platform}</span>
               </div>
               <div>
-                <span className="block text-[10px] font-bold uppercase text-slate-400">Firmware Version</span>
+                <span className="block text-[10px] font-bold uppercase text-slate-400">{t.devices.firmware}</span>
                 <span className="font-mono text-slate-800">{d.firmware_version ?? "—"}</span>
               </div>
             </div>
@@ -73,7 +73,7 @@ export function Devices() {
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Discovered Device Accounts ({users.data?.total ?? 0})
+            {t.devices.discoveredUsers} ({users.data?.total ?? 0})
           </h2>
           <span className="text-[11px] text-slate-400">Synced via Collector Roster Ingestion</span>
         </div>
@@ -84,13 +84,13 @@ export function Devices() {
               <thead>
                 <tr>
                   <th className="w-14">PK</th>
-                  <th>Terminal User ID</th>
+                  <th>{t.attendance.terminalIdColumn}</th>
                   <th>Terminal UID</th>
                   <th>Display Name</th>
-                  <th>Privilege</th>
-                  <th>Account State</th>
-                  <th>Incarnation</th>
-                  <th>Last Roster Sync</th>
+                  <th>{t.devices.privilege}</th>
+                  <th>{t.common.status}</th>
+                  <th>{t.devices.incarnation}</th>
+                  <th>{t.devices.lastSeen}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

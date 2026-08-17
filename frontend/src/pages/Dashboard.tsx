@@ -2,9 +2,11 @@ import { api } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ErrorBanner, Loading, StatCard, StatusBadge, WriteGateStatusBadge } from "../components/Status";
 import { useAuth } from "../auth";
+import { useTranslation } from "../i18n";
 
 export function Dashboard() {
   const { serverWriteEnabled } = useAuth();
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useApi((s) => api.dashboard(s), []);
 
   if (loading) return <Loading />;
@@ -21,12 +23,12 @@ export function Dashboard() {
         <div>
           <div className="flex items-center gap-2.5">
             <span className="flex h-3 w-3 rounded-full bg-emerald-500 animate-pulse" />
-            <h1 className="text-lg font-bold tracking-tight text-slate-900">ADMS Operational Status</h1>
+            <h1 className="text-lg font-bold tracking-tight text-slate-900">{t.dashboard.title}</h1>
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            Collector: <strong>{data.collector?.state ?? "—"}</strong> · ZKTeco ZEM560:{" "}
+            {t.system.collectorService}: <strong>{data.collector?.state === "LIVE" ? t.status.collectorLive : (data.collector?.state ?? "—")}</strong> · ZKTeco ZEM560:{" "}
             <strong className={isCollectorLive ? "text-emerald-700" : "text-amber-700"}>
-              {data.collector?.device_connected ? "192.168.1.201 (Connected)" : "Disconnected"}
+              {data.collector?.device_connected ? "192.168.1.201 (" + t.status.deviceConnected + ")" : t.status.deviceDisconnected}
             </strong>
           </p>
         </div>
@@ -37,7 +39,7 @@ export function Dashboard() {
             onClick={() => reload()}
             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
           >
-            Refresh Telemetry
+            {t.common.refresh}
           </button>
         </div>
       </div>
@@ -45,34 +47,34 @@ export function Dashboard() {
       {/* KPI Stat Cards Grid */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <StatCard
-          label="Personnel"
+          label={t.nav.personnel}
           value={data.humans_total}
-          hint={`${data.humans_production_eligible} eligible / ${data.humans_excluded} excluded`}
+          hint={`${data.humans_production_eligible} ${t.personnel.productionScope} / ${data.humans_excluded} ${t.personnel.excludedScope}`}
         />
         <StatCard
-          label="Terminal Devices"
+          label={t.nav.devices}
           value={data.devices_total}
-          hint={`${data.devices_active} active (ZEM560)`}
+          hint={`${data.devices_active} ${t.common.active} (ZEM560)`}
         />
         <StatCard
-          label="Device Users"
+          label={t.devices.discoveredUsers}
           value={data.device_users_total}
-          hint={`${data.device_users_active} active accounts`}
+          hint={`${data.device_users_active} ${t.common.active}`}
         />
         <StatCard
-          label="Attendance Today"
+          label={t.dashboard.kpiAttendanceToday}
           value={data.attendance_today}
-          hint={`${data.attendance_total} total / ${data.attendance_unattributed} unmapped`}
+          hint={`${data.attendance_total} ${t.common.all} / ${data.attendance_unattributed} ${t.dashboard.kpiUnattributed}`}
         />
         <StatCard
-          label="Identity Mappings"
+          label={t.mappings.verifiedMappings}
           value={data.mappings_total}
-          hint={`${data.mappings_verified_active} VERIFIED active`}
+          hint={`${data.mappings_verified_active} ${t.mappings.activeMapping}`}
         />
         <StatCard
-          label="Collector State"
-          value={data.collector?.state ?? "—"}
-          hint={data.collector?.device_connected ? "Socket live & healthy" : "Collector offline"}
+          label={t.system.collectorService}
+          value={data.collector?.state === "LIVE" ? t.status.collectorLive : (data.collector?.state ?? "—")}
+          hint={data.collector?.device_connected ? t.status.deviceConnected : t.status.deviceDisconnected}
           tone={isCollectorLive ? "highlight" : "normal"}
         />
       </div>
@@ -82,7 +84,7 @@ export function Dashboard() {
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-2xs space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Enrollment Sessions by State
+              {t.dashboard.enrollmentStatusTitle}
             </h2>
             <span className="text-xs text-slate-400">Live workflow breakdown</span>
           </div>

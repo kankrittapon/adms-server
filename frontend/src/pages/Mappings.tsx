@@ -3,10 +3,12 @@ import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
 import { ErrorBanner, Loading, StatusBadge } from "../components/Status";
+import { useTranslation } from "../i18n";
 import type { MappingEligibilityItem } from "../api/types";
 
 export function Mappings() {
   const { isAdmin } = useAuth();
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useApi((s) => api.mappings({ limit: 100 }, s), []);
 
   return (
@@ -14,14 +16,12 @@ export function Mappings() {
       {/* Header */}
       <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Identity Mapping Authority</h1>
-          <p className="text-xs text-slate-500">
-            Temporal Human ↔ Terminal User identity bindings verified by system administrators.
-          </p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">{t.mappings.title}</h1>
+          <p className="text-xs text-slate-500">{t.mappings.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-2xs">
-            {data ? `${data.total} Active Mappings` : "Loading..."}
+            {data ? `${data.total} ${t.mappings.verifiedMappings}` : t.common.loading}
           </span>
         </div>
       </div>
@@ -40,13 +40,13 @@ export function Mappings() {
               <thead>
                 <tr>
                   <th className="w-16">Map ID</th>
-                  <th>Verified Human Identity</th>
-                  <th>Terminal User</th>
-                  <th>Mapping Status</th>
-                  <th>Valid From (UTC)</th>
-                  <th>Valid To (UTC)</th>
+                  <th>{t.personnel.thaiName}</th>
+                  <th>{t.attendance.terminalIdColumn}</th>
+                  <th>{t.common.status}</th>
+                  <th>{t.mappings.validFrom} (UTC)</th>
+                  <th>{t.mappings.validTo} (UTC)</th>
                   <th>Verification Method</th>
-                  <th>Verified By</th>
+                  <th>{t.mappings.verifiedBy}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -62,7 +62,7 @@ export function Mappings() {
                     </td>
                     <td className="font-mono text-slate-700 whitespace-nowrap">{fmt(m.valid_from)}</td>
                     <td className="font-mono text-slate-500 whitespace-nowrap">
-                      {m.valid_to ? fmt(m.valid_to) : "— (Permanent)"}
+                      {m.valid_to ? fmt(m.valid_to) : `— (${t.mappings.activeMapping})`}
                     </td>
                     <td>
                       <span className="inline-block rounded bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700 border border-purple-200">
@@ -89,6 +89,7 @@ function fmt(iso: string): string {
 }
 
 function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
+  const { t } = useTranslation();
   const { me, serverWriteEnabled } = useAuth();
   const elig = useApi((s) => api.mappingEligibility(s), []);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -134,10 +135,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
       })
       .catch((e: unknown) => {
         if (e instanceof ApiClientError && e.code === "WRITE_DISABLED") {
-          setError(
-            "Write endpoints are disabled on the server (API_WRITE_ENABLED=false). " +
-              "Enable the write flag to create mappings."
-          );
+          setError(t.personnel.writesDisabledNotice);
         } else if (e instanceof ApiClientError) {
           setError(`${e.code}: ${e.message}`);
         } else {
@@ -151,10 +149,9 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
     <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-5 shadow-2xs space-y-4">
       <div className="flex items-center justify-between border-b border-purple-100 pb-3">
         <div>
-          <h2 className="text-sm font-bold text-slate-900">Create VERIFIED Mapping (Admin Authority)</h2>
+          <h2 className="text-sm font-bold text-slate-900">{t.mappings.adminAuthorityTitle}</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Choose a <code>READY_FOR_MAPPING</code> enrollment with completed controlled-scan evidence.
-            Creating the mapping consumes (retires) the enrollment.
+            {t.mappings.adminAuthorityDesc}
           </p>
         </div>
         <span className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-purple-800">
@@ -164,7 +161,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
 
       {!serverWriteEnabled && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-          🔒 Writes Locked: <code>API_WRITE_ENABLED=false</code> — Mapping creation is read-only.
+          {t.personnel.writesDisabledNotice}
         </div>
       )}
 
@@ -176,7 +173,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
         <ErrorBanner message={elig.error} />
       ) : elig.data?.items.length === 0 ? (
         <p className="text-xs text-slate-500">
-          No eligible enrollments — no <code>READY_FOR_MAPPING</code> enrollment awaiting activation.
+          No eligible enrollments awaiting activation.
         </p>
       ) : (
         <div className="space-y-3">
@@ -204,7 +201,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700">Verified By (Admin Signer)</label>
+              <label className="block text-[11px] font-bold text-slate-700">{t.mappings.verifiedBy}</label>
               <input
                 type="text"
                 value={verifiedBy}
@@ -215,7 +212,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700">Audit Verification Note</label>
+              <label className="block text-[11px] font-bold text-slate-700">Verification Note</label>
               <input
                 type="text"
                 value={note}
@@ -247,7 +244,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
               disabled={!serverWriteEnabled || busy || !selectedId}
               className="rounded-md bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
             >
-              {busy ? "Activating Mapping..." : "Create VERIFIED Mapping"}
+              {busy ? t.common.saving : t.mappings.createMappingButton}
             </button>
           </div>
         </div>

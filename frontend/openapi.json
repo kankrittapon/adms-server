@@ -1245,6 +1245,17 @@
             "title": "Employee Id",
             "type": "string"
           },
+          "english_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "English Name"
+          },
           "notes": {
             "anyOf": [
               {
@@ -2343,6 +2354,25 @@
           "reasoning"
         ],
         "title": "UnattributedAttendance",
+        "type": "object"
+      },
+      "UpdateHumanEnglishNameRequest": {
+        "properties": {
+          "english_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full English name with Latin letters, spaces, hyphens, and apostrophes",
+            "title": "English Name"
+          }
+        },
+        "title": "UpdateHumanEnglishNameRequest",
         "type": "object"
       },
       "ValidationError": {
@@ -3928,6 +3958,56 @@
           }
         },
         "summary": "Get Human",
+        "tags": [
+          "humans"
+        ]
+      },
+      "patch": {
+        "operationId": "update_human_english_name_api_v1_humans__employee_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "required": true,
+            "schema": {
+              "title": "Employee Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateHumanEnglishNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Human"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Human English Name",
         "tags": [
           "humans"
         ]

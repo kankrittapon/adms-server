@@ -21,6 +21,9 @@ import type {
   Page,
   RankReference,
   UnattributedAttendance,
+  CreateOperatorRequest,
+  OperatorOut,
+  ToggleActiveResponse,
   BodyOf,
   JsonResponse,
   OperationsKey,
@@ -246,6 +249,29 @@ export const api = {
 
   // Reference
   ranks: (signal?: AbortSignal) => request<RankReference[]>("/api/v1/reference/ranks", signal),
+
+  // Humans update
+  updateHumanEnglishName: (employeeId: string, englishName: string | null) =>
+    request<Human>(`/api/v1/humans/${employeeId}`, undefined, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ english_name: englishName } satisfies BodyOf<"update_human_english_name_api_v1_humans__employee_id__patch">),
+    }),
+
+  // Operator Management (admin)
+  listOperators: (signal?: AbortSignal) => request<OperatorOut[]>("/api/v1/operators", signal),
+  createOperator: (payload: CreateOperatorRequest) =>
+    request<OperatorOut>("/api/v1/operators", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload satisfies BodyOf<"create_operator_api_v1_operators_post">),
+    }),
+  toggleOperatorActive: (operatorId: number, active: boolean) =>
+    request<ToggleActiveResponse>(`/api/v1/operators/${operatorId}/toggle-active`, undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active } satisfies BodyOf<"toggle_active_api_v1_operators__operator_id__toggle_active_post">),
+    }),
 
   // F5 hardening: audit trail (admin)
   auditEvents: (params: QueryOf<"list_events_api_v1_audit_events_get">, signal?: AbortSignal) =>

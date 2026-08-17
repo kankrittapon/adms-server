@@ -1,6 +1,6 @@
 """Attendance read endpoints.
 
-PromptID: ADMS-Frontend-F1-API-001
+PromptID: ADMS-Frontend-F1-API-001 / ADMS-Frontend-I18n-RBAC-Personnel-004
 
 Normalized timestamp fields only. raw_payload is NOT exposed by default —
 there is an explicit separate diagnostics endpoint for it.
@@ -12,7 +12,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.api import repository
-from app.api.dependencies import get_cfg, pagination, require_role
+from app.api.auth import ROLES_ADMIN_ONLY, ROLES_GENERAL_READ
+from app.api.dependencies import get_cfg, pagination, require_roles
 from app.api.errors import ApiError, not_found
 from app.api.schemas import Attendance, AttendanceDetail, AttendanceRawPayload, Page, UnattributedAttendance
 from app.config import Config
@@ -34,7 +35,11 @@ def _parse_dt(value: Optional[str]) -> Optional[datetime]:
     return dt
 
 
-@router.get("/api/v1/attendance", response_model=Page[Attendance])
+@router.get(
+    "/api/v1/attendance",
+    response_model=Page[Attendance],
+    dependencies=[Depends(require_roles(ROLES_GENERAL_READ))],
+)
 def list_attendance(
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
@@ -62,7 +67,7 @@ def list_attendance(
 @router.get(
     "/api/v1/attendance/unattributed",
     response_model=Page[UnattributedAttendance],
-    dependencies=[Depends(require_role("ADMIN"))],
+    dependencies=[Depends(require_roles(ROLES_ADMIN_ONLY))],
 )
 def unattributed(page: tuple = Depends(pagination), cfg: Config = Depends(get_cfg)):
     """F4: read-only reconciliation diagnostics.
@@ -75,7 +80,11 @@ def unattributed(page: tuple = Depends(pagination), cfg: Config = Depends(get_cf
     return repository.unattributed_attendance(cfg, limit=limit, offset=offset)
 
 
-@router.get("/api/v1/attendance/{attendance_id}", response_model=AttendanceDetail)
+@router.get(
+    "/api/v1/attendance/{attendance_id}",
+    response_model=AttendanceDetail,
+    dependencies=[Depends(require_roles(ROLES_GENERAL_READ))],
+)
 def get_attendance(attendance_id: int, cfg: Config = Depends(get_cfg)):
     row = repository.get_attendance(cfg, attendance_id)
     if row is None:
@@ -86,6 +95,7 @@ def get_attendance(attendance_id: int, cfg: Config = Depends(get_cfg)):
 @router.get(
     "/api/v1/attendance/{attendance_id}/raw-payload",
     response_model=AttendanceRawPayload,
+    dependencies=[Depends(require_roles(ROLES_GENERAL_READ))],
     description="Explicit diagnostics endpoint for raw attendance payload.",
 )
 def get_attendance_raw_payload(attendance_id: int, cfg: Config = Depends(get_cfg)):

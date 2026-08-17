@@ -85,6 +85,18 @@ def require_auth(request: Request) -> OperatorContext:
     return ctx
 
 
+def require_roles(allowed_roles: set | list):
+    """Dependency factory: requires an authenticated operator with one of the allowed roles."""
+    allowed_set = set(allowed_roles)
+
+    def dependency(request: Request, ctx: OperatorContext = Depends(require_auth)) -> OperatorContext:
+        if ctx.role not in allowed_set:
+            raise ApiError(403, "FORBIDDEN", f"requires one of roles: {', '.join(sorted(allowed_set))}")
+        return ctx
+
+    return dependency
+
+
 def require_role(min_role: str):
     """Dependency factory: requires an authenticated operator with role >= min_role."""
 

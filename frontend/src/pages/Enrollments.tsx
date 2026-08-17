@@ -5,16 +5,8 @@ import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
 import { useAttendanceStream } from "../hooks/useAttendanceStream";
 import { ErrorBanner, Loading, StatusBadge, WriteGateStatusBadge } from "../components/Status";
+import { useTranslation } from "../i18n";
 import type { Enrollment, EnrollmentNextActions } from "../api/types";
-
-const STEPS = [
-  { id: "RESERVED", label: "1. Reserved", desc: "Terminal ID allocated" },
-  { id: "TERMINAL_ACCOUNT_CREATED", label: "2. Terminal Account", desc: "Account on device" },
-  { id: "FINGERPRINT_ENROLLED", label: "3. Fingerprint", desc: "Biometric captured" },
-  { id: "CONTROLLED_SCAN_CONFIRMED", label: "4. Controlled Scan", desc: "Attendance verified" },
-  { id: "READY_FOR_MAPPING", label: "5. Ready for Mapping", desc: "Ready for admin" },
-  { id: "RETIRED", label: "6. Verified Mapping", desc: "Active mapping" },
-];
 
 function getStepIndex(status: string): number {
   switch (status) {
@@ -40,12 +32,22 @@ function getStepIndex(status: string): number {
 }
 
 export function Enrollments() {
-  const { me, canWrite, serverWriteEnabled, canMutate } = useAuth();
+  const { me, serverWriteEnabled, canMutate } = useAuth();
+  const { t } = useTranslation();
   const list = useApi((s) => api.enrollments({ limit: 100 }, s), []);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  const STEPS = [
+    { id: "RESERVED", label: t.enrollment.step1Title },
+    { id: "TERMINAL_ACCOUNT_CREATED", label: t.enrollment.step2Title },
+    { id: "FINGERPRINT_ENROLLED", label: t.enrollment.step3Title },
+    { id: "CONTROLLED_SCAN_CONFIRMED", label: t.enrollment.step4Title },
+    { id: "READY_FOR_MAPPING", label: t.enrollment.step5Title },
+    { id: "RETIRED", label: t.enrollment.step6Title },
+  ];
 
   // Auto-select the first or newest enrollment if none selected
   useEffect(() => {
@@ -67,10 +69,8 @@ export function Enrollments() {
       {/* Workspace Header */}
       <div className="flex flex-col justify-between gap-2 border-b border-slate-200 pb-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Enrollment Workspace</h1>
-          <p className="text-xs text-slate-500">
-            Guided operator workflow to safely allocate terminal IDs, create terminal accounts, verify biometrics, and produce verified attendance mappings.
-          </p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">{t.enrollment.title}</h1>
+          <p className="text-xs text-slate-500">{t.enrollment.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <WriteGateStatusBadge writeEnabled={serverWriteEnabled} />
@@ -84,9 +84,9 @@ export function Enrollments() {
             !
           </div>
           <div>
-            <div className="font-bold">Production Writes Locked (Safe Mode)</div>
+            <div className="font-bold">{t.status.writesLocked}</div>
             <div className="mt-0.5 text-amber-800 leading-relaxed">
-              The ADMS server is operating in safety read-only mode (<code>API_WRITE_ENABLED=false</code>). All mutation controls (Reservation, Terminal Account Creation, State Confirmations) are viewable below but disabled until an administrator enables server writes.
+              {t.personnel.writesDisabledNotice}
             </div>
           </div>
         </div>
@@ -103,11 +103,10 @@ export function Enrollments() {
       <ReserveCard
         operatorName={me?.username ?? ""}
         canMutate={canMutate}
-        canWrite={canWrite}
         serverWriteEnabled={serverWriteEnabled}
         onReserved={(newId) => {
           setActionError(null);
-          setActionSuccess("Enrollment reserved successfully. Proceed to Step 2 below.");
+          setActionSuccess("Enrollment reserved successfully.");
           list.reload();
           setSelectedId(newId);
         }}
@@ -119,13 +118,13 @@ export function Enrollments() {
         <div className="lg:col-span-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Enrollment Sessions ({list.data?.total ?? 0})
+              {t.enrollment.activeQueue} ({list.data?.total ?? 0})
             </h2>
             <button
               onClick={() => list.reload()}
               className="text-[11px] font-medium text-blue-600 hover:underline"
             >
-              Refresh queue
+              {t.common.refresh}
             </button>
           </div>
 
@@ -135,7 +134,7 @@ export function Enrollments() {
             <ErrorBanner message={list.error} />
           ) : (list.data?.items.length ?? 0) === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
-              No enrollment sessions recorded. Use the form above to reserve the first terminal ID.
+              {t.enrollment.noActiveSessions}
             </div>
           ) : (
             <div className="space-y-2">
@@ -172,7 +171,7 @@ export function Enrollments() {
                     <div className="mt-2.5 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500">
                       <span>By: {e.reserved_by ?? "—"}</span>
                       <span>
-                        {stepIdx >= 0 ? `Step ${stepIdx + 1} of 6` : "Cancelled"}
+                        {stepIdx >= 0 ? `Step ${stepIdx + 1} / 6` : t.enrollment.cancelledTitle}
                       </span>
                     </div>
                   </div>
@@ -187,6 +186,7 @@ export function Enrollments() {
           {selected ? (
             <ActiveEnrollmentInspector
               enrollment={selected}
+              steps={STEPS}
               canMutate={canMutate}
               busyAction={busyAction}
               onRunAction={async (action, payload) => {
@@ -200,22 +200,22 @@ export function Enrollments() {
                       payload.display_name as string,
                       me?.username ?? "operator"
                     );
-                    setActionSuccess("Terminal account created on device. Take the person to ZEM560 to enroll fingerprint.");
+                    setActionSuccess("Terminal account created on device.");
                   } else if (action === "start-fingerprint-enrollment") {
                     await api.startFingerprintEnrollment(selected.enrollment_id, me?.username ?? "operator");
                     setActionSuccess("Fingerprint enrollment window active.");
                   } else if (action === "confirm-fingerprint") {
                     await api.confirmFingerprintEnrolled(selected.enrollment_id, me?.username ?? "operator");
-                    setActionSuccess("Fingerprint confirmed. Proceed to controlled scan.");
+                    setActionSuccess("Fingerprint confirmed.");
                   } else if (action === "start-controlled-scan") {
                     await api.startControlledScan(selected.enrollment_id, me?.username ?? "operator");
-                    setActionSuccess("Controlled scan window started (5 minutes). Ask person to scan finger now.");
+                    setActionSuccess("Controlled scan window started.");
                   } else if (action === "confirm-controlled-scan") {
                     await api.confirmControlledScan(selected.enrollment_id, me?.username ?? "operator", payload.scan_time as string);
-                    setActionSuccess("Controlled scan confirmed. Ready for mapping.");
+                    setActionSuccess("Controlled scan confirmed.");
                   } else if (action === "mark-ready-for-mapping") {
                     await api.markReadyForMapping(selected.enrollment_id, me?.username ?? "operator");
-                    setActionSuccess("Marked READY_FOR_MAPPING. An Admin can now activate the mapping.");
+                    setActionSuccess("Marked READY_FOR_MAPPING.");
                   } else if (action === "cancel") {
                     await api.cancelEnrollment(selected.enrollment_id, me?.username ?? "operator", payload.notes as string);
                     setActionSuccess("Enrollment cancelled.");
@@ -235,8 +235,7 @@ export function Enrollments() {
             />
           ) : (
             <div className="flex h-64 flex-col items-center justify-center rounded-lg border border-slate-200 bg-white p-6 text-center text-xs text-slate-500">
-              <div className="font-semibold text-slate-700">No Enrollment Selected</div>
-              <div className="mt-1">Select an enrollment session from the left queue to view and drive its workflow.</div>
+              <div className="font-semibold text-slate-700">{t.enrollment.noActiveSessions}</div>
             </div>
           )}
         </div>
@@ -245,22 +244,18 @@ export function Enrollments() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Step 1: Start New Enrollment (Reserve) Card
-// ---------------------------------------------------------------------------
 function ReserveCard({
   operatorName,
   canMutate,
-  canWrite,
   serverWriteEnabled,
   onReserved,
 }: {
   operatorName: string;
   canMutate: boolean;
-  canWrite: boolean;
   serverWriteEnabled: boolean;
   onReserved: (newId: number) => void;
 }) {
+  const { t } = useTranslation();
   const eligible = useApi((s) => api.humans({ production_scope: true, limit: 200 }, s), []);
   const devices = useApi((s) => api.devices(s), []);
   const [employeeId, setEmployeeId] = useState("");
@@ -296,7 +291,7 @@ function ReserveCard({
       })
       .catch((e: unknown) => {
         if (e instanceof ApiClientError && e.code === "WRITE_DISABLED") {
-          setError("Server writes are locked (API_WRITE_ENABLED=false).");
+          setError(t.personnel.writesDisabledNotice);
         } else if (e instanceof ApiClientError) {
           setError(`${e.code}: ${e.message}`);
         } else {
@@ -313,7 +308,7 @@ function ReserveCard({
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 font-mono text-[11px] font-bold text-white">
             1
           </span>
-          <h2 className="text-sm font-bold text-slate-900">Step 1: Start New Enrollment (Reserve Terminal ID)</h2>
+          <h2 className="text-sm font-bold text-slate-900">{t.enrollment.step1Title}</h2>
         </div>
         <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700">
           Browser Action
@@ -323,7 +318,7 @@ function ReserveCard({
       <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4 md:items-end">
         <div>
           <label className="block text-[11px] font-bold text-slate-700">
-            Human (Production Scope: {eligible.data?.total ?? "..."})
+            {t.enrollment.selectPerson} ({eligible.data?.total ?? "..."})
           </label>
           <select
             value={employeeId}
@@ -331,7 +326,7 @@ function ReserveCard({
             onChange={(e) => setEmployeeId(e.target.value)}
             className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-500"
           >
-            <option value="">— Select Personnel —</option>
+            <option value="">— {t.enrollment.selectPerson} —</option>
             {eligible.data?.items.map((h) => (
               <option key={h.employee_id} value={h.employee_id}>
                 {h.display_name} {h.rank ? `(${h.rank})` : ""}
@@ -341,7 +336,7 @@ function ReserveCard({
         </div>
 
         <div>
-          <label className="block text-[11px] font-bold text-slate-700">Target Terminal Device</label>
+          <label className="block text-[11px] font-bold text-slate-700">{t.enrollment.selectDevice}</label>
           <select
             value={deviceId}
             disabled={!canMutate || busy}
@@ -357,7 +352,7 @@ function ReserveCard({
         </div>
 
         <div>
-          <label className="block text-[11px] font-bold text-slate-700">Operator</label>
+          <label className="block text-[11px] font-bold text-slate-700">{t.audit.operatorColumn}</label>
           <input
             type="text"
             value={operator}
@@ -373,47 +368,42 @@ function ReserveCard({
             disabled={!canMutate || busy || !employeeId}
             className="w-full rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
           >
-            {busy ? "Reserving..." : "Reserve Terminal ID"}
+            {busy ? t.common.saving : t.enrollment.step1Button}
           </button>
         </div>
       </div>
 
-      {!canWrite ? (
-        <div className="mt-2 text-[11px] text-slate-500">
-          ℹ️ Logged in as <strong>VIEWER</strong>. Reservation requires OPERATOR or ADMIN role.
-        </div>
-      ) : !serverWriteEnabled ? (
+      {!serverWriteEnabled && (
         <div className="mt-2 text-[11px] text-amber-800">
-          🔒 Reservation disabled: Server writes are locked (<code>API_WRITE_ENABLED=false</code>).
+          {t.personnel.writesDisabledNotice}
         </div>
-      ) : null}
+      )}
 
       {error && <div className="mt-2 text-xs font-semibold text-rose-700">{error}</div>}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Active Enrollment Inspector with Stepper & Step Guidance
-// ---------------------------------------------------------------------------
 function ActiveEnrollmentInspector({
   enrollment,
+  steps,
   canMutate,
   busyAction,
   onRunAction,
 }: {
   enrollment: Enrollment;
+  steps: { id: string; label: string }[];
   canMutate: boolean;
   busyAction: string | null;
   onRunAction: (action: string, payload: Record<string, unknown>) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const currentStep = getStepIndex(enrollment.status);
   const [displayName, setDisplayName] = useState(enrollment.employee_name ?? "");
   const [scanTime, setScanTime] = useState("");
   const [cancelNotes, setCancelNotes] = useState("");
   const [showCancel, setShowCancel] = useState(false);
 
-  // SSE Stream for Realtime Attendance Scan Detection
   const { lastEvent } = useAttendanceStream();
   const [detectedScan, setDetectedScan] = useState<string | null>(null);
 
@@ -450,7 +440,7 @@ function ActiveEnrollmentInspector({
             onClick={() => setShowCancel(!showCancel)}
             className="text-xs font-semibold text-rose-600 hover:underline"
           >
-            {showCancel ? "Close cancel" : "Cancel session"}
+            {showCancel ? t.common.close : t.enrollment.cancelSession}
           </button>
         )}
       </div>
@@ -458,7 +448,7 @@ function ActiveEnrollmentInspector({
       {/* Stepper Progress Bar */}
       <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
         <div className="grid grid-cols-6 gap-1 text-center">
-          {STEPS.map((s, idx) => {
+          {steps.map((s, idx) => {
             const isCompleted = currentStep > idx;
             const isCurrent = currentStep === idx;
             return (
@@ -487,10 +477,10 @@ function ActiveEnrollmentInspector({
         </div>
       </div>
 
-      {/* Cancellation Drawer if active */}
+      {/* Cancellation Drawer */}
       {showCancel && (
         <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs space-y-2">
-          <div className="font-bold text-rose-900">Cancel Enrollment Session</div>
+          <div className="font-bold text-rose-900">{t.enrollment.cancelSession}</div>
           <input
             type="text"
             placeholder="Cancellation reason (required)"
@@ -505,27 +495,27 @@ function ActiveEnrollmentInspector({
             }}
             className="rounded-md bg-rose-600 px-3 py-1 font-bold text-white hover:bg-rose-700"
           >
-            Confirm Cancellation
+            {t.common.confirm}
           </button>
         </div>
       )}
 
-      {/* Dynamic Action & Guidance Panes based on State */}
+      {/* Dynamic Action Panes */}
       {enrollment.status === "RESERVED" && (
         <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-blue-900">Step 2: Create Terminal Account on Device</span>
+            <span className="text-xs font-bold text-blue-900">{t.enrollment.step2Title}</span>
             <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
               Browser Action
             </span>
           </div>
           <p className="text-xs text-blue-900/90 leading-relaxed">
-            Writes the reserved terminal ID <strong className="font-mono text-blue-950">{enrollment.reserved_device_user_id}</strong> to the physical terminal <strong>ADMS-ZEM560</strong> with NORMAL user privilege. This establishes the terminal record without requiring terminal menu access or SSH.
+            {t.enrollment.step2Desc}
           </p>
 
           <div className="flex flex-wrap items-end gap-3 pt-1">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-[11px] font-bold text-blue-950">Terminal Display Name (ASCII)</label>
+              <label className="block text-[11px] font-bold text-blue-950">{t.enrollment.terminalDisplayName}</label>
               <input
                 type="text"
                 value={displayName}
@@ -539,7 +529,7 @@ function ActiveEnrollmentInspector({
               disabled={!canMutate || busyAction === "create-terminal-account" || !displayName.trim()}
               className="rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {busyAction === "create-terminal-account" ? "Writing to terminal..." : "Create Terminal Account on Device"}
+              {busyAction === "create-terminal-account" ? t.common.saving : t.enrollment.step2Button}
             </button>
           </div>
         </div>
@@ -547,35 +537,33 @@ function ActiveEnrollmentInspector({
 
       {(enrollment.status === "TERMINAL_ACCOUNT_CREATED" || enrollment.status === "FINGERPRINT_ENROLLMENT_PENDING") && (
         <div className="space-y-4">
-          {/* Physical Terminal Instruction Banner */}
           <div className="rounded-lg border border-indigo-200 bg-indigo-50/70 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-950">Step 3: Physical Fingerprint Enrollment at Terminal</span>
+              <span className="text-xs font-bold text-indigo-950">{t.enrollment.step3Title}</span>
               <span className="rounded bg-indigo-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-900">
                 Physical Action at ZEM560
               </span>
             </div>
             <ol className="list-inside list-decimal space-y-1.5 text-xs text-indigo-950 leading-relaxed">
-              <li>Take the person to terminal <strong>ADMS-ZEM560 (192.168.1.201)</strong>.</li>
-              <li>Press <strong>Menu</strong> → select <strong>User Mgt</strong> → <strong>Manage</strong>.</li>
-              <li>Find User ID <strong className="font-mono text-indigo-950">{enrollment.reserved_device_user_id}</strong> and press OK.</li>
-              <li>Select <strong>Enroll FP</strong> and guide the person to place their finger on the sensor <strong>3 times</strong> until accepted.</li>
-              <li>Press ESC to return to the home screen.</li>
+              <li>พาบุคคลไปยังเครื่องสแกน <strong>ADMS-ZEM560 (192.168.1.201)</strong></li>
+              <li>กดปุ่ม <strong>Menu</strong> → เลือก <strong>User Mgt</strong> → <strong>Manage</strong></li>
+              <li>ค้นหา User ID <strong className="font-mono text-indigo-950">{enrollment.reserved_device_user_id}</strong> และกด OK</li>
+              <li>เลือก <strong>Enroll FP</strong> แล้ววางนิ้ว <strong>3 ครั้ง</strong> จนกว่าเครื่องจะแจ้งสำเร็จ</li>
+              <li>กดปุ่ม ESC เพื่อกลับสู่หน้าจอหลัก</li>
             </ol>
           </div>
 
-          {/* Web Confirmation Action */}
           <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3.5">
             <div>
-              <div className="text-xs font-bold text-slate-900">Confirm Biometric Template Enrolled</div>
-              <div className="text-[11px] text-slate-500">Click once the fingerprint is successfully enrolled at the physical terminal.</div>
+              <div className="text-xs font-bold text-slate-900">{t.enrollment.step3Title}</div>
+              <div className="text-[11px] text-slate-500">{t.enrollment.step3Desc}</div>
             </div>
             <button
               onClick={() => onRunAction("confirm-fingerprint", {})}
               disabled={!canMutate || busyAction === "confirm-fingerprint"}
               className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {busyAction === "confirm-fingerprint" ? "Confirming..." : "Confirm Fingerprint Enrolled"}
+              {busyAction === "confirm-fingerprint" ? t.common.saving : t.enrollment.step3Button}
             </button>
           </div>
         </div>
@@ -584,70 +572,53 @@ function ActiveEnrollmentInspector({
       {enrollment.status === "FINGERPRINT_ENROLLED" && (
         <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-blue-900">Step 4a: Initiate Controlled Scan Window</span>
+            <span className="text-xs font-bold text-blue-900">{t.enrollment.step4Title}</span>
             <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
               Browser Action
             </span>
           </div>
           <p className="text-xs text-blue-900/90 leading-relaxed">
-            Opens a 5-minute controlled scan window. During this window, the person will scan their newly enrolled finger to verify that the attendance logging engine captures their scan.
+            {t.enrollment.step4Desc}
           </p>
           <button
             onClick={() => onRunAction("start-controlled-scan", {})}
             disabled={!canMutate || busyAction === "start-controlled-scan"}
             className="rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {busyAction === "start-controlled-scan" ? "Starting..." : "Start 5-Minute Controlled Scan Window"}
+            {busyAction === "start-controlled-scan" ? t.common.saving : "Start Controlled Scan Window"}
           </button>
         </div>
       )}
 
       {enrollment.status === "CONTROLLED_SCAN_PENDING" && (
         <div className="space-y-4">
-          {/* Physical Scan Instruction */}
           <div className="rounded-lg border border-indigo-200 bg-indigo-50/70 p-4 space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-950">Step 4b: Person Scans Finger on Terminal</span>
+              <span className="text-xs font-bold text-indigo-950">{t.enrollment.step4Title}</span>
               <span className="rounded bg-indigo-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-900">
                 Physical Action at ZEM560
               </span>
             </div>
             <p className="text-xs text-indigo-950 leading-relaxed">
-              Ask <strong>{enrollment.employee_name}</strong> to place their finger on the ADMS-ZEM560 terminal sensor right now. The live attendance engine will detect the event automatically.
+              ให้ <strong>{enrollment.employee_name}</strong> ทำการทดสอบสแกนนิ้วที่เครื่อง ADMS-ZEM560 ทันที
             </p>
-            {enrollment.controlled_scan_window_until && (
-              <div className="text-[11px] font-mono text-indigo-900 font-semibold">
-                Window expires at: {new Date(enrollment.controlled_scan_window_until).toLocaleTimeString()}
-              </div>
-            )}
           </div>
 
-          {/* Realtime Scan Detection Alert */}
           {detectedScan && (
             <div className="flex items-center justify-between rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900 animate-pulse">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
                 <span>
-                  <strong>Realtime Scan Detected!</strong> Terminal ID <strong>{enrollment.reserved_device_user_id}</strong> scanned at <code className="font-mono">{detectedScan}</code>.
+                  <strong>{t.enrollment.liveScanDetected}</strong> Terminal ID <strong>{enrollment.reserved_device_user_id}</strong> @ <code className="font-mono">{detectedScan}</code>
                 </span>
               </div>
-              <span className="rounded bg-emerald-200 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900">
-                AUTO-CAPTURED
-              </span>
             </div>
           )}
 
-          {/* Controlled Scan Confirmation Form */}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-900">Step 4c: Submit Controlled Scan Confirmation</span>
-              <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
-                Web Confirmation
-              </span>
-            </div>
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[200px]">
-                <label className="block text-[11px] font-bold text-slate-700">Scan Timestamp (Local / ISO)</label>
+                <label className="block text-[11px] font-bold text-slate-700">Scan Timestamp</label>
                 <input
                   type="datetime-local"
                   value={scanTime}
@@ -658,13 +629,13 @@ function ActiveEnrollmentInspector({
               </div>
               <button
                 onClick={() => {
-                  if (!scanTime) return alert("Select or enter the scan timestamp.");
+                  if (!scanTime) return alert("Select scan timestamp.");
                   onRunAction("confirm-controlled-scan", { scan_time: new Date(scanTime).toISOString() });
                 }}
                 disabled={!canMutate || busyAction === "confirm-controlled-scan" || !scanTime}
                 className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
-                {busyAction === "confirm-controlled-scan" ? "Submitting..." : "Confirm Controlled Scan"}
+                {busyAction === "confirm-controlled-scan" ? t.common.saving : t.enrollment.step4Button}
               </button>
             </div>
           </div>
@@ -674,20 +645,20 @@ function ActiveEnrollmentInspector({
       {enrollment.status === "CONTROLLED_SCAN_CONFIRMED" && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-950">Step 5: Mark Ready for Mapping</span>
+            <span className="text-xs font-bold text-emerald-950">{t.enrollment.step5Title}</span>
             <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
               Web Action
             </span>
           </div>
           <p className="text-xs text-emerald-900 leading-relaxed">
-            Controlled scan evidence is confirmed. Advance this enrollment to <code>READY_FOR_MAPPING</code> so an Administrator can review and activate the final VERIFIED temporal mapping.
+            {t.enrollment.step5Desc}
           </p>
           <button
             onClick={() => onRunAction("mark-ready-for-mapping", {})}
             disabled={!canMutate || busyAction === "mark-ready-for-mapping"}
             className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {busyAction === "mark-ready-for-mapping" ? "Advancing..." : "Mark Ready for Mapping"}
+            {busyAction === "mark-ready-for-mapping" ? t.common.saving : "Mark Ready for Mapping"}
           </button>
         </div>
       )}
@@ -695,33 +666,33 @@ function ActiveEnrollmentInspector({
       {enrollment.status === "READY_FOR_MAPPING" && (
         <div className="rounded-lg border border-purple-200 bg-purple-50/80 p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-purple-950">Step 6: Ready for Admin Mapping Verification</span>
+            <span className="text-xs font-bold text-purple-950">{t.enrollment.step6Title}</span>
             <span className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-purple-800">
               Admin Action
             </span>
           </div>
           <p className="text-xs text-purple-900 leading-relaxed">
-            This enrollment has completed all physical biometric and scan steps. It is now queued for an Administrator to verify and activate as a permanent temporal identity mapping.
+            {t.enrollment.step6Desc}
           </p>
           <Link
             to="/mappings"
             className="inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-purple-800"
           >
-            Go to Mapping Management →
+            {t.nav.mappings} →
           </Link>
         </div>
       )}
 
       {enrollment.status === "RETIRED" && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900">
-          <strong>Mapping Completed:</strong> This enrollment session was consumed to create an active VERIFIED identity mapping.
+          <strong>{t.enrollment.completedTitle}:</strong> {t.enrollment.completedDesc}
         </div>
       )}
 
       {/* Enrollment Metadata Table */}
       <div className="border-t border-slate-100 pt-3">
         <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          Session Technical Audit Data
+          {t.enrollment.metadataInspector}
         </div>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs md:grid-cols-3">
           <MetaItem dt="Employee ID" dd={enrollment.employee_id} mono />

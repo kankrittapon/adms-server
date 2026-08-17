@@ -1,13 +1,13 @@
 """Audit-trail endpoints (F5 hardening, admin-only).
 
-PromptID: ADMS-Frontend-F5-Hardening-001
+PromptID: ADMS-Frontend-F5-Hardening-001 / ADMS-Frontend-I18n-RBAC-Personnel-004
 
 GET /api/v1/audit/events       -> paginated sync_events (event_type + date filters)
 GET /api/v1/audit/event-types  -> distinct event types for the filter UI
 
 The sync_events table already captures AUTH_LOGIN / AUTH_LOGIN_FAILED /
 AUTH_LOGOUT / AUTH_PASSWORD_CHANGE / OPERATOR_* / ENROLLMENT_* /
-MAPPING_VERIFIED / RATE_LIMITED events. This is read-only.
+MAPPING_VERIFIED / RATE_LIMITED / HUMAN_ENGLISH_NAME_UPDATED events.
 """
 
 from datetime import datetime, timezone
@@ -16,14 +16,15 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.api import repository
-from app.api.dependencies import get_cfg, pagination, require_role
+from app.api.auth import ROLES_ADMIN_ONLY
+from app.api.dependencies import get_cfg, pagination, require_roles
 from app.api.errors import ApiError
 from app.api.schemas import AuditEvent, EventTypesResponse, Page
 from app.config import Config
 
 router = APIRouter(tags=["audit"])
 
-admin_only = require_role("ADMIN")
+admin_only = require_roles(ROLES_ADMIN_ONLY)
 
 
 def _parse_dt(value: Optional[str]) -> Optional[datetime]:

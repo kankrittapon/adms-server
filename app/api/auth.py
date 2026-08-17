@@ -1,6 +1,6 @@
 """F5 authentication core.
 
-PromptID: ADMS-Frontend-F5-Auth-001
+PromptID: ADMS-Frontend-F5-Auth-001 / ADMS-Frontend-I18n-RBAC-Personnel-004
 
 DB-backed operator accounts and opaque Bearer tokens.
 
@@ -11,19 +11,38 @@ Design (owner-approved):
   - Strict posture: no valid token -> 401; insufficient role -> 403.
   - First ADMIN is bootstrapped via `python -m app.api.bootstrap_admin`.
 
-Role hierarchy: VIEWER (1) < OPERATOR (2) < ADMIN (3).
+Roles:
+  - VIEWER: General read-only operational observer.
+  - ENROLLMENT_OPERATOR: Capability-scoped operational role restricted to
+    the guided enrollment workflow.
+  - OPERATOR: Broad operational workflow access.
+  - ADMIN: Full administrative authority.
 """
 
 import hashlib
 import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Set, Tuple
 
 from app.api.errors import ApiError
-from app.config import Config
 
-ROLE_LEVEL = {"VIEWER": 1, "OPERATOR": 2, "ADMIN": 3}
+VALID_ROLES: Set[str] = {"VIEWER", "ENROLLMENT_OPERATOR", "OPERATOR", "ADMIN"}
+
+ROLE_LEVEL = {
+    "VIEWER": 1,
+    "ENROLLMENT_OPERATOR": 2,
+    "OPERATOR": 3,
+    "ADMIN": 4,
+}
+
+# Capability Role Sets
+ROLES_ALL_AUTHENTICATED: Set[str] = VALID_ROLES
+ROLES_GENERAL_READ: Set[str] = {"VIEWER", "OPERATOR", "ADMIN"}
+ROLES_ENROLLMENT_READ: Set[str] = {"VIEWER", "ENROLLMENT_OPERATOR", "OPERATOR", "ADMIN"}
+ROLES_ENROLLMENT_MUTATE: Set[str] = {"ENROLLMENT_OPERATOR", "OPERATOR", "ADMIN"}
+ROLES_OPERATOR_PLUS: Set[str] = {"OPERATOR", "ADMIN"}
+ROLES_ADMIN_ONLY: Set[str] = {"ADMIN"}
 
 PBKDF2_ITERATIONS = 260_000
 TOKEN_BYTES = 32  # 256-bit opaque token
@@ -71,6 +90,8 @@ def _hash_token(token: str) -> str:
 
 def issue_token(operator_id: int, role: str, ttl_hours: int) -> Tuple[str, datetime]:
     """Returns (plaintext_token, expires_at). Only the hash is persisted."""
+    if role not in VALID_ROLES:
+        raise ValueError(f"invalid role: {role}")
     token = secrets.token_urlsafe(TOKEN_BYTES)
     expires_at = datetime.now(timezone.utc) + timedelta(hours=ttl_hours)
     return token, expires_at
@@ -82,8 +103,8 @@ def role_required(current_role: str, min_role: str) -> bool:
 
 
 def require_role_token(role: str) -> None:
-    """Raises a 403 ApiError when the role is below the required level."""
-    if role not in ROLE_LEVEL:
+    """Raises a 401 ApiError when the role is not recognized."""
+    if role not in VALID_ROLES:
         raise ApiError(401, "UNAUTHORIZED", "invalid token role")
 
 
@@ -106,7 +127,7 @@ def verify_token_row(row: Optional[tuple], now: Optional[datetime] = None) -> Op
         return None
     if not active:
         return None
-    if role not in ROLE_LEVEL:
+    if role not in VALID_ROLES:
         return None
     return {
         "operator_id": operator_id,

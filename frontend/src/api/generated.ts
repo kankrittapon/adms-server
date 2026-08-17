@@ -519,7 +519,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Human English Name */
+        patch: operations["update_human_english_name_api_v1_humans__employee_id__patch"];
         trace?: never;
     };
     "/api/v1/mappings": {
@@ -1150,6 +1151,8 @@ export interface components {
             display_name: string;
             /** Employee Id */
             employee_id: string;
+            /** English Name */
+            english_name?: string | null;
             /** Notes */
             notes?: string | null;
             /** Personnel Id */
@@ -1527,6 +1530,14 @@ export interface components {
             status: string;
             /** User Id */
             user_id: string;
+        };
+        /** UpdateHumanEnglishNameRequest */
+        UpdateHumanEnglishNameRequest: {
+            /**
+             * English Name
+             * @description Full English name with Latin letters, spaces, hyphens, and apostrophes
+             */
+            english_name?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -2430,6 +2441,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Human"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_human_english_name_api_v1_humans__employee_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateHumanEnglishNameRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

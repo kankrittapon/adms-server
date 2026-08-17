@@ -1,6 +1,6 @@
 """Dashboard summary endpoint.
 
-PromptID: ADMS-Frontend-F1-API-001
+PromptID: ADMS-Frontend-F1-API-001 / ADMS-Frontend-I18n-RBAC-Personnel-004
 
 One efficient aggregation query for F2/F3 dashboard views.
 """
@@ -10,15 +10,20 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 
 from app.api import repository
-from app.api.dependencies import get_cfg
-from app.api.schemas import CollectorSummary, DashboardSummary
+from app.api.auth import ROLES_GENERAL_READ
+from app.api.dependencies import get_cfg, require_roles
 from app.api.routers.health import _read_collector_health
+from app.api.schemas import CollectorSummary, DashboardSummary
 from app.config import Config
 
 router = APIRouter(tags=["dashboard"])
 
 
-@router.get("/api/v1/dashboard/summary", response_model=DashboardSummary)
+@router.get(
+    "/api/v1/dashboard/summary",
+    response_model=DashboardSummary,
+    dependencies=[Depends(require_roles(ROLES_GENERAL_READ))],
+)
 def dashboard_summary(cfg: Config = Depends(get_cfg)) -> DashboardSummary:
     data = repository.dashboard_summary(cfg)
     collector_raw = _read_collector_health()

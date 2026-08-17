@@ -1,6 +1,6 @@
 """Human <-> Device mapping endpoints.
 
-PromptID: ADMS-Frontend-F1-API-001
+PromptID: ADMS-Frontend-F1-API-001 / ADMS-Frontend-I18n-RBAC-Personnel-004
 
 Reads expose temporal mapping state. The write route wraps the canonical
 app.mapping.create_verified_mapping() — it NEVER reimplements identity logic,
@@ -14,7 +14,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from app.api import repository
-from app.api.dependencies import get_cfg, pagination, require_role, require_writes
+from app.api.auth import ROLES_ADMIN_ONLY, ROLES_GENERAL_READ
+from app.api.dependencies import get_cfg, pagination, require_roles, require_writes
 from app.api.errors import ApiError, not_found
 from app.api.schemas import Mapping, MappingEligibility, Page
 from app.config import Config
@@ -23,7 +24,11 @@ from app.mapping import MappingError, create_verified_mapping
 router = APIRouter(tags=["mappings"])
 
 
-@router.get("/api/v1/mappings", response_model=Page[Mapping])
+@router.get(
+    "/api/v1/mappings",
+    response_model=Page[Mapping],
+    dependencies=[Depends(require_roles(ROLES_GENERAL_READ))],
+)
 def list_mappings(
     employee_id: Optional[str] = Query(None),
     device_user_pk: Optional[int] = Query(None),
@@ -45,7 +50,7 @@ def list_mappings(
 @router.get(
     "/api/v1/mappings/eligibility",
     response_model=MappingEligibility,
-    dependencies=[Depends(require_role("ADMIN"))],
+    dependencies=[Depends(require_roles(ROLES_ADMIN_ONLY))],
 )
 def mapping_eligibility(cfg: Config = Depends(get_cfg)):
     """READY_FOR_MAPPING enrollments with controlled-scan evidence.
@@ -59,7 +64,11 @@ def mapping_eligibility(cfg: Config = Depends(get_cfg)):
     return {"items": items, "count": len(items)}
 
 
-@router.get("/api/v1/mappings/{mapping_id}", response_model=Mapping)
+@router.get(
+    "/api/v1/mappings/{mapping_id}",
+    response_model=Mapping,
+    dependencies=[Depends(require_roles(ROLES_GENERAL_READ))],
+)
 def get_mapping(mapping_id: int, cfg: Config = Depends(get_cfg)):
     row = repository.get_mapping(cfg, mapping_id)
     if row is None:
@@ -93,7 +102,7 @@ class CreateMappingResponse(BaseModel):
     "/api/v1/mappings",
     response_model=CreateMappingResponse,
     status_code=201,
-    dependencies=[Depends(require_role("ADMIN")), Depends(require_writes)],
+    dependencies=[Depends(require_roles(ROLES_ADMIN_ONLY)), Depends(require_writes)],
 )
 def create_mapping(payload: CreateMappingRequest, cfg: Config = Depends(get_cfg)):
     try:

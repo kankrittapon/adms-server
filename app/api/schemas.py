@@ -81,6 +81,7 @@ class Human(BaseModel):
     employee_id: str
     personnel_id: Optional[str] = None
     display_name: str
+    english_name: Optional[str] = None
     rank: Optional[str] = None
     rank_metadata: Optional[RankMetadata] = None
     position: Optional[str] = None
@@ -92,6 +93,10 @@ class Human(BaseModel):
     source: str
     created_at: datetime
     updated_at: datetime
+
+
+class UpdateHumanEnglishNameRequest(BaseModel):
+    english_name: Optional[str] = Field(None, max_length=200, description="Full English name with Latin letters, spaces, hyphens, and apostrophes")
 
 
 # --- Devices --------------------------------------------------------------

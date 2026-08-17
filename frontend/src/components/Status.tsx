@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "../i18n";
 
 export type BadgeTone = "green" | "red" | "amber" | "blue" | "indigo" | "purple" | "neutral";
 
@@ -90,39 +91,42 @@ export function ScopeBadge({ scope }: { scope: boolean }) {
 }
 
 export function WriteGateStatusBadge({ writeEnabled }: { writeEnabled: boolean }) {
+  const { t } = useTranslation();
   if (writeEnabled) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900 shadow-2xs">
         <span className="h-2 w-2 rounded-full bg-amber-600 animate-ping" />
-        ⚠️ WRITES ACTIVE (MUTATION ENABLED)
+        {t.status.writesActive}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-2xs">
       <span className="h-2 w-2 rounded-full bg-slate-500" />
-      🔒 WRITES LOCKED (READ-ONLY SAFE)
+      {t.status.writesLocked}
     </span>
   );
 }
 
 export function Loading() {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center py-12 text-slate-500">
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
-      <span className="mt-2 text-xs font-medium">Loading telemetry...</span>
+      <span className="mt-2 text-xs font-medium">{t.common.loading}</span>
     </div>
   );
 }
 
 export function ErrorBanner({ message }: { message: string }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50/90 p-3.5 text-xs text-rose-900 shadow-2xs">
       <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-200 font-bold text-rose-800 text-[11px]">
         !
       </div>
       <div>
-        <div className="font-bold">System Error</div>
+        <div className="font-bold">{t.common.error}</div>
         <div className="mt-0.5 leading-relaxed text-rose-800">{message}</div>
       </div>
     </div>

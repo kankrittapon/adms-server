@@ -2,8 +2,10 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ErrorBanner, Loading } from "../components/Status";
+import { useTranslation } from "../i18n";
 
 export function Audit() {
+  const { t } = useTranslation();
   const [eventType, setEventType] = useState("");
   const types = useApi((s) => api.auditEventTypes(s), []);
   const { data, loading, error, reload } = useApi(
@@ -16,14 +18,12 @@ export function Audit() {
       {/* Header */}
       <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Security & Operational Audit Trail</h1>
-          <p className="text-xs text-slate-500">
-            Immutable administrative event log capturing authentication, enrollment transitions, mappings, and system mutations.
-          </p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">{t.audit.title}</h1>
+          <p className="text-xs text-slate-500">{t.audit.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-2xs">
-            {data ? `${data.total} Total Events` : "Loading..."}
+            {data ? `${data.total} ${t.audit.title}` : t.common.loading}
           </span>
         </div>
       </div>
@@ -36,7 +36,7 @@ export function Audit() {
             onChange={(e) => setEventType(e.target.value)}
             className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
           >
-            <option value="">All Security & Operational Event Types</option>
+            <option value="">{t.audit.eventTypeFilter}</option>
             {types.data?.event_types.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -48,7 +48,7 @@ export function Audit() {
           onClick={reload}
           className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
         >
-          Refresh Log
+          {t.common.refresh}
         </button>
       </div>
 
@@ -63,10 +63,10 @@ export function Audit() {
             <table className="w-full border-collapse text-left text-xs table-dense">
               <thead>
                 <tr>
-                  <th className="w-44">Timestamp (UTC)</th>
-                  <th className="w-48">Event Category</th>
+                  <th className="w-44">{t.audit.timestampColumn} (UTC)</th>
+                  <th className="w-48">{t.audit.eventTypeColumn}</th>
                   <th className="w-32">Origin IP</th>
-                  <th>Event Message & Payload Details</th>
+                  <th>{t.audit.detailsColumn}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -88,7 +88,7 @@ export function Audit() {
             </table>
           </div>
           <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2 text-[11px] text-slate-500">
-            Showing latest {data?.items.length ?? 0} events from <code>sync_events</code>.
+            {t.common.showing} {data?.items.length ?? 0} {t.common.of} {data?.total ?? 0}
           </div>
         </div>
       )}
