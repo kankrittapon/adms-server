@@ -1294,6 +1294,11 @@ export interface components {
             role: string;
             /** Username */
             username: string;
+            /**
+             * Write Enabled
+             * @default false
+             */
+            write_enabled: boolean;
         };
         /** OperatorOut */
         OperatorOut: {
@@ -2210,7 +2215,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnrollmentTransitionResult"];
                 };
             };
             /** @description Validation Error */

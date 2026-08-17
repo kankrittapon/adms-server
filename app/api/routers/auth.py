@@ -50,6 +50,7 @@ class MeResponse(BaseModel):
     username: str
     display_name: str
     role: str
+    write_enabled: bool = False
 
 
 @router.post(
@@ -112,12 +113,13 @@ def logout(request: Request, cfg: Config = Depends(get_cfg), ctx: OperatorContex
 
 
 @router.get("/api/v1/auth/me", response_model=MeResponse)
-def me(ctx: OperatorContext = Depends(require_auth)):
+def me(ctx: OperatorContext = Depends(require_auth), settings: ApiSettings = Depends(get_settings)):
     return MeResponse(
         operator_id=ctx.operator_id,
         username=ctx.username,
         display_name=ctx.display_name,
         role=ctx.role,
+        write_enabled=settings.write_enabled,
     )
 
 

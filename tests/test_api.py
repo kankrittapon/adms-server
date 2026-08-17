@@ -15,7 +15,7 @@ covered in tests/test_api_auth.py.
 import os
 import unittest
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -423,13 +423,13 @@ class TestEnrollmentNextActions(ApiTestBase):
         with patch("app.api.repository.get_enrollment_row", return_value=row):
             return self.client.get("/api/v1/enrollments/1/next-actions")
 
-    def test_reserved_allows_cancel_only(self):
+    def test_reserved_allows_create_terminal_account_and_cancel(self):
         resp = self._enrollment("RESERVED")
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertEqual(body["status"], "RESERVED")
         actions = {a["action"] for a in body["next_actions"]}
-        self.assertEqual(actions, {"cancel"})
+        self.assertEqual(actions, {"create-terminal-account", "cancel"})
 
     def test_fingerprint_enrolled_allows_controlled_scan(self):
         resp = self._enrollment("FINGERPRINT_ENROLLED")
@@ -616,14 +616,31 @@ class TestWriteGuard(ApiTestBase):
         self.assertEqual(resp.status_code, 200)
         mock_transition.assert_called_once()
 
-    def test_create_terminal_account_never_through_api(self):
-        client = self.make_write_client()
-        resp = client.post(
-            "/api/v1/enrollments/1/create-terminal-account",
-            json={"display_name": "Test Name", "operator": "tester"},
-        )
-        self.assertEqual(resp.status_code, 501)
-        self.assertEqual(resp.json()["error"]["code"], "NOT_IMPLEMENTED")
+    def test_create_terminal_account_with_mock_device(self):
+        app = create_app(settings=ApiSettings(write_enabled=True))
+        mock_device = MagicMock()
+        mock_device.get_users.return_value = []
+        mock_device.set_user.return_value = True
+        app.state.device_executor = mock_device
+
+        client = TestClient(app)
+        admin_ctx = OperatorContext(operator_id=1, username="admin", display_name="Admin", role="ADMIN")
+        with patch("app.api.dependencies._load_token_context", return_value=admin_ctx):
+            with patch("app.api.routers.enrollments.create_reserved_terminal_account") as mock_create:
+                mock_create.return_value = {
+                    "enrollment_id": 1,
+                    "status": "TERMINAL_ACCOUNT_CREATED",
+                    "terminal_id": "1001",
+                }
+                resp = client.post(
+                    "/api/v1/enrollments/1/create-terminal-account",
+                    json={"display_name": "Test Name", "operator": "tester"},
+                )
+                self.assertEqual(resp.status_code, 200)
+                body = resp.json()
+                self.assertEqual(body["status"], "TERMINAL_ACCOUNT_CREATED")
+                self.assertEqual(body["enrollment_id"], 1)
+                mock_create.assert_called_once()
 
     @patch("app.api.routers.mappings.create_verified_mapping")
     def test_mapping_works_when_enabled(self, mock_mapping):

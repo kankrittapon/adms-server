@@ -1712,6 +1712,11 @@
           "username": {
             "title": "Username",
             "type": "string"
+          },
+          "write_enabled": {
+            "default": false,
+            "title": "Write Enabled",
+            "type": "boolean"
           }
         },
         "required": [
@@ -3537,7 +3542,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentTransitionResult"
+                }
               }
             },
             "description": "Successful Response"

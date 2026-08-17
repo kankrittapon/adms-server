@@ -13,7 +13,7 @@ operator; the API only records operator confirmations).
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
 from app.api import repository
@@ -34,6 +34,7 @@ from app.enrollment import (
     cancel_enrollment,
     confirm_controlled_scan,
     confirm_fingerprint_enrolled,
+    create_reserved_terminal_account,
     get_enrollment,
     mark_ready_for_mapping,
     reserve_next_device_user_id,
@@ -155,23 +156,58 @@ class CreateTerminalAccountRequest(BaseModel):
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/create-terminal-account",
+    response_model=EnrollmentTransitionResult,
     dependencies=[Depends(require_role("OPERATOR")), Depends(require_writes)],
 )
 def create_terminal_account(
     enrollment_id: int,
     payload: CreateTerminalAccountRequest,
+    request: Request,
     cfg: Config = Depends(get_cfg),
 ):
-    # This step requires a live terminal connection and is intentionally NOT
-    # performed through the API in F1. The physical account creation is done
-    # by the operator at the terminal / collector workflow.
-    raise ApiError(
-        501,
-        "NOT_IMPLEMENTED",
-        "terminal account creation requires a live terminal connection and is "
-        "not exposed through the F1 API; perform the physical enrollment via "
-        "the operator workflow",
-    )
+    # Check if a direct test device is injected into app state (e.g. unit tests)
+    if hasattr(request.app.state, "device_executor") and request.app.state.device_executor is not None:
+        try:
+            result = create_reserved_terminal_account(
+                cfg,
+                enrollment_id=enrollment_id,
+                display_name=payload.display_name,
+                device=request.app.state.device_executor,
+            )
+        except EnrollmentError as e:
+            raise ApiError(409, "ENROLLMENT_CONFLICT", str(e))
+        return {
+            "enrollment_id": enrollment_id,
+            "status": "TERMINAL_ACCOUNT_CREATED",
+            "action": "create-terminal-account",
+            "operator": payload.operator,
+        }
+
+    # Serialized dispatch over DeviceCommandBus to the live Collector
+    from app.device_command_bus import get_command_bus, DeviceCommandError
+    bus = get_command_bus(cfg)
+    try:
+        res = bus.execute(
+            "CREATE_TERMINAL_ACCOUNT",
+            {
+                "enrollment_id": enrollment_id,
+                "display_name": payload.display_name,
+                "operator": payload.operator,
+            },
+            timeout=10.0,
+        )
+    except DeviceCommandError as e:
+        err_str = str(e)
+        if "already exists" in err_str or "state" in err_str or "expected RESERVED" in err_str:
+            raise ApiError(409, "ENROLLMENT_CONFLICT", err_str)
+        raise ApiError(503, "DEVICE_UNAVAILABLE", err_str)
+
+    return {
+        "enrollment_id": enrollment_id,
+        "status": res.get("status", "TERMINAL_ACCOUNT_CREATED"),
+        "action": "create-terminal-account",
+        "operator": payload.operator,
+    }
 
 
 @router.post(

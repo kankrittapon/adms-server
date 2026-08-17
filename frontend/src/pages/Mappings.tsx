@@ -58,14 +58,13 @@ function fmt(iso: string): string {
 }
 
 function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
-  const { me } = useAuth();
+  const { me, serverWriteEnabled } = useAuth();
   const elig = useApi((s) => api.mappingEligibility(s), []);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [verifiedBy, setVerifiedBy] = useState(me?.username ?? "");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [writeDisabled, setWriteDisabled] = useState(false);
 
   const item: MappingEligibilityItem | null =
     elig.data?.items.find((e) => e.enrollment_id === selectedId) ?? null;
@@ -102,7 +101,6 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
       })
       .catch((e: unknown) => {
         if (e instanceof ApiClientError && e.code === "WRITE_DISABLED") {
-          setWriteDisabled(true);
           setError(
             "Write endpoints are disabled on the server (API_WRITE_ENABLED=false). " +
               "Enable the write flag to create mappings."
@@ -117,17 +115,16 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <div className="mb-6 rounded border border-gray-200 bg-white p-4">
-      <h2 className="mb-3 text-base font-semibold">Create VERIFIED mapping (admin)</h2>
-      <p className="mb-3 max-w-3xl text-sm text-gray-500">
+    <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-2xs">
+      <h2 className="mb-1 text-base font-bold text-slate-900">Create VERIFIED mapping (Admin)</h2>
+      <p className="mb-3 max-w-3xl text-xs text-slate-500">
         Choose a <code>READY_FOR_MAPPING</code> enrollment with completed controlled-scan
         evidence. Creating the mapping consumes (retires) the enrollment. This is the only
         path to a VERIFIED temporal identity — no automatic matching ever.
       </p>
-      {writeDisabled && (
-        <div className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          <strong>Writes disabled.</strong> <code>API_WRITE_ENABLED=false</code> — enable for a
-          real mapping session.
+      {!serverWriteEnabled && (
+        <div className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          🔒 <strong>Writes disabled:</strong> <code>API_WRITE_ENABLED=false</code> — Server writes are currently locked.
         </div>
       )}
       {error && <ErrorBanner message={error} />}
@@ -136,13 +133,13 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
       ) : elig.error ? (
         <ErrorBanner message={elig.error} />
       ) : elig.data?.items.length === 0 ? (
-        <p className="text-sm text-gray-500">
+        <p className="text-xs text-slate-500">
           No eligible enrollments — no <code>READY_FOR_MAPPING</code> enrollment without an
           existing VERIFIED mapping.
         </p>
       ) : (
         <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col text-xs text-gray-500">
+          <label className="flex flex-col text-xs text-slate-600 font-medium">
             Enrollment (READY_FOR_MAPPING)
             <select
               value={selectedId ?? ""}
@@ -150,7 +147,8 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
                 setSelectedId(e.target.value ? Number(e.target.value) : null);
                 setError(null);
               }}
-              className="mt-1 w-80 rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              disabled={!serverWriteEnabled || busy}
+              className="mt-1 w-80 rounded border border-slate-300 px-2 py-1.5 text-xs text-slate-900 bg-white disabled:bg-slate-100"
             >
               <option value="">— select —</option>
               {elig.data?.items.map((e) => (
@@ -173,29 +171,31 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
               <div>Confirmed by: {item.confirmed_by ?? "—"} · device: {item.device_name}</div>
             </div>
           )}
-          <label className="flex flex-col text-xs text-gray-500">
+          <label className="flex flex-col text-xs text-slate-600 font-medium">
             Verified by
             <input
               type="text"
               value={verifiedBy}
+              disabled={!serverWriteEnabled || busy}
               onChange={(e) => setVerifiedBy(e.target.value)}
-              className="mt-1 w-44 rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              className="mt-1 w-44 rounded border border-slate-300 px-2 py-1.5 text-xs text-slate-900 bg-white disabled:bg-slate-100"
             />
           </label>
-          <label className="flex flex-col text-xs text-gray-500">
+          <label className="flex flex-col text-xs text-slate-600 font-medium">
             Verification note
             <input
               type="text"
               value={note}
+              disabled={!serverWriteEnabled || busy}
               onChange={(e) => setNote(e.target.value)}
               placeholder="audit note referencing evidence"
-              className="mt-1 w-72 rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              className="mt-1 w-72 rounded border border-slate-300 px-2 py-1.5 text-xs text-slate-900 bg-white disabled:bg-slate-100"
             />
           </label>
           <button
             onClick={submit}
-            disabled={busy}
-            className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            disabled={!serverWriteEnabled || busy || !selectedId}
+            className="rounded bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {busy ? "Creating…" : "Create VERIFIED mapping"}
           </button>

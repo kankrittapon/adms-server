@@ -10,8 +10,9 @@ from app.timestamp_utils import normalize_device_timestamp
 log = logging.getLogger(__name__)
 
 class MQTTService:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, command_handler: Optional[Any] = None):
         self.cfg = cfg
+        self.command_handler = command_handler
         self.client: Optional[mqtt.Client] = None
         self.connected = False
 
@@ -28,6 +29,7 @@ class MQTTService:
             )
             self.client.on_connect = self._on_connect
             self.client.on_disconnect = self._on_disconnect
+            self.client.on_message = self._on_message
             self.client.connect(self.cfg.mqtt_host, self.cfg.mqtt_port, keepalive=60)
             self.client.loop_start()
             log.info("MQTT client connecting asynchronously to %s:%s", self.cfg.mqtt_host, self.cfg.mqtt_port)
@@ -39,6 +41,7 @@ class MQTTService:
         if rc == 0:
             log.info("MQTT connected successfully")
             self.connected = True
+            client.subscribe("adms/device/command/request", qos=1)
         else:
             log.warning("MQTT connect failed with rc=%s", rc)
             self.connected = False
@@ -46,6 +49,34 @@ class MQTTService:
     def _on_disconnect(self, client, userdata, flags, rc, properties=None):
         log.warning("MQTT disconnected (rc=%s)", rc)
         self.connected = False
+
+    def _on_message(self, client, userdata, msg):
+        if msg.topic == "adms/device/command/request":
+            if self.command_handler:
+                try:
+                    payload = json.loads(msg.payload.decode("utf-8", errors="replace"))
+                    self.command_handler(payload)
+                except Exception as e:
+                    log.warning("MQTT command message handler error: %s", e)
+
+    def publish_command_response(self, command_id: str, success: bool, result: Optional[dict] = None, error: Optional[str] = None) -> bool:
+        if not self.client or not self.connected:
+            return False
+        try:
+            payload = json.dumps({
+                "command_id": command_id,
+                "success": success,
+                "result": result,
+                "error": error,
+                "timestamp": datetime.now().isoformat()
+            })
+            topic = f"adms/device/command/response/{command_id}"
+            info = self.client.publish(topic, payload, qos=1)
+            info.wait_for_publish(timeout=2.0)
+            return True
+        except Exception as e:
+            log.warning("MQTT publish command response failed: %s", e)
+            return False
 
     def publish_attendance(self, attendance: Any, status: str) -> bool:
         if not self.client or not self.connected:

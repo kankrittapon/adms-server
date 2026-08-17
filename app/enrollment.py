@@ -57,7 +57,11 @@ ACTIVE_ENROLLMENT_STATUSES = (
 
 ALLOWED_TRANSITIONS: Dict[str, Set[str]] = {
     "RESERVED": {"TERMINAL_ACCOUNT_CREATED", "CANCELLED"},
-    "TERMINAL_ACCOUNT_CREATED": {"FINGERPRINT_ENROLLMENT_PENDING", "CANCELLED"},
+    "TERMINAL_ACCOUNT_CREATED": {
+        "FINGERPRINT_ENROLLMENT_PENDING",
+        "FINGERPRINT_ENROLLED",
+        "CANCELLED",
+    },
     "FINGERPRINT_ENROLLMENT_PENDING": {"FINGERPRINT_ENROLLED", "CANCELLED"},
     "FINGERPRINT_ENROLLED": {"CONTROLLED_SCAN_PENDING", "CANCELLED"},
     "CONTROLLED_SCAN_PENDING": {"CONTROLLED_SCAN_CONFIRMED", "CANCELLED"},
@@ -70,9 +74,11 @@ ALLOWED_TRANSITIONS: Dict[str, Set[str]] = {
 # Canonical API action catalog for the enrollment workflow. The frontend uses
 # GET /api/v1/enrollments/{id}/next-actions to learn which actions are valid
 # in the current state — the state machine is NEVER duplicated in the UI.
-# Physical terminal steps (terminal account creation) are performed by the
-# operator at the terminal / collector workflow, not through the API.
 ENROLLMENT_ACTIONS: Dict[str, Dict[str, Any]] = {
+    "create-terminal-account": {
+        "target": "TERMINAL_ACCOUNT_CREATED",
+        "requires_role": "OPERATOR",
+    },
     "start-fingerprint-enrollment": {
         "target": "FINGERPRINT_ENROLLMENT_PENDING",
         "requires_role": "OPERATOR",

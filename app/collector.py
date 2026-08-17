@@ -81,7 +81,53 @@ class CollectorStateEngine:
         self.last_roster_uid_anomalies: Optional[int] = None
 
         # Services
-        self.mqtt_service = MQTTService(cfg)
+        self.mqtt_service = MQTTService(cfg, command_handler=self.handle_device_command)
+
+    def handle_device_command(self, req: dict):
+        command_id = req.get("command_id")
+        action = req.get("action")
+        params = req.get("params", {})
+        if not command_id:
+            return
+        log.info("Received device command %s (action=%s)", command_id, action)
+        if action == "CREATE_TERMINAL_ACCOUNT":
+            if not self.connection or self.state != State.LIVE:
+                self.mqtt_service.publish_command_response(
+                    command_id,
+                    success=False,
+                    error=f"Collector is not in LIVE state (current state: {self.state.name})"
+                )
+                return
+            try:
+                from app.enrollment import create_reserved_terminal_account
+                enrollment_id = int(params["enrollment_id"])
+                display_name = str(params["display_name"])
+                result = create_reserved_terminal_account(
+                    self.cfg,
+                    enrollment_id=enrollment_id,
+                    display_name=display_name,
+                    device=self.connection
+                )
+                # Reconcile roster lifecycle immediately to discover the new terminal user
+                self.perform_roster_lifecycle_check()
+                self.mqtt_service.publish_command_response(
+                    command_id,
+                    success=True,
+                    result=result
+                )
+            except Exception as e:
+                log.error("Device command execution failed for %s: %s", command_id, e)
+                self.mqtt_service.publish_command_response(
+                    command_id,
+                    success=False,
+                    error=str(e)
+                )
+        else:
+            self.mqtt_service.publish_command_response(
+                command_id,
+                success=False,
+                error=f"Unsupported device action: {action}"
+            )
 
     def write_health_status(self):
         """

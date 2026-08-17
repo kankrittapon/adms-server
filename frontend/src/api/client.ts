@@ -191,6 +191,15 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),
+  createTerminalAccount: (id: number, displayName: string, operator: string) =>
+    request<EnrollmentTransitionResult>(`/api/v1/enrollments/${id}/create-terminal-account`, undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        display_name: displayName,
+        operator,
+      } satisfies BodyOf<"create_terminal_account_api_v1_enrollments__enrollment_id__create_terminal_account_post">),
+    }),
   startFingerprintEnrollment: (id: number, operator: string, notes?: string) =>
     enrollmentTransition<"start_fingerprint_api_v1_enrollments__enrollment_id__start_fingerprint_enrollment_post">(
       id,
