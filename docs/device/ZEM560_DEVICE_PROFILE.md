@@ -7,7 +7,7 @@
 * **Underlying Platform**: ZEM560_TFT
 * **Verification Timestamp**: 2026-08-11T10:14:00+07:00
 * **Source PromptID**: `ADMS-Device-CapabilityProfile-001`
-* **Canonical Specification**: [ZEM560_CAPABILITY_SPEC.md](file:///d:/Dev/adms-server/docs/ZEM560_CAPABILITY_SPEC.md)
+* **Canonical Specification**: [ZEM560_CAPABILITY_SPEC.md](ZEM560_CAPABILITY_SPEC.md)
 * **Primary Management Protocol**: Telnet over TCP Port 23
 * **Primary Collector Protocol**: ZK Binary Protocol over TCP/UDP Port 4370
 

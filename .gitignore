@@ -2,26 +2,43 @@
 .env
 .env.local
 .env.*.local
+!.env.example
 
 # Python & Caches
 __pycache__/
 *.py[cod]
+*.pyo
 .pytest_cache/
+.coverage
+htmlcov/
 .venv/
 venv/
 
+# Node & Frontend Builds
+node_modules/
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+
 # AI Agent Local Instructions & Working State
-AGENTS.md
-CLAUDE.md
-CODEX.md
-GEMINI.md
+.agent/
+.agents/
+.freebuff/
 .kob/
 promptID/
-.freebuff/
 
-# Local IDE MCP server configuration (tooling, not project code)
-.vscode/mcp.json
-.agents/mcp_config.json
+# Local IDE Configuration & State
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test Scratch & Output Artifacts (Canonical tests/ suite remains tracked)
+test/
+tests/__pycache__/
+tests/.pytest_cache/
+tests/output/
+tests/tmp/
 
 # Database Snapshots & Local Backups
 *.dump
@@ -31,8 +48,17 @@ promptID/
 pre_migration_backup*
 backups/
 
-# Raw Data Imports
+# Raw Data Imports & Excel Scratch
+# (Canonical source workbook in excel/files/ remains explicitly tracked)
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+!excel/files/รายละเอียด กพ.พัน.สอล.ฯ ก.พ.69.xlsx
+excel/uploads/
 data/raw/
 data/imports/
-archive/
-excel/uploads/
+/archive/
+data/archive/
+!docs/reports/archive/
+

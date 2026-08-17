@@ -1,77 +1,49 @@
-# AI-Brain & ADMS Audit & Infrastructure Reports
+# ADMS Historical Reports & Checkpoint Archive
 
-This index records all historical and active audit, infrastructure, architecture, and planning reports for the AI-Brain and ADMS Server systems.
+## 1. About Historical Reports
 
-## Report Index
+The documents in this directory represent immutable verification records, execution checkpoints, and architectural audits conducted throughout the development and operational hardening of the ADMS platform.
 
-| PromptID | Date | Type | Mode | Status | Supersedes / Context |
-| -------- | ---- | ---- | ---- | ------ | -------------------- |
-| `AIBRAIN-Audit-LiveBaseline-001` | 2026-08-11 | Audit | READ-ONLY | COMPLETE | Establishes verified live runtime baseline for AI-Brain host, Docker containers, databases, and network bindings. |
-| `AIBRAIN-Infra-HardenNetwork-001` | 2026-08-11 | Hardening Plan | READ-ONLY / PLAN ONLY | COMPLETE | Dependency analysis and network hardening plan for restricting `n8n_zort_postgres` (5432) and `adminer` (8080) host bindings. |
-| `AIBRAIN-Infra-HardenNetwork-002` | 2026-08-11 | Execution Report | WRITE — LIMITED AUTHORIZATION | COMPLETE | Execution report for removing host port publishing of `n8n_zort_postgres` (5432) and restricting `adminer` (8080) to loopback `127.0.0.1`. |
-| `AIBRAIN-Architecture-MapCurrentState-001` | 2026-08-11 | Architecture Map | READ-ONLY INFRA + DOC WRITE ONLY | COMPLETE | Canonical architecture mapping of AI-Brain components, data flows, network layers, storage persistence, trust boundaries, and Adminer SSH access documentation. |
-| `AIBRAIN-Infra-AddHealthchecks-001` | 2026-08-11 | Healthcheck Plan | READ-ONLY / PLAN ONLY | COMPLETE | Analysis and healthcheck improvement plan for `private_postgres`, `adminer`, and `n8n_zort_cloudflared`. |
-| `AIBRAIN-Infra-AddHealthchecks-002` | 2026-08-11 | Execution Report | WRITE — LIMITED AUTHORIZATION | COMPLETE | Execution report for adding explicit Docker healthchecks to `private_postgres` (`pg_isready`) and `adminer` (`wget spider`). |
-| `ADMS-Bootstrap-ZEM560-001` | 2026-08-11 | Device Bootstrap | READ-ONLY / DOC ONLY | COMPLETE | Project baseline and technical profile reconstruction for ZKTeco ZEM560 series biometric device and ADMS Server collector. |
-| `ADMS-Device-LiveFingerprint-001` | 2026-08-11 | Device Fingerprint | READ-ONLY DEVICE / DOC ONLY | COMPLETE | Verified live hardware profile for SONIC / ZEM560_TFT terminal (MIPS CPU, Linux 2.6.24 Treckle, Firmware Ver 6.60 Aug 26 2011, Telnet TCP/23, ZK Protocol TCP/4370). |
-| `ADMS-Collector-Reliability-001` | 2026-08-11 | Reliability Plan | READ-ONLY PLAN / DOC ONLY | COMPLETE | Production-grade reliability model, hybrid event capture & backfill architecture, state machine, and deduplication plan for ZEM560 Python collector. |
-| `ADMS-Device-AttendanceBehavior-001` | 2026-08-11 | Attendance Behavior | READ-ONLY DEVICE / DOC ONLY | COMPLETE | Verified live device test of `get_attendance()` (0.18s for 6 records), clock drift (-25.39s), `pyzk` `live_capture` 10s timeout yield behavior, and client-side watermark filtering. |
-| `ADMS-Device-CapabilityProfile-001` | 2026-08-11 | Capability Spec | READ-ONLY DEVICE / DOC ONLY | COMPLETE | Verified capacity spec for SONIC ZEM560_TFT (30k users, 3k templates, 100k logs), pyzk API capability matrix, 5-tier project usability framework, and UID/deduplication analysis. |
-| `ADMS-Collector-StateEngine-001` | 2026-08-11 | State Engine Plan | READ-ONLY PLAN / DOC ONLY | COMPLETE | Modular state engine architecture design for `app/main.py` (`STARTING`, `CONNECTING`, `BACKFILLING`, `LIVE`, `DEGRADED`, `BACKOFF`, `STOPPING`), bounded exponential backoff ($2\text{s}\to 60\text{s}$ with $\pm 20\%$ jitter), interruptible sleep, and failure domain isolation. |
-| `ADMS-Data-ExcelProfile-001` | 2026-08-11 | Data Profiling | READ-ONLY DATA / DOC ONLY | COMPLETE | Analysis and normalization profile for employee master workbook `รายละเอียด กพ.พัน.สอล.ฯ ก.พ.69.xlsx` (120 unique records across 4 rank categories), PostgreSQL schema mapping, and idempotent upsert plan. |
-| `ADMS-Collector-StateEngine-002` | 2026-08-11 | Execution Report | WRITE — LIMITED APPLICATION AUTHORIZATION | COMPLETE | Modular State Engine implementation (`app/main.py`, `app/config.py`, `app/collector.py`, `app/db.py`, `app/mqtt_client.py`), unit tests (5/5 passed), live verification against SONIC ZEM560_TFT terminal (`LIVE` state reached, graceful shutdown verified). |
-| `ADMS-Collector-HybridBackfill-001` | 2026-08-11 | Hybrid Backfill Plan | READ-ONLY PLAN / DOC ONLY | COMPLETE | Detailed design for historical `get_attendance()` log backfill, client-side watermark filtering ($\text{MAX(scan\_time)} - 5\text{ mins}$), 500-record batch chunk persistence, MQTT suppression for historical scans, and 15-minute periodic reconciliation cadence. |
-| `ADMS-Collector-HybridBackfill-002` | 2026-08-11 | Execution Report | WRITE — LIMITED APPLICATION AUTHORIZATION | COMPLETE | Implemented historical attendance log backfill (`app/collector.py`, `app/db.py`, `app/config.py`), unit test suite & 100k synthetic benchmark (9/9 passed, 0.0040s filtering), live verification against SONIC ZEM560_TFT terminal (6 records backfilled in 0.2008s, MQTT suppressed, 100% idempotent). |
-| `ADMS-Checkpoint-CollectorFoundation-001` | 2026-08-11 | Foundation Checkpoint | DOC ONLY | COMPLETE | Established verified collector foundation baseline after State Engine and Hybrid Backfill implementation. |
-| `ADMS-Device-RemoteEnrollmentCapability-001` | 2026-08-11 | Capability Test | CONTROLLED DEVICE TEST | COMPLETE | Controlled live test of `enroll_user()`: Command times out without activating on-screen UI on standalone firmware `Ver 6.60`. Classified as **DO NOT USE / NOT RECOMMENDED FOR PRODUCTION**. |
-| `ADMS-Device-FirmwareFilesystemAudit-001` | 2026-08-11 | Filesystem Audit | READ-ONLY DEVICE / DOC ONLY | COMPLETE | Read-only Telnet inspection of MTD partitions, `/mnt/mtdblock/options.cfg`, `AttState=0` (default Check-In punch state key, unrelated to remote enrollment), driver nodes (`/dev/tft_lcd`), and generic config vs physical hardware matrix. |
-| `ADMS-Device-NativePushVerification-001` | 2026-08-11 | Protocol Verification | READ-ONLY PROTOCOL / DOC ONLY | COMPLETE | Protocol & socket inspection of native Push config (`AuthServerIP=192.168.1.248:8000`, `libhttppush.so`), embedded HTTP web server (TCP Port 80, `ZK Web Server`), and evaluation. Reconfirmed Python Collector over TCP 4370 as the primary production architecture. |
-| `ADMS-Collector-Healthcheck-001` | 2026-08-11 | Healthcheck Plan | READ-ONLY PLAN / DOC ONLY | COMPLETE | Detailed design for atomic ephemeral health status file (`/tmp/collector_health.json`), state-aware liveness thresholds (LIVE/BACKOFF 120s, BACKFILLING 600s), non-invasive `app/healthcheck.py` CLI module, and Docker Compose parameters. |
-| `ADMS-Collector-Healthcheck-002` | 2026-08-11 | Healthcheck Execution | WRITE — LIMITED APPLICATION AUTHORIZATION | COMPLETE | Implemented atomic health status updates (`app/collector.py`), non-invasive CLI health evaluation module (`app/healthcheck.py`), Docker Compose healthcheck block (`docker-compose.yml`), test suite (22/22 passed), live verification against physical terminal (Exit Code 0 verified during LIVE state). |
-| `ADMS-Data-IdentityMapping-001` | 2026-08-11 | Identity Mapping Plan | READ-ONLY PLAN / DOC ONLY | COMPLETE | Detailed design for strict separation of Human Master Data (`employees`) and Device-Local Identity (`device_users`), multi-device mapping schema (`devices`, `device_users`, `employee_device_mappings`), rejection of Excel row-number mapping assumption, and unmapped attendance ingestion policy. |
-| `ADMS-Data-IdentitySchema-001` | 2026-08-11 | Identity Schema Plan | READ-ONLY PLAN / DOC ONLY | COMPLETE | Detailed DDL migration design (`sql/002_identity_foundation.sql`), additive zero-data-loss architecture (`devices`, `device_users`, `human_employees`, `employee_device_mappings`), seed queries for physical terminal (`3392113170057`), and 5-stage migration path. |
-| `ADMS-Checkpoint-PreIdentitySchema-001` | 2026-08-11 | Pre-Schema Checkpoint | DOC ONLY | COMPLETE | Established clean, verified repository checkpoint baseline prior to executing the first additive database schema migration (`sql/002_identity_foundation.sql`). |
-| `ADMS-Data-IdentitySchema-002` | 2026-08-11 | Identity Schema Execution | DEPLOY VERIFIED GIT REVISION + LIMITED ADDITIVE DATABASE MIGRATION | COMPLETE | Applied additive SQL identity schema migration (`sql/002_identity_foundation.sql`), registered physical terminal `3392113170057`, created `device_users` foundation, verified 100% attendance log preservation (6/6 records), and verified collector & healthcheck compatibility. |
-| `ADMS-Collector-IdentityTransition-001` | 2026-08-11 | Identity Transition Plan + Git Hygiene | READ-ONLY PLAN + REPOSITORY HYGIENE WRITE | COMPLETE | Detailed design for Collector identity transition (`ensure_device_user`), identified legacy FK constraint blocker (`attendance_logs_user_id_fkey`), updated `.gitignore`, and untracked local AI rules/prompt history from Git index while preserving local files. |
-| `ADMS-Data-LegacyIdentityConstraint-001` | 2026-08-11 | Constraint Transition Plan | READ-ONLY PLAN / DOC ONLY | COMPLETE | Detailed design for dropping `attendance_logs_user_id_fkey` constraint while preserving `user_id` string column and `UNIQUE (user_id, device_ip, scan_time)` constraint, unblocking Collector transition away from `ensure_employee_stub()`. |
-| `ADMS-Data-LegacyIdentityConstraint-002` | 2026-08-11 | Constraint Transition Execution | WRITE — LIMITED DATABASE CONSTRAINT MIGRATION | COMPLETE | Applied SQL migration `sql/003_legacy_identity_constraint.sql` dropping `attendance_logs_user_id_fkey` constraint, preserved raw `user_id` column & `UNIQUE (user_id, device_ip, scan_time)` dedupe constraint, verified 100% attendance preservation (6/6 records), and unblocked Collector transition (`ADMS-Collector-IdentityTransition-002`). |
-| `ADMS-Collector-IdentityTransition-002` | 2026-08-11 | Identity Transition Execution | WRITE — LIMITED APPLICATION CODE AUTHORIZATION | COMPLETE | Implemented Collector database layer identity transition (`app/db.py`), removed `ensure_employee_stub()`, added `get_or_create_device()`, `ensure_device_user()`, and `resolve_verified_employee_mapping()`, added test suite (28/28 passed 100%), verified live against physical terminal `192.168.1.201` (0 new stubs created, unmapped scans stored cleanly with `employee_id = NULL`). |
-| `ADMS-Checkpoint-PostIdentityTransition-001` | 2026-08-11 | Post-Identity Checkpoint | CHECKPOINT READ-ONLY VALIDATION + DATABASE BACKUP + DOC WRITE | COMPLETE | Formal recovery checkpoint post-identity transition. Verified `human_employees` 0 records, verified 0 new legacy stubs created, generated real PostgreSQL custom-format backup archive (`adms_post_identity_20260811_113944.dump`), and verified archive listing via `pg_restore -l`. |
-| `ADMS-Data-ExcelImport-001` | 2026-08-11 | Excel Import Plan | READ-ONLY DATA / PLAN ONLY | COMPLETE | Profiled 120 clean Human Master records across 4 categories (`นายทหาร` 20, `พันจ่า` 58, `จ่า` 6, `พลทหาร` 36), verified 0 duplicates, established mapping contract for `human_employees`, rejected 1..120 row mapping assumption. |
-| `ADMS-Data-HumanMasterSchema-001` | 2026-08-11 | Schema Readiness Plan | READ-ONLY PLAN / DOC ONLY | COMPLETE | Reviewed `human_employees` schema, rejected invalid/unsafe `ON CONFLICT (display_name)` idempotency, designed additive migration `sql/004_human_master_schema.sql` (`branch`, `category`, `human_employee_sources` provenance table), selected Option B decision gate. |
-| `ADMS-Data-HumanMasterSchema-002` | 2026-08-11 | Schema Foundation Execution | WRITE — LIMITED DATABASE SCHEMA / MIGRATION AUTHORIZATION | COMPLETE | Applied SQL migration `sql/004_human_master_schema.sql` adding `branch` & `category` columns to `human_employees`, created `human_employee_sources` provenance linkage table (`UNIQUE (source_system, source_record_key)`), created pre-migration backup (`adms_pre_schema004_20260811_115214.dump`), and verified unit test suite (28/28 passed). |
-| `ADMS-Docs-Categorize-001` | 2026-08-11 | Docs Categorization Plan | READ-ONLY DOC INVENTORY + DOC ORG PLAN | COMPLETE | Inventoried 55 documentation files, classified 20 canonical root docs into 6 domain categories (`architecture/`, `device/`, `collector/`, `data/`, `database/`, `operations/`), mapped flat reports retention, designed `docs/README.md` navigation map. |
-| `ADMS-Docs-Categorize-002` | 2026-08-11 | Docs Categorization Execution | WRITE — REPOSITORY DOCS WRITE AUTHORIZATION | COMPLETE | Reorganized 20 canonical docs into 6 domain subdirectories using `git mv`, separated AI-Brain docs under `docs/external/ai-brain/`, created top-level `docs/README.md` navigation map using relative Markdown links, updated project cross-references. |
-| `ADMS-Data-ExcelImport-002` | 2026-08-11 | Excel Import Execution | WRITE — LIMITED HUMAN MASTER DATA IMPORT AUTHORIZATION | COMPLETE | Implemented import utility `app/import_excel_human_master.py`, verified dry-run (120 records, 4 categories), generated pre-import recovery backup `adms_pre_excel_import_20260811_120503.dump`, added test suite (33/33 passed 100%), verified zero terminal access. |
-| `ADMS-Checkpoint-PostExcelImport-001` | 2026-08-11 | Post-Import Checkpoint | CHECKPOINT READ-ONLY VALIDATION + DATABASE BACKUP AUTHORIZATION | COMPLETE (Latest ADMS Architecture Execution Checkpoint) | Verified 120 `human_employees` & 120 `human_employee_sources` records, 0 mappings created, 6/6 attendance logs preserved, generated post-import recovery backup `adms_post_excel_import_20260811_121449.dump`, verified archive via `pg_restore -l`. |
+### Canonical Documentation
+For the active, authoritative documentation of the system, refer to the root `docs/` directory:
+- [System Architecture](file:///d:/Dev/adms-server/docs/ARCHITECTURE.md) (`docs/ARCHITECTURE.md`)
+- [Deployment & Infrastructure Guide](file:///d:/Dev/adms-server/docs/DEPLOYMENT.md) (`docs/DEPLOYMENT.md`)
+- [Security & RBAC Matrix](file:///d:/Dev/adms-server/docs/SECURITY_RBAC.md) (`docs/SECURITY_RBAC.md`)
+- [Database Schema & Migrations](file:///d:/Dev/adms-server/docs/DATABASE_MIGRATIONS.md) (`docs/DATABASE_MIGRATIONS.md`)
+- [Enrollment Runbook](file:///d:/Dev/adms-server/docs/ENROLLMENT_SESSION_RUNBOOK.md) (`docs/ENROLLMENT_SESSION_RUNBOOK.md`)
+- [Operations & Troubleshooting](file:///d:/Dev/adms-server/docs/OPERATIONS.md) (`docs/OPERATIONS.md`)
 
-*Latest relevant checkpoint for network-hardening work: `AIBRAIN-Infra-HardenNetwork-002`*  
-*Latest relevant checkpoint for architecture mapping: `AIBRAIN-Architecture-MapCurrentState-001`*  
-*Latest relevant checkpoint for healthcheck implementation: `AIBRAIN-Infra-AddHealthchecks-002`*  
-*Latest relevant checkpoint for ADMS ZEM560 live fingerprint: `ADMS-Device-LiveFingerprint-001`*  
-*Latest relevant checkpoint for ADMS device attendance behavior: `ADMS-Device-AttendanceBehavior-001`*  
-*Latest relevant checkpoint for ADMS capability specification: `ADMS-Device-CapabilityProfile-001`*  
-*Latest relevant checkpoint for ADMS collector state engine design: `ADMS-Collector-StateEngine-001`*  
-*Latest relevant checkpoint for ADMS employee master data profile: `ADMS-Data-ExcelProfile-001`*  
-*Latest relevant checkpoint for ADMS collector state engine implementation: `ADMS-Collector-StateEngine-002`*  
-*Latest relevant checkpoint for ADMS hybrid backfill implementation: `ADMS-Collector-HybridBackfill-002`*  
-*Latest relevant checkpoint for ADMS collector foundation baseline: `ADMS-Checkpoint-CollectorFoundation-001`*  
-*Latest relevant checkpoint for ADMS remote enrollment test: `ADMS-Device-RemoteEnrollmentCapability-001`*  
-*Latest relevant checkpoint for ADMS firmware filesystem audit: `ADMS-Device-FirmwareFilesystemAudit-001`*  
-*Latest relevant checkpoint for ADMS native Push verification: `ADMS-Device-NativePushVerification-001`*  
-*Latest relevant checkpoint for ADMS collector healthcheck execution: `ADMS-Collector-Healthcheck-002`*  
-*Latest relevant checkpoint for ADMS employee identity mapping plan: `ADMS-Data-IdentityMapping-001`*  
-*Latest relevant checkpoint for ADMS identity schema migration plan: `ADMS-Data-IdentitySchema-001`*  
-*Latest relevant checkpoint for ADMS pre-identity-schema baseline: `ADMS-Checkpoint-PreIdentitySchema-001`*  
-*Latest relevant checkpoint for ADMS identity schema migration execution: `ADMS-Data-IdentitySchema-002`*  
-*Latest relevant checkpoint for ADMS collector identity transition plan: `ADMS-Collector-IdentityTransition-001`*  
-*Latest relevant checkpoint for ADMS legacy identity constraint plan: `ADMS-Data-LegacyIdentityConstraint-001`*  
-*Latest relevant checkpoint for ADMS legacy identity constraint execution: `ADMS-Data-LegacyIdentityConstraint-002`*  
-*Latest relevant checkpoint for ADMS collector identity transition execution: `ADMS-Collector-IdentityTransition-002`*  
-*Latest relevant checkpoint for ADMS post-identity transition checkpoint: `ADMS-Checkpoint-PostIdentityTransition-001`*  
-*Latest relevant checkpoint for ADMS Excel Human Master import plan: `ADMS-Data-ExcelImport-001`*  
-*Latest relevant checkpoint for ADMS Human Master schema readiness plan: `ADMS-Data-HumanMasterSchema-001`*  
-*Latest relevant checkpoint for ADMS Human Master schema migration execution: `ADMS-Data-HumanMasterSchema-002`*  
-*Latest relevant checkpoint for ADMS docs categorization execution: `ADMS-Docs-Categorize-002`*  
-*Latest relevant checkpoint for ADMS Excel Human Master import execution: `ADMS-Data-ExcelImport-002`*  
-*Latest relevant checkpoint for ADMS post Excel import checkpoint: `ADMS-Checkpoint-PostExcelImport-001`*
+All completed phase reports have been preserved in the [Archive](file:///d:/Dev/adms-server/docs/reports/archive/) (`docs/reports/archive/`).
+
+---
+
+## 2. Chronological PromptID & Phase Index
+
+| Phase / PromptID | Focus Area | Key Outcome / Deliverables | Archived Report |
+| ---------------- | ---------- | -------------------------- | --------------- |
+| `ADMS-Bootstrap-ZEM560-001` | Hardware Profile | ZKTeco ZEM560_TFT protocol and socket discovery | [ADMS-Bootstrap-ZEM560-001.md](archive/ADMS-Bootstrap-ZEM560-001.md) |
+| `ADMS-Collector-StateEngine-002` | Collector FSM | Modular collector architecture (`app/collector.py`) | [ADMS-Collector-StateEngine-002.md](archive/ADMS-Collector-StateEngine-002.md) |
+| `ADMS-Collector-HybridBackfill-002` | Ingestion | Historical log backfill and deduplication | [ADMS-Collector-HybridBackfill-002.md](archive/ADMS-Collector-HybridBackfill-002.md) |
+| `ADMS-Collector-Healthcheck-002` | Monitoring | Atomic health status file and CLI evaluator | [ADMS-Collector-Healthcheck-002.md](archive/ADMS-Collector-Healthcheck-002.md) |
+| `ADMS-Data-IdentitySchema-002` | Database | Additive identity schema migration (`sql/002`) | [ADMS-Data-IdentitySchema-002.md](archive/ADMS-Data-IdentitySchema-002.md) |
+| `ADMS-Data-ExcelImport-002` | Human Master | Ingestion of 120 official personnel roster records | [ADMS-Data-ExcelImport-002.md](archive/ADMS-Data-ExcelImport-002.md) |
+| `ADMS-Data-HumanMasterSchema-002` | Schema | Provenance and RTN branch schema (`sql/004`) | [ADMS-Data-HumanMasterSchema-002.md](archive/ADMS-Data-HumanMasterSchema-002.md) |
+| `ADMS-Collector-TimestampTimezone-002` | Timezones | UTC timestamp normalization with Bangkok timezone | [ADMS-Collector-TimestampTimezone-002.md](archive/ADMS-Collector-TimestampTimezone-002.md) |
+| `ADMS-Collector-TemporalIdentity-002` | Resolver | Temporal interval resolver `[valid_from, valid_to)` | [ADMS-Collector-TemporalIdentity-002.md](archive/ADMS-Collector-TemporalIdentity-002.md) |
+| `ADMS-Data-DeviceEnrollmentPilot-001` | Pilot | First controlled pilot enrollment on User ID 1001 | [ADMS-Data-DeviceEnrollmentPilot-001.md](archive/ADMS-Data-DeviceEnrollmentPilot-001.md) |
+| `ADMS-Data-HumanDeviceMapping-003` | Mapping | First production `VERIFIED` temporal mapping created | [ADMS-Data-HumanDeviceMapping-003.md](archive/ADMS-Data-HumanDeviceMapping-003.md) |
+| `ADMS-Data-PlothanProductionExclusion-001` | Data Guard | Migration 007 (`production_scope` conscript exclusion) | [ADMS-Data-PlothanProductionExclusion-001.md](archive/ADMS-Data-PlothanProductionExclusion-001.md) |
+| `ADMS-Data-MultiFingerprintValidation-001` | Biometrics | Verified multi-fingerprint resolution to one Human | [ADMS-Data-MultiFingerprintValidation-001.md](archive/ADMS-Data-MultiFingerprintValidation-001.md) |
+| `ADMS-Frontend-F1-API-001` | Backend API | FastAPI REST API layer deployment | [ADMS-Frontend-F1-API-001.md](archive/ADMS-Frontend-F1-API-001.md) |
+| `ADMS-Frontend-F5-Auth-001` | Security | DB-backed operator authentication (Migration 008) | [ADMS-Frontend-F5-Auth-001.md](archive/ADMS-Frontend-F5-Auth-001.md) |
+| `ADMS-Frontend-F3-EnrollmentWorkflow-001` | Frontend | State machine driven Enrollment Workspace UI | [ADMS-Frontend-F3-EnrollmentWorkflow-001.md](archive/ADMS-Frontend-F3-EnrollmentWorkflow-001.md) |
+| `ADMS-Frontend-F6-ProductionServing-001` | Serving | Production Nginx web container serving on 8082 | [ADMS-Frontend-F6-ProductionServing-001.md](archive/ADMS-Frontend-F6-ProductionServing-001.md) |
+| `ADMS-Frontend-F5-Hardening-001` | Hardening | Login rate limiting and security audit logs | [ADMS-Frontend-F5-Hardening-001.md](archive/ADMS-Frontend-F5-Hardening-001.md) |
+| `ADMS-Data-DeviceUserLifecycleHardening-001` | Lifecycle | Migration 009 (`account_incarnation` counter) | [ADMS-Data-DeviceUserLifecycleHardening-001.md](archive/ADMS-Data-DeviceUserLifecycleHardening-001.md) |
+| `ADMS-Frontend-RealtimeSSE-001` | Streaming | Realtime SSE attendance event stream | [ADMS-Frontend-RealtimeSSE-001.md](archive/ADMS-Frontend-RealtimeSSE-001.md) |
+| `ADMS-Frontend-Codegen-001` | Codegen | OpenAPI snapshot & typed TypeScript client derivation | [ADMS-Frontend-Codegen-001.md](archive/ADMS-Frontend-Codegen-001.md) |
+| `ADMS-Infra-CollectorHealthBridge-001` | Health | Shared volume health bridge between listener and API | [ADMS-Infra-CollectorHealthBridge-001.md](archive/ADMS-Infra-CollectorHealthBridge-001.md) |
+| `ADMS-Frontend-WriteEnablement-001` | Runbook | Physical enrollment runbook and operator CLI | (Runbook: `docs/ENROLLMENT_SESSION_RUNBOOK.md`) |
+| `ADMS-Frontend-FullControlUX-002` | Hardware UX | Browser-driven terminal account creation via Command Bus | [ADMS-Frontend-FullControlUX-002](archive/) |
+| `ADMS-Frontend-DesignSystem-003` | Design System | Enterprise UI design system implementation across all pages | (Integrated into `frontend/`) |
+| `ADMS-Frontend-I18n-RBAC-Personnel-004` | I18n & RBAC | TH/EN localization, `ENROLLMENT_OPERATOR`, English name edit | (Integrated across codebase) |
