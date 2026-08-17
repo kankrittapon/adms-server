@@ -259,9 +259,20 @@ export function Enrollments() {
                     } else if (err.code === "DEVICE_COMMAND_IN_PROGRESS") {
                       setActionError(t.enrollment.terminalInProgressBody);
                       setTerminalAccountUncertain(true);
-                    } else if (err.code === "DEVICE_UNAVAILABLE") {
-                      // Pre-mutation failure — set_user() was never attempted.
-                      // Must not be conflated with the unconfirmed-after-write
+                    } else if (
+                      err.code === "DEVICE_UNAVAILABLE" ||
+                      err.code === "COLLECTOR_UNAVAILABLE" ||
+                      err.code === "DEVICE_COMMAND_QUEUE_FULL" ||
+                      err.code === "DEVICE_OWNER_TIMEOUT" ||
+                      err.code === "DEVICE_COMMAND_CANCELLED"
+                    ) {
+                      // PromptID-014 (single-owner device I/O): all of these
+                      // codes mean no device write was ever attempted for
+                      // this request — the Collector's connection wasn't
+                      // usable, its command queue was full, the single
+                      // device owner never reached a safe point to service
+                      // this command in time, or it was cancelled due to a
+                      // reconnect. Distinct from the unconfirmed-after-write
                       // case, which implies a device-side operation happened.
                       setActionError(`${t.enrollment.terminalUnavailableTitle}. ${t.enrollment.terminalUnavailableBody}`);
                       setTerminalAccountUncertain(false);

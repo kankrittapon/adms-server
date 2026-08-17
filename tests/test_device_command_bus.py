@@ -4,6 +4,7 @@ PromptID: ADMS-Frontend-FullControlUX-002
 """
 
 import json
+import threading
 import time
 import unittest
 from unittest.mock import MagicMock, patch
@@ -197,6 +198,16 @@ class TestDeviceCommandBus(unittest.TestCase):
 
 
 class TestCollectorCommandHandler(unittest.TestCase):
+    """PromptID-014: handle_device_command() now only enqueues+waits (it
+    runs on the simulated MQTT thread here) — it never touches
+    self.connection directly. A command only completes once something
+    drains the queue via device_owner.drain_pending(), which in production
+    is the owner (main) thread at a live_capture() safe point. These tests
+    simulate that by running handle_device_command on a background thread
+    and draining from the main test thread, mirroring the real two-thread
+    architecture rather than calling it as a same-thread synchronous
+    function (which would now deadlock waiting on its own drain)."""
+
     def setUp(self):
         self.cfg = Config.from_env()
         self.engine = CollectorStateEngine(self.cfg)
@@ -216,9 +227,12 @@ class TestCollectorCommandHandler(unittest.TestCase):
             "cmd-123",
             success=False,
             error="Collector is not in LIVE state (current state: CONNECTING)",
+            error_code="COLLECTOR_UNAVAILABLE",
         )
+        # Rejected before ever reaching the queue.
+        self.assertEqual(self.engine.device_owner.queue_depth(), 0)
 
-    @patch("app.enrollment.create_or_reconcile_terminal_account")
+    @patch("app.collector.create_or_reconcile_terminal_account")
     def test_command_executed_when_live(self, mock_create):
         mock_device = MagicMock()
         self.engine.state = State.LIVE
@@ -231,11 +245,28 @@ class TestCollectorCommandHandler(unittest.TestCase):
             "terminal_id": "1002",
         }
 
-        self.engine.handle_device_command({
-            "command_id": "cmd-456",
-            "action": "CREATE_TERMINAL_ACCOUNT",
-            "params": {"enrollment_id": 2, "display_name": "Somchai S."},
-        })
+        # Simulate the MQTT thread: handle_device_command blocks until the
+        # owner (this test's main thread, below) drains the queue.
+        t = threading.Thread(
+            target=self.engine.handle_device_command,
+            kwargs={"req": {
+                "command_id": "cmd-456",
+                "action": "CREATE_TERMINAL_ACCOUNT",
+                "params": {"enrollment_id": 2, "display_name": "Somchai S."},
+            }},
+        )
+        t.start()
+        # Poll briefly for the request to land in the queue (bounded, no
+        # sleep-and-hope — fails fast if it never arrives).
+        deadline = time.time() + 2.0
+        while self.engine.device_owner.queue_depth() == 0 and time.time() < deadline:
+            time.sleep(0.005)
+        self.assertEqual(self.engine.device_owner.queue_depth(), 1)
+
+        drained = self.engine.device_owner.drain_pending(self.engine._execute_owned_command)
+        self.assertEqual(drained, 1)
+        t.join(timeout=2.0)
+        self.assertFalse(t.is_alive())
 
         mock_create.assert_called_once_with(
             self.cfg,

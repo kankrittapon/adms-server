@@ -483,12 +483,41 @@ def create_terminal_account_collector_budget_seconds() -> float:
 # Collector process — not a hardware timeout, a transport/scheduling margin.
 DEVICE_COMMAND_TRANSPORT_MARGIN_SECONDS = 3.0
 
+# ---------------------------------------------------------------------------
+# Device-owner acquire budget (ADMS-ZEM560-SingleOwnerIO-014)
+#
+# Since 014, a command no longer executes the instant the Collector's MQTT
+# thread receives it — it is enqueued and must wait for the single device
+# owner (the Collector's main thread) to reach a safe point before it can
+# even START executing. The worst-case wait for that safe point is bounded
+# by pyzk's live_capture() idle-timeout cycle: live_capture() is a lazy
+# generator, so the owner is never mid-pyzk-call between one yielded value
+# and the next `next()` call — but it can't check the command queue until a
+# yield happens, and pyzk's live_capture(new_timeout=...) defaults to a 10s
+# per-iteration socket timeout (app/collector.py calls it with no override).
+# This must be added to the outer DeviceCommandBus timeout, or the very fix
+# that makes device I/O correct (serializing it) would make the existing
+# 010 budget too tight and reintroduce a false DEVICE_COMMAND_TIMEOUT.
+LIVE_CAPTURE_IDLE_TIMEOUT_SECONDS = 10.0
+
+# Margin beyond one full idle cycle for actual drain/dispatch overhead once
+# the owner reaches the safe point (queue pop, generation check, invoking
+# the executor) — deliberately small since that work does no device I/O.
+DEVICE_OWNER_DRAIN_MARGIN_SECONDS = 5.0
+
+DEVICE_OWNER_ACQUIRE_TIMEOUT_SECONDS = (
+    LIVE_CAPTURE_IDLE_TIMEOUT_SECONDS + DEVICE_OWNER_DRAIN_MARGIN_SECONDS
+)
+
 # The value app/device_command_bus.py's execute() must be called with for the
 # CREATE_TERMINAL_ACCOUNT command — computed, not hand-picked, and re-derives
-# automatically if READBACK_RETRIES/READBACK_DELAY_SECONDS/ZK_TIMEOUT change.
-# Invariant: outer_timeout > collector_budget + transport_margin.
+# automatically if READBACK_RETRIES/READBACK_DELAY_SECONDS/ZK_TIMEOUT/the
+# device-owner acquire budget change.
+# Invariant: outer_timeout > device_owner_acquire_budget + collector_budget + transport_margin.
 CREATE_TERMINAL_ACCOUNT_DEVICE_TIMEOUT_SECONDS = (
-    create_terminal_account_collector_budget_seconds() + DEVICE_COMMAND_TRANSPORT_MARGIN_SECONDS
+    DEVICE_OWNER_ACQUIRE_TIMEOUT_SECONDS
+    + create_terminal_account_collector_budget_seconds()
+    + DEVICE_COMMAND_TRANSPORT_MARGIN_SECONDS
 )
 
 # States from which terminal-account creation/reconciliation may run. RESERVED

@@ -144,10 +144,18 @@ class TestDerivedTimingBudget(unittest.TestCase):
         )
 
     def test_item6_outer_timeout_exceeds_collector_budget_by_positive_margin(self):
+        # PromptID-014: the margin over the raw collector budget now also
+        # includes DEVICE_OWNER_ACQUIRE_TIMEOUT_SECONDS — a command must
+        # wait for the single device owner to reach a safe point (bounded
+        # by live_capture()'s idle cycle) before it can even start
+        # executing, in addition to the pure transport margin.
+        from app.enrollment import DEVICE_OWNER_ACQUIRE_TIMEOUT_SECONDS
+
         budget = create_terminal_account_collector_budget_seconds()
         self.assertGreater(CREATE_TERMINAL_ACCOUNT_DEVICE_TIMEOUT_SECONDS, budget)
         margin = CREATE_TERMINAL_ACCOUNT_DEVICE_TIMEOUT_SECONDS - budget
-        self.assertAlmostEqual(margin, DEVICE_COMMAND_TRANSPORT_MARGIN_SECONDS, places=3)
+        expected_margin = DEVICE_OWNER_ACQUIRE_TIMEOUT_SECONDS + DEVICE_COMMAND_TRANSPORT_MARGIN_SECONDS
+        self.assertAlmostEqual(margin, expected_margin, places=3)
         self.assertGreater(margin, 0)
 
 

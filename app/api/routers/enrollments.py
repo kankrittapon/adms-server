@@ -263,6 +263,35 @@ def create_terminal_account(
             # Pre-mutation roster failure reported by the Collector itself
             # (TerminalRosterUnavailable) — set_user() was never reached.
             raise ApiError(503, code, err_str)
+        if code == "COLLECTOR_UNAVAILABLE":
+            # ADMS-ZEM560-SingleOwnerIO-014, category 4 — the Collector
+            # itself is not LIVE (no connection, or reconnecting). Distinct
+            # from DEVICE_UNAVAILABLE: that means the Collector IS live but
+            # a specific roster read against the device failed; this means
+            # the Collector never had a usable connection to attempt
+            # anything with in the first place.
+            raise ApiError(503, code, err_str)
+        if code == "DEVICE_COMMAND_QUEUE_FULL":
+            # ADMS-ZEM560-SingleOwnerIO-014, category 1 — the Collector's
+            # bounded device-command queue was already full. No write was
+            # attempted for this request; safe to retry once the earlier
+            # command in the queue has been serviced.
+            raise ApiError(503, code, err_str)
+        if code == "DEVICE_OWNER_TIMEOUT":
+            # ADMS-ZEM560-SingleOwnerIO-014, category 2 — the command was
+            # accepted but the single device owner never reached a safe
+            # point to execute it within its wait budget. Distinct from a
+            # device PROTOCOL timeout (DEVICE_UNAVAILABLE /
+            # TERMINAL_ACCOUNT_UNCONFIRMED): no device I/O for this command
+            # was ever attempted, so — unlike those — it is always safe to
+            # retry without any reconciliation concern.
+            raise ApiError(503, code, err_str)
+        if code == "DEVICE_COMMAND_CANCELLED":
+            # ADMS-ZEM560-SingleOwnerIO-014 — the command was queued but
+            # cancelled because the device connection was reconnected (or
+            # the Collector is shutting down) before it could execute.
+            # Nothing was attempted against the device; safe to retry.
+            raise ApiError(503, code, err_str)
         if getattr(e, "timed_out", False):
             # UNKNOWN OUTCOME, not guaranteed failure — the frontend should
             # offer "Verify / Reconcile" (re-issuing this same request is

@@ -21,8 +21,29 @@ from app.db import (
 )
 from app.mqtt_client import MQTTService
 from app.timestamp_utils import normalize_device_timestamp
+from app.device_owner import (
+    DeviceCommandCancelled,
+    DeviceCommandQueueFull,
+    DeviceOwner,
+    DeviceOwnerAcquireTimeout,
+)
+from app.enrollment import (
+    DEVICE_OWNER_ACQUIRE_TIMEOUT_SECONDS,
+    EnrollmentError,
+    TerminalAccountConflict,
+    TerminalAccountUnconfirmed,
+    TerminalRosterUnavailable,
+    create_or_reconcile_terminal_account,
+)
 
 log = logging.getLogger(__name__)
+
+# Bounded command queue capacity. In practice paho-mqtt's loop_start() thread
+# dispatches on_message callbacks serially (one at a time), so more than one
+# command is rarely genuinely in flight — this bound exists as a defensive
+# cap against pathological accumulation (e.g. a stuck owner), not as a
+# throughput knob.
+DEVICE_COMMAND_QUEUE_MAXSIZE = 4
 
 class State(Enum):
     STARTING = auto()
@@ -80,88 +101,152 @@ class CollectorStateEngine:
         self.last_roster_reappeared: Optional[int] = None
         self.last_roster_uid_anomalies: Optional[int] = None
 
+        # Device-owner queue telemetry (ADMS-ZEM560-SingleOwnerIO-014)
+        self.last_command_queued_at: Optional[datetime] = None
+        self.last_command_executed_at: Optional[datetime] = None
+        self.last_command_queue_wait_seconds: Optional[float] = None
+        self.last_capture_paused_for_command_at: Optional[datetime] = None
+        self.last_capture_resumed_at: Optional[datetime] = None
+
         # Services
         self.mqtt_service = MQTTService(cfg, command_handler=self.handle_device_command)
 
+        # Single-owner device I/O (ADMS-ZEM560-SingleOwnerIO-014). The
+        # Collector's main thread — already the sole owner of
+        # self.connection across every state — is the only execution
+        # context ever permitted to call a pyzk method. The paho-mqtt
+        # network thread (which runs handle_device_command below) only
+        # ever submits into this queue and waits; it never touches
+        # self.connection directly. See app/device_owner.py.
+        self.device_owner = DeviceOwner(
+            maxsize=DEVICE_COMMAND_QUEUE_MAXSIZE,
+            acquire_timeout_seconds=DEVICE_OWNER_ACQUIRE_TIMEOUT_SECONDS,
+        )
+
     def handle_device_command(self, req: dict):
+        """Runs on paho-mqtt's network thread (see MQTTService._on_message).
+        MUST NOT perform any ZK/pyzk I/O directly — it only enqueues the
+        request via self.device_owner and blocks on the result. All actual
+        device I/O happens in _execute_owned_command, called exclusively by
+        the owner (main) thread from drain_pending()."""
         command_id = req.get("command_id")
         action = req.get("action")
         params = req.get("params", {})
         if not command_id:
             return
         log.info("Received device command %s (action=%s)", command_id, action)
-        if action == "CREATE_TERMINAL_ACCOUNT":
-            if not self.connection or self.state != State.LIVE:
-                self.mqtt_service.publish_command_response(
-                    command_id,
-                    success=False,
-                    error=f"Collector is not in LIVE state (current state: {self.state.name})"
-                )
-                return
-            try:
-                from app.enrollment import (
-                    EnrollmentError,
-                    TerminalAccountConflict,
-                    TerminalAccountUnconfirmed,
-                    TerminalRosterUnavailable,
-                    create_or_reconcile_terminal_account,
-                )
-                enrollment_id = int(params["enrollment_id"])
-                display_name = str(params["display_name"])
-                result = create_or_reconcile_terminal_account(
-                    self.cfg,
-                    enrollment_id=enrollment_id,
-                    display_name=display_name,
-                    device=self.connection
-                )
-                # Reconcile roster lifecycle immediately to discover the new terminal user
-                self.perform_roster_lifecycle_check()
-                self.mqtt_service.publish_command_response(
-                    command_id,
-                    success=True,
-                    result=result
-                )
-            except TerminalRosterUnavailable as e:
-                # PRE-MUTATION failure — set_user() was never reached. Must
-                # not be reported as ENROLLMENT_CONFLICT (implies a state
-                # issue) or TERMINAL_ACCOUNT_UNCONFIRMED (implies a write was
-                # attempted) — neither is true here.
-                log.error("Device command %s: pre-mutation roster read failed: %s", command_id, e)
-                self.mqtt_service.publish_command_response(
-                    command_id, success=False, error=str(e),
-                    error_code="DEVICE_UNAVAILABLE",
-                )
-            except TerminalAccountConflict as e:
-                log.error("Device command %s: terminal account conflict: %s", command_id, e)
-                self.mqtt_service.publish_command_response(
-                    command_id, success=False, error=str(e),
-                    error_code="TERMINAL_ACCOUNT_CONFLICT",
-                )
-            except TerminalAccountUnconfirmed as e:
-                log.error("Device command %s: terminal account unconfirmed: %s", command_id, e)
-                self.mqtt_service.publish_command_response(
-                    command_id, success=False, error=str(e),
-                    error_code="TERMINAL_ACCOUNT_UNCONFIRMED",
-                )
-            except EnrollmentError as e:
-                log.error("Device command execution failed for %s: %s", command_id, e)
-                self.mqtt_service.publish_command_response(
-                    command_id, success=False, error=str(e),
-                    error_code="ENROLLMENT_CONFLICT",
-                )
-            except Exception as e:
-                log.error("Device command execution failed for %s: %s", command_id, e)
-                self.mqtt_service.publish_command_response(
-                    command_id,
-                    success=False,
-                    error=str(e)
-                )
-        else:
+        if action != "CREATE_TERMINAL_ACCOUNT":
             self.mqtt_service.publish_command_response(
                 command_id,
                 success=False,
                 error=f"Unsupported device action: {action}"
             )
+            return
+        if not self.connection or self.state not in (State.LIVE, State.DEGRADED):
+            # Category 4 — Collector/device unavailable. Rejected before
+            # ever reaching the queue; there is no connection generation to
+            # queue a command against.
+            self.mqtt_service.publish_command_response(
+                command_id,
+                success=False,
+                error=f"Collector is not in LIVE state (current state: {self.state.name})",
+                error_code="COLLECTOR_UNAVAILABLE",
+            )
+            return
+
+        queued_at = time.monotonic()
+        self.last_command_queued_at = datetime.now(timezone.utc)
+        log.info("Device command %s queued (queue depth now %d)", command_id, self.device_owner.queue_depth() + 1)
+        try:
+            result = self.device_owner.submit_and_wait(command_id, action, params)
+            wait_s = time.monotonic() - queued_at
+            self.last_command_queue_wait_seconds = wait_s
+            self.last_command_executed_at = datetime.now(timezone.utc)
+            log.info("Device command %s executed successfully (queue wait %.2fs)", command_id, wait_s)
+            self.mqtt_service.publish_command_response(
+                command_id,
+                success=True,
+                result=result
+            )
+        except DeviceCommandQueueFull as e:
+            # Category 1
+            log.warning("Device command %s rejected: %s", command_id, e)
+            self.mqtt_service.publish_command_response(
+                command_id, success=False, error=str(e), error_code=e.error_code,
+            )
+        except DeviceOwnerAcquireTimeout as e:
+            # Category 2 — distinct from a device PROTOCOL timeout: the
+            # owner never even started executing this command.
+            log.warning("Device command %s: %s", command_id, e)
+            self.mqtt_service.publish_command_response(
+                command_id, success=False, error=str(e), error_code=e.error_code,
+            )
+        except DeviceCommandCancelled as e:
+            log.warning("Device command %s: %s", command_id, e)
+            self.mqtt_service.publish_command_response(
+                command_id, success=False, error=str(e), error_code=e.error_code,
+            )
+        except TerminalRosterUnavailable as e:
+            # Category 3 (protocol-level) — PRE-MUTATION failure —
+            # set_user() was never reached. Must not be reported as
+            # ENROLLMENT_CONFLICT (implies a state issue) or
+            # TERMINAL_ACCOUNT_UNCONFIRMED (implies a write was attempted) —
+            # neither is true here.
+            log.error("Device command %s: pre-mutation roster read failed: %s", command_id, e)
+            self.mqtt_service.publish_command_response(
+                command_id, success=False, error=str(e),
+                error_code="DEVICE_UNAVAILABLE",
+            )
+        except TerminalAccountConflict as e:
+            log.error("Device command %s: terminal account conflict: %s", command_id, e)
+            self.mqtt_service.publish_command_response(
+                command_id, success=False, error=str(e),
+                error_code="TERMINAL_ACCOUNT_CONFLICT",
+            )
+        except TerminalAccountUnconfirmed as e:
+            log.error("Device command %s: terminal account unconfirmed: %s", command_id, e)
+            self.mqtt_service.publish_command_response(
+                command_id, success=False, error=str(e),
+                error_code="TERMINAL_ACCOUNT_UNCONFIRMED",
+            )
+        except EnrollmentError as e:
+            log.error("Device command execution failed for %s: %s", command_id, e)
+            self.mqtt_service.publish_command_response(
+                command_id, success=False, error=str(e),
+                error_code="ENROLLMENT_CONFLICT",
+            )
+        except Exception as e:
+            log.error("Device command execution failed for %s: %s", command_id, e)
+            self.mqtt_service.publish_command_response(
+                command_id,
+                success=False,
+                error=str(e)
+            )
+
+    def _execute_owned_command(self, action: str, params: dict) -> Any:
+        """Executed EXCLUSIVELY by the device owner (main thread), invoked
+        from DeviceOwner.drain_pending() at a safe point. This — together
+        with the state-machine's own handle_* methods — is the only code
+        permitted to call a method on self.connection for command-triggered
+        work. Any exception raised here propagates verbatim back to the
+        waiting MQTT thread via the request's result slot."""
+        if action == "CREATE_TERMINAL_ACCOUNT":
+            enrollment_id = int(params["enrollment_id"])
+            display_name = str(params["display_name"])
+            result = create_or_reconcile_terminal_account(
+                self.cfg,
+                enrollment_id=enrollment_id,
+                display_name=display_name,
+                device=self.connection
+            )
+            # Reconcile roster lifecycle immediately to discover the new
+            # terminal user — still inside the same owned execution, on the
+            # same connection, not a separate MQTT-thread call (that used to
+            # be a second, unprotected get_users() call from the MQTT
+            # thread; see PromptID-013's audit finding #9).
+            self.perform_roster_lifecycle_check()
+            return result
+        raise ValueError("unsupported device action: %s" % action)
 
     def write_health_status(self):
         """
@@ -191,7 +276,24 @@ class CollectorStateEngine:
                 "last_roster_user_count": self.last_roster_user_count,
                 "last_roster_marked_inactive": self.last_roster_marked_inactive,
                 "last_roster_reappeared": self.last_roster_reappeared,
-                "last_roster_uid_anomalies": self.last_roster_uid_anomalies
+                "last_roster_uid_anomalies": self.last_roster_uid_anomalies,
+                # Device-owner / command-queue telemetry (ADMS-ZEM560-
+                # SingleOwnerIO-014). Deliberately distinct from
+                # device_connected: a live Python `self.connection` object
+                # existing is NOT the same claim as "the device owner is
+                # actively servicing commands" — e.g. the owner thread could
+                # in principle be stuck inside a single pyzk call well past
+                # its normal cycle time while device_connected still reads
+                # True. Do not infer command-queue health from
+                # device_connected alone.
+                "device_owner_available": self.state in (State.LIVE, State.DEGRADED) and self.connection is not None,
+                "device_command_queue_depth": self.device_owner.queue_depth() if hasattr(self, "device_owner") else 0,
+                "device_command_generation": self.device_owner.current_generation() if hasattr(self, "device_owner") else 0,
+                "last_command_queued_at": self.last_command_queued_at.isoformat() if self.last_command_queued_at else None,
+                "last_command_executed_at": self.last_command_executed_at.isoformat() if self.last_command_executed_at else None,
+                "last_command_queue_wait_seconds": self.last_command_queue_wait_seconds,
+                "last_capture_paused_for_command_at": self.last_capture_paused_for_command_at.isoformat() if self.last_capture_paused_for_command_at else None,
+                "last_capture_resumed_at": self.last_capture_resumed_at.isoformat() if self.last_capture_resumed_at else None,
             }
 
             dir_path = os.path.dirname(HEALTH_FILE_PATH)
@@ -217,6 +319,19 @@ class CollectorStateEngine:
         return delay
 
     def cleanup_connection(self):
+        # Owner-thread-only. Cancel any command still waiting for this
+        # connection generation BEFORE tearing it down, and bump the
+        # generation so nothing queued (or queued moments from now, racing
+        # this call) can ever execute against a stale/disconnected
+        # connection — mutation safety defaults to cancel, not delayed
+        # execution against a reconnected device (PromptID-014 Phase 6).
+        cancelled = self.device_owner.cancel_all_pending(
+            "device connection is being reset — command cancelled rather "
+            "than executed against a stale connection"
+        )
+        self.device_owner.bump_generation()
+        if cancelled:
+            log.warning("Cancelled %d pending device command(s) during connection cleanup", cancelled)
         if self.connection:
             try:
                 log.info("cleaning up ZK connection...")
@@ -437,6 +552,23 @@ class CollectorStateEngine:
 
                 # Update health heartbeat on every 10s idle ping yield or scan event
                 self.write_health_status()
+
+                # Safe point (ADMS-ZEM560-SingleOwnerIO-014): live_capture()
+                # is a lazy generator — no pyzk call is in flight between one
+                # yielded value and the next `next()` call on it. This is
+                # exactly where the owner (this thread) may safely execute
+                # any queued device command on the same connection, since
+                # nothing else can be mid-recv() right here. drain_pending()
+                # is a cheap non-blocking no-op when the queue is empty, so
+                # it is safe to call unconditionally on every iteration.
+                if self.device_owner.queue_depth():
+                    self.last_capture_paused_for_command_at = datetime.now(timezone.utc)
+                    log.info("Live capture pausing at safe point to service queued device command(s)")
+                drained = self.device_owner.drain_pending(self._execute_owned_command)
+                if drained:
+                    self.last_capture_resumed_at = datetime.now(timezone.utc)
+                    log.info("Live capture resumed after servicing %d device command(s)", drained)
+                    self.write_health_status()
 
                 # Reset reconnect backoff counter if LIVE state has been stable > threshold
                 if self.live_start_time and (time.time() - self.live_start_time) >= self.cfg.stable_live_window:
