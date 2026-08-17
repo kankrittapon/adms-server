@@ -74,35 +74,22 @@ ALLOWED_TRANSITIONS: Dict[str, Set[str]] = {
 # Canonical API action catalog for the enrollment workflow. The frontend uses
 # GET /api/v1/enrollments/{id}/next-actions to learn which actions are valid
 # in the current state — the state machine is NEVER duplicated in the UI.
+#
+# Note: role requirements are NOT declared per-action here. The single source
+# of truth for "who may mutate an enrollment" is ROLES_ENROLLMENT_MUTATE in
+# app/api/auth.py, enforced by the router's Depends(enrollment_mutate) and
+# echoed back to the frontend by the next-actions endpoint. A hand-typed
+# per-action role string here previously drifted from that enforcement
+# (it said "OPERATOR" while ENROLLMENT_OPERATOR was also permitted) — do not
+# reintroduce a second, parallel role declaration.
 ENROLLMENT_ACTIONS: Dict[str, Dict[str, Any]] = {
-    "create-terminal-account": {
-        "target": "TERMINAL_ACCOUNT_CREATED",
-        "requires_role": "OPERATOR",
-    },
-    "start-fingerprint-enrollment": {
-        "target": "FINGERPRINT_ENROLLMENT_PENDING",
-        "requires_role": "OPERATOR",
-    },
-    "confirm-fingerprint": {
-        "target": "FINGERPRINT_ENROLLED",
-        "requires_role": "OPERATOR",
-    },
-    "start-controlled-scan": {
-        "target": "CONTROLLED_SCAN_PENDING",
-        "requires_role": "OPERATOR",
-    },
-    "confirm-controlled-scan": {
-        "target": "CONTROLLED_SCAN_CONFIRMED",
-        "requires_role": "OPERATOR",
-    },
-    "mark-ready-for-mapping": {
-        "target": "READY_FOR_MAPPING",
-        "requires_role": "OPERATOR",
-    },
-    "cancel": {
-        "target": "CANCELLED",
-        "requires_role": "OPERATOR",
-    },
+    "create-terminal-account": {"target": "TERMINAL_ACCOUNT_CREATED"},
+    "start-fingerprint-enrollment": {"target": "FINGERPRINT_ENROLLMENT_PENDING"},
+    "confirm-fingerprint": {"target": "FINGERPRINT_ENROLLED"},
+    "start-controlled-scan": {"target": "CONTROLLED_SCAN_PENDING"},
+    "confirm-controlled-scan": {"target": "CONTROLLED_SCAN_CONFIRMED"},
+    "mark-ready-for-mapping": {"target": "READY_FOR_MAPPING"},
+    "cancel": {"target": "CANCELLED"},
 }
 
 UUID_RE = re.compile(

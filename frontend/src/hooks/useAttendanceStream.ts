@@ -26,6 +26,7 @@ const RECONNECT_DELAY_MS = 3000;
 export function useAttendanceStream(): {
   status: StreamStatus;
   lastEvent: AttendanceEvent | null;
+  reconnect: () => void;
 } {
   const [status, setStatus] = useState<StreamStatus>("disconnected");
   const [lastEvent, setLastEvent] = useState<AttendanceEvent | null>(null);
@@ -37,6 +38,9 @@ export function useAttendanceStream(): {
       setStatus("disconnected");
       return;
     }
+    // Reflect the attempt immediately so the UI never shows "disconnected"
+    // before the first fetch has even had a chance to resolve.
+    setStatus("connecting");
     const controller = new AbortController();
     abortRef.current = controller;
     let closed = false;
@@ -102,5 +106,10 @@ export function useAttendanceStream(): {
     };
   }, [connect]);
 
-  return { status, lastEvent };
+  const reconnect = useCallback(() => {
+    abortRef.current?.abort();
+    connect();
+  }, [connect]);
+
+  return { status, lastEvent, reconnect };
 }

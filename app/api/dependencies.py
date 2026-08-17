@@ -113,6 +113,12 @@ def require_writes(request: Request) -> None:
 
     F1 ships writes OFF by default. Enabling writes is a deliberate operator
     decision (API_WRITE_ENABLED=true) — separate from role authorization.
+
+    This is Layer 1 (infrastructure master gate) of the two-layer write
+    model. See require_write_session for Layer 2 (runtime write session).
+    Both are required for a domain-mutating endpoint to succeed; this layer
+    unconditionally overrides Layer 2 — if it's closed, Layer 2 is never
+    even checked.
     """
     settings: ApiSettings = request.app.state.settings
     if not settings.write_enabled:
@@ -122,6 +128,35 @@ def require_writes(request: Request) -> None:
             "API write endpoints are disabled by default "
             "(set API_WRITE_ENABLED=true to enable).",
         )
+
+
+def require_write_session(request: Request) -> None:
+    """Layer 2 of the two-layer write model: a short-lived, ADMIN-opened
+    runtime write session must be active. See app/write_session.py.
+
+    Always add this alongside require_writes (never as a replacement for
+    it) on every domain-mutating route — dependencies=[Depends(...role...),
+    Depends(require_writes), Depends(require_write_session)].
+    """
+    from app.write_session import is_write_session_active
+
+    cfg = get_cfg()
+    active, just_expired = is_write_session_active(cfg)
+    if active:
+        return
+    if just_expired:
+        raise ApiError(
+            403,
+            "WRITE_SESSION_EXPIRED",
+            "The write session has expired. Ask an administrator to open a "
+            "new work session to continue.",
+        )
+    raise ApiError(
+        403,
+        "WRITE_SESSION_REQUIRED",
+        "No write session is currently open. Ask an administrator to open "
+        "a work session before making changes.",
+    )
 
 
 def pagination(

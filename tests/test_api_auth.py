@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from app.api.auth import hash_password, verify_password, verify_token_row
+from app.api.dependencies import require_write_session
 from app.api.main import create_app
 from app.api.settings import ApiSettings
 
@@ -206,6 +207,9 @@ class TestStrictAuth(unittest.TestCase):
 class TestRoleMatrix(unittest.TestCase):
     def _client_with(self, role):
         app = create_app(settings=ApiSettings(write_enabled=True))
+        # Role/write-gate matrix tests, not the write-session mechanism
+        # itself (see tests/test_write_session.py) — bypass Layer 2.
+        app.dependency_overrides[require_write_session] = lambda: None
         client = TestClient(app)
         from app.api.dependencies import OperatorContext
 
@@ -303,7 +307,13 @@ class TestRoleMatrix(unittest.TestCase):
 
 class TestOperatorManagement(unittest.TestCase):
     def setUp(self):
-        self.app = create_app(settings=ApiSettings(write_enabled=False))
+        # Operator management mutations are gated by API_WRITE_ENABLED just
+        # like every other domain write (P0 fix) — writes must be on for the
+        # create/toggle tests below; the dedicated
+        # test_operator_create_blocked_when_writes_disabled test below covers
+        # the write_enabled=False case explicitly.
+        self.app = create_app(settings=ApiSettings(write_enabled=True))
+        self.app.dependency_overrides[require_write_session] = lambda: None
         self.client = TestClient(self.app)
 
     def _admin_client(self):
@@ -385,12 +395,44 @@ class TestOperatorManagement(unittest.TestCase):
         self.assertEqual(body["username"], "enroll_op")
         self.assertEqual(body["role"], "ENROLLMENT_OPERATOR")
 
+    def test_operator_create_blocked_when_writes_disabled(self):
+        """P0 fix: operator creation must be blocked by API_WRITE_ENABLED=false,
+        same as every other domain-mutating endpoint — this previously bypassed
+        the write gate entirely."""
+        app = create_app(settings=ApiSettings(write_enabled=False))
+        client = TestClient(app)
+        from app.api.dependencies import OperatorContext
+
+        ctx = OperatorContext(1, "admin", "Admin", "ADMIN")
+        with patch("app.api.dependencies._load_token_context", return_value=ctx):
+            resp = client.post(
+                "/api/v1/operators",
+                json={"username": "newop", "display_name": "New Op",
+                      "password": "a-long-enough-password", "role": "OPERATOR"},
+            )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["error"]["code"], "WRITE_DISABLED")
+
+    def test_operator_toggle_blocked_when_writes_disabled(self):
+        app = create_app(settings=ApiSettings(write_enabled=False))
+        client = TestClient(app)
+        from app.api.dependencies import OperatorContext
+
+        ctx = OperatorContext(1, "admin", "Admin", "ADMIN")
+        with patch("app.api.dependencies._load_token_context", return_value=ctx):
+            resp = client.post(
+                "/api/v1/operators/2/toggle-active", json={"active": False}
+            )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["error"]["code"], "WRITE_DISABLED")
+
 
 class TestEnrollmentOperatorRole(unittest.TestCase):
     """Specific tests for ENROLLMENT_OPERATOR capability scoping."""
 
     def _client(self, write_enabled=True):
         app = create_app(settings=ApiSettings(write_enabled=write_enabled))
+        app.dependency_overrides[require_write_session] = lambda: None
         client = TestClient(app)
         from app.api.dependencies import OperatorContext
         ctx = OperatorContext(2, "enroll_user", "Enrollment Op", "ENROLLMENT_OPERATOR")
@@ -491,6 +533,7 @@ class TestEnrollmentOperatorRole(unittest.TestCase):
 class TestPersonnelEnglishName(unittest.TestCase):
     def _client(self, role="ADMIN", write_enabled=True):
         app = create_app(settings=ApiSettings(write_enabled=write_enabled))
+        app.dependency_overrides[require_write_session] = lambda: None
         client = TestClient(app)
         from app.api.dependencies import OperatorContext
         ctx = OperatorContext(1, "admin_user", "Admin", role)

@@ -58,6 +58,26 @@ def register_exception_handlers(app: FastAPI) -> None:
             headers=exc.headers,
         )
 
+    # Domain exceptions raised by app/enrollment.py and app/mapping.py are
+    # translated to the API error envelope in exactly one place, rather than
+    # duplicated in a try/except at every router call site.
+    from app.enrollment import EnrollmentError
+    from app.mapping import MappingError
+
+    @app.exception_handler(EnrollmentError)
+    async def _enrollment_error_handler(request: Request, exc: EnrollmentError) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content=_error_body("ENROLLMENT_CONFLICT", str(exc)),
+        )
+
+    @app.exception_handler(MappingError)
+    async def _mapping_error_handler(request: Request, exc: MappingError) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content=_error_body("MAPPING_CONFLICT", str(exc)),
+        )
+
     @app.exception_handler(RequestValidationError)
     async def _validation_error_handler(
         request: Request, exc: RequestValidationError

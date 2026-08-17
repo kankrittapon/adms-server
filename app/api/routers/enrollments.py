@@ -18,7 +18,13 @@ from pydantic import BaseModel, Field
 
 from app.api import repository
 from app.api.auth import ROLES_ENROLLMENT_MUTATE, ROLES_ENROLLMENT_READ
-from app.api.dependencies import get_cfg, pagination, require_roles, require_writes
+from app.api.dependencies import (
+    get_cfg,
+    pagination,
+    require_roles,
+    require_write_session,
+    require_writes,
+)
 from app.api.errors import ApiError, not_found
 from app.api.schemas import (
     Enrollment,
@@ -31,7 +37,6 @@ from app.config import Config
 from app.enrollment import (
     ALLOWED_TRANSITIONS,
     ENROLLMENT_ACTIONS,
-    EnrollmentError,
     cancel_enrollment,
     confirm_controlled_scan,
     confirm_fingerprint_enrolled,
@@ -102,11 +107,16 @@ def get_next_actions(enrollment_id: int, cfg: Config = Depends(get_cfg)):
         raise not_found("enrollment", enrollment_id)
     status = row["status"]
     allowed = ALLOWED_TRANSITIONS.get(status, set())
+    # requires_role is computed here from the actual enforcement role set
+    # (ROLES_ENROLLMENT_MUTATE), not from ENROLLMENT_ACTIONS' per-action
+    # "requires_role" field — that field is informational only and must
+    # never drift from the router's real Depends(enrollment_mutate) check.
+    requires_role = "+".join(sorted(ROLES_ENROLLMENT_MUTATE, key=lambda r: r))
     actions = [
         {
             "action": action,
             "target_status": spec["target"],
-            "requires_role": spec["requires_role"],
+            "requires_role": requires_role,
         }
         for action, spec in sorted(ENROLLMENT_ACTIONS.items())
         if spec["target"] in allowed
@@ -136,20 +146,20 @@ class ReserveRequest(BaseModel):
     "/api/v1/enrollments/reserve",
     status_code=201,
     response_model=EnrollmentReserveResult,
-    dependencies=[Depends(enrollment_mutate), Depends(require_writes)],
+    dependencies=[
+        Depends(enrollment_mutate),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
 )
 def reserve(payload: ReserveRequest, cfg: Config = Depends(get_cfg)):
-    try:
-        result = reserve_next_device_user_id(
-            cfg,
-            employee_id=payload.employee_id,
-            device_id=payload.device_id,
-            operator=payload.operator,
-            roster_user_ids=set(payload.roster_user_ids or []),
-        )
-    except EnrollmentError as e:
-        raise ApiError(409, "ENROLLMENT_CONFLICT", str(e))
-    return result
+    return reserve_next_device_user_id(
+        cfg,
+        employee_id=payload.employee_id,
+        device_id=payload.device_id,
+        operator=payload.operator,
+        roster_user_ids=set(payload.roster_user_ids or []),
+    )
 
 
 class TransitionRequest(BaseModel):
@@ -170,7 +180,11 @@ class CreateTerminalAccountRequest(BaseModel):
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/create-terminal-account",
     response_model=EnrollmentTransitionResult,
-    dependencies=[Depends(enrollment_mutate), Depends(require_writes)],
+    dependencies=[
+        Depends(enrollment_mutate),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
 )
 def create_terminal_account(
     enrollment_id: int,
@@ -180,15 +194,12 @@ def create_terminal_account(
 ):
     # Check if a direct test device is injected into app state (e.g. unit tests)
     if hasattr(request.app.state, "device_executor") and request.app.state.device_executor is not None:
-        try:
-            result = create_reserved_terminal_account(
-                cfg,
-                enrollment_id=enrollment_id,
-                display_name=payload.display_name,
-                device=request.app.state.device_executor,
-            )
-        except EnrollmentError as e:
-            raise ApiError(409, "ENROLLMENT_CONFLICT", str(e))
+        create_reserved_terminal_account(
+            cfg,
+            enrollment_id=enrollment_id,
+            display_name=payload.display_name,
+            device=request.app.state.device_executor,
+        )
         return {
             "enrollment_id": enrollment_id,
             "status": "TERMINAL_ACCOUNT_CREATED",
@@ -226,102 +237,102 @@ def create_terminal_account(
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/start-fingerprint-enrollment",
     response_model=EnrollmentTransitionResult,
-    dependencies=[Depends(enrollment_mutate), Depends(require_writes)],
+    dependencies=[
+        Depends(enrollment_mutate),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
 )
 def start_fingerprint(
     enrollment_id: int,
     payload: TransitionRequest,
     cfg: Config = Depends(get_cfg),
 ):
-    try:
-        result = start_fingerprint_enrollment(cfg, enrollment_id, payload.operator, payload.notes)
-    except EnrollmentError as e:
-        raise ApiError(409, "ENROLLMENT_CONFLICT", str(e))
-    return result
+    return start_fingerprint_enrollment(cfg, enrollment_id, payload.operator, payload.notes)
 
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/confirm-fingerprint",
     response_model=EnrollmentTransitionResult,
-    dependencies=[Depends(enrollment_mutate), Depends(require_writes)],
+    dependencies=[
+        Depends(enrollment_mutate),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
 )
 def confirm_fingerprint(
     enrollment_id: int,
     payload: TransitionRequest,
     cfg: Config = Depends(get_cfg),
 ):
-    try:
-        result = confirm_fingerprint_enrolled(cfg, enrollment_id, payload.operator, payload.notes)
-    except EnrollmentError as e:
-        raise ApiError(409, "ENROLLMENT_CONFLICT", str(e))
-    return result
+    return confirm_fingerprint_enrolled(cfg, enrollment_id, payload.operator, payload.notes)
 
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/start-controlled-scan",
     response_model=EnrollmentTransitionResult,
-    dependencies=[Depends(enrollment_mutate), Depends(require_writes)],
+    dependencies=[
+        Depends(enrollment_mutate),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
 )
 def start_scan_window(
     enrollment_id: int,
     payload: TransitionRequest,
     cfg: Config = Depends(get_cfg),
 ):
-    try:
-        result = start_controlled_scan_window(cfg, enrollment_id, payload.operator)
-    except EnrollmentError as e:
-        raise ApiError(409, "ENROLLMENT_CONFLICT", str(e))
-    return result
+    return start_controlled_scan_window(cfg, enrollment_id, payload.operator)
 
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/confirm-controlled-scan",
     response_model=EnrollmentTransitionResult,
-    dependencies=[Depends(enrollment_mutate), Depends(require_writes)],
+    dependencies=[
+        Depends(enrollment_mutate),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
 )
 def confirm_scan(
     enrollment_id: int,
     payload: ScanConfirmationRequest,
     cfg: Config = Depends(get_cfg),
 ):
-    try:
-        result = confirm_controlled_scan(
-            cfg, enrollment_id, payload.scan_time, payload.operator, None
-        )
-    except EnrollmentError as e:
-        raise ApiError(409, "ENROLLMENT_CONFLICT", str(e))
-    return result
+    return confirm_controlled_scan(
+        cfg, enrollment_id, payload.scan_time, payload.operator, None
+    )
 
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/mark-ready-for-mapping",
     response_model=EnrollmentTransitionResult,
-    dependencies=[Depends(enrollment_mutate), Depends(require_writes)],
+    dependencies=[
+        Depends(enrollment_mutate),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
 )
 def mark_ready(
     enrollment_id: int,
     payload: TransitionRequest,
     cfg: Config = Depends(get_cfg),
 ):
-    try:
-        result = mark_ready_for_mapping(cfg, enrollment_id, payload.operator, payload.notes)
-    except EnrollmentError as e:
-        raise ApiError(409, "ENROLLMENT_CONFLICT", str(e))
-    return result
+    return mark_ready_for_mapping(cfg, enrollment_id, payload.operator, payload.notes)
 
 
 @router.post(
     "/api/v1/enrollments/{enrollment_id}/cancel",
     response_model=EnrollmentTransitionResult,
-    dependencies=[Depends(enrollment_mutate), Depends(require_writes)],
+    dependencies=[
+        Depends(enrollment_mutate),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
 )
 def cancel(
     enrollment_id: int,
     payload: TransitionRequest,
     cfg: Config = Depends(get_cfg),
 ):
-    try:
-        result = cancel_enrollment(cfg, enrollment_id, payload.operator, payload.notes)
-    except EnrollmentError as e:
-        raise ApiError(409, "ENROLLMENT_CONFLICT", str(e))
-    return result
+    return cancel_enrollment(cfg, enrollment_id, payload.operator, payload.notes)

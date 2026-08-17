@@ -24,6 +24,7 @@ import type {
   CreateOperatorRequest,
   OperatorOut,
   ToggleActiveResponse,
+  WriteSessionStatus,
   BodyOf,
   JsonResponse,
   OperationsKey,
@@ -278,6 +279,19 @@ export const api = {
     request<Page<AuditEvent>>(`/api/v1/audit/events${qs(params)}`, signal),
   auditEventTypes: (signal?: AbortSignal) =>
     request<EventTypesResponse>("/api/v1/audit/event-types", signal),
+
+  // Runtime write session (Layer 2 write control; ADMIN opens/closes, any
+  // authenticated role can read status)
+  writeSessionStatus: (signal?: AbortSignal) =>
+    request<WriteSessionStatus>("/api/v1/write-session", signal),
+  openWriteSession: (reason: string) =>
+    request<WriteSessionStatus>("/api/v1/write-session/open", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason } satisfies BodyOf<"open_session_api_v1_write_session_open_post">),
+    }),
+  closeWriteSession: () =>
+    request<WriteSessionStatus>("/api/v1/write-session/close", undefined, { method: "POST" }),
 };
 
 function enrollmentTransition<OpId extends OperationsKey>(

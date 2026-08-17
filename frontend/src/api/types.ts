@@ -94,3 +94,4 @@ export type CreateOperatorRequest = Schemas["CreateOperatorRequest"];
 export type ToggleActiveRequest = Schemas["ToggleActiveRequest"];
 export type ToggleActiveResponse = Schemas["ToggleActiveResponse"];
 export type UpdateHumanEnglishNameRequest = Schemas["UpdateHumanEnglishNameRequest"];
+export type WriteSessionStatus = Schemas["WriteSessionStatus"];

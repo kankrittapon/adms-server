@@ -4,8 +4,31 @@ import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
 import { useAttendanceStream } from "../hooks/useAttendanceStream";
-import { ErrorBanner, Loading, StatusBadge } from "../components/Status";
+import { ErrorBanner, Loading, StatusBadge, StreamStatusBadge } from "../components/Status";
 import { useTranslation } from "../i18n";
+import { attendanceReasoningLabels, enumLabel } from "../i18n/enumLabels";
+
+/** Primary display in Thailand local time (fixed UTC+7, no DST); storage
+ * and the API contract remain UTC/ISO-8601, this is a display-only
+ * conversion. Raw UTC stays available via the title tooltip. */
+function formatBangkokTime(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    })
+      .format(new Date(iso))
+      .replace(",", "");
+  } catch {
+    return iso;
+  }
+}
 
 export function Attendance() {
   const { isAdmin } = useAuth();
@@ -18,8 +41,8 @@ export function Attendance() {
     [status, limit]
   );
 
-  // Realtime: live indicator + auto-refresh when a scan arrives via SSE.
-  const { status: streamStatus, lastEvent } = useAttendanceStream();
+  // Realtime: live indicator + auto-refresh when a new scan arrives.
+  const { status: streamStatus, lastEvent, reconnect } = useAttendanceStream();
   const [newScan, setNewScan] = useState<{ user_id: string; scan_time: string } | null>(null);
   const bannerTimer = useRef<number | null>(null);
   useEffect(() => {
@@ -40,7 +63,7 @@ export function Attendance() {
           <p className="text-xs text-slate-500">{t.attendance.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          <LiveBadge status={streamStatus} />
+          <StreamStatusBadge status={streamStatus} onRetry={reconnect} />
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
@@ -76,7 +99,7 @@ export function Attendance() {
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
             <span>
               <strong>{t.attendance.liveStreamBadge}:</strong> Terminal User <strong>{newScan.user_id}</strong> @{" "}
-              <code className="font-mono text-xs">{newScan.scan_time.replace("T", " ")}</code>
+              <code className="font-mono text-xs" title={`${newScan.scan_time} (UTC)`}>{formatBangkokTime(newScan.scan_time)}</code>
             </span>
           </div>
           <button
@@ -100,7 +123,9 @@ export function Attendance() {
               <thead>
                 <tr>
                   <th className="w-16">Log ID</th>
-                  <th>{t.attendance.timeColumn} (UTC)</th>
+                  <th>
+                    {t.attendance.timeColumn} <span className="font-normal text-slate-400">({t.attendance.timeColumnSuffix})</span>
+                  </th>
                   <th>{t.attendance.terminalIdColumn}</th>
                   <th>Device User PK</th>
                   <th>{t.attendance.personColumn}</th>
@@ -115,8 +140,8 @@ export function Attendance() {
                         #{a.id}
                       </Link>
                     </td>
-                    <td className="font-mono text-slate-700 whitespace-nowrap">
-                      {a.scan_time.replace("T", " ").replace("Z", " UTC")}
+                    <td className="font-mono text-slate-700 whitespace-nowrap" title={`${a.scan_time} (UTC)`}>
+                      {formatBangkokTime(a.scan_time)}
                     </td>
                     <td className="font-mono font-semibold text-slate-900">{a.user_id}</td>
                     <td className="font-mono text-slate-500">{a.device_user_pk ?? "—"}</td>
@@ -175,7 +200,7 @@ function ReconciliationSection() {
             <thead>
               <tr>
                 <th className="w-16">Log ID</th>
-                <th>Scan Time (UTC)</th>
+                <th>Scan Time ({t.attendance.timeColumnSuffix})</th>
                 <th>Terminal User</th>
                 <th>Device User PK</th>
                 <th>Temporal Classification</th>
@@ -190,8 +215,8 @@ function ReconciliationSection() {
                       #{a.id}
                     </Link>
                   </td>
-                  <td className="font-mono text-slate-700 whitespace-nowrap">
-                    {a.scan_time.replace("T", " ").replace("Z", " UTC")}
+                  <td className="font-mono text-slate-700 whitespace-nowrap" title={`${a.scan_time} (UTC)`}>
+                    {formatBangkokTime(a.scan_time)}
                   </td>
                   <td className="font-mono font-semibold text-slate-900">{a.user_id}</td>
                   <td className="font-mono text-slate-500">{a.device_user_pk ?? "—"}</td>
@@ -219,41 +244,14 @@ const REASONING_STYLES: Record<string, string> = {
 };
 
 function ReasoningBadge({ classification }: { classification: string }) {
+  const { locale } = useTranslation();
   return (
     <span
       className={`inline-block rounded border px-2 py-0.5 text-[11px] font-semibold ${
         REASONING_STYLES[classification] ?? "bg-slate-100 text-slate-700 border-slate-300"
       }`}
     >
-      {classification}
-    </span>
-  );
-}
-
-function LiveBadge({ status }: { status: "connecting" | "connected" | "disconnected" }) {
-  const styles: Record<string, string> = {
-    connected: "bg-emerald-50 text-emerald-700 border-emerald-300",
-    connecting: "bg-amber-50 text-amber-700 border-amber-300",
-    disconnected: "bg-slate-100 text-slate-500 border-slate-300",
-  };
-  const labels: Record<string, string> = {
-    connected: "LIVE STREAM ACTIVE",
-    connecting: "CONNECTING...",
-    disconnected: "STREAM OFFLINE",
-  };
-  return (
-    <span
-      title={"Realtime stream via MQTT→SSE"}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${
-        styles[status] ?? styles.disconnected
-      }`}
-    >
-      <span
-        className={`inline-block h-2 w-2 rounded-full ${
-          status === "connected" ? "animate-pulse bg-emerald-500" : "bg-current opacity-50"
-        }`}
-      />
-      {labels[status] ?? "STREAM OFFLINE"}
+      {enumLabel(attendanceReasoningLabels, classification, locale)}
     </span>
   );
 }

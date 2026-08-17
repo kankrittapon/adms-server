@@ -16,7 +16,13 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.api.auth import ROLES_ADMIN_ONLY, VALID_ROLES, hash_password
-from app.api.dependencies import OperatorContext, get_cfg, require_roles
+from app.api.dependencies import (
+    OperatorContext,
+    get_cfg,
+    require_roles,
+    require_write_session,
+    require_writes,
+)
 from app.api.errors import ApiError, not_found
 from app.config import Config
 from app.db import get_db_connection, log_sync_event
@@ -75,7 +81,7 @@ def list_operators(cfg: Config = Depends(get_cfg)):
     "/api/v1/operators",
     response_model=OperatorOut,
     status_code=201,
-    dependencies=[Depends(admin_only)],
+    dependencies=[Depends(admin_only), Depends(require_writes), Depends(require_write_session)],
 )
 def create_operator(
     payload: CreateOperatorRequest,
@@ -113,7 +119,7 @@ def create_operator(
 @router.post(
     "/api/v1/operators/{operator_id}/toggle-active",
     response_model=ToggleActiveResponse,
-    dependencies=[Depends(admin_only)],
+    dependencies=[Depends(admin_only), Depends(require_writes), Depends(require_write_session)],
 )
 def toggle_active(
     operator_id: int,

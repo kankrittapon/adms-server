@@ -13,7 +13,14 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api import repository
 from app.api.auth import ROLES_ADMIN_ONLY, ROLES_ENROLLMENT_READ
-from app.api.dependencies import OperatorContext, get_cfg, pagination, require_roles, require_writes
+from app.api.dependencies import (
+    OperatorContext,
+    get_cfg,
+    pagination,
+    require_roles,
+    require_write_session,
+    require_writes,
+)
 from app.api.errors import ApiError, not_found
 from app.api.schemas import Human, Page, UpdateHumanEnglishNameRequest
 from app.config import Config
@@ -68,7 +75,11 @@ def get_human(employee_id: str, cfg: Config = Depends(get_cfg)):
 @router.patch(
     "/api/v1/humans/{employee_id}",
     response_model=Human,
-    dependencies=[Depends(require_roles(ROLES_ADMIN_ONLY)), Depends(require_writes)],
+    dependencies=[
+        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
 )
 def update_human_english_name(
     employee_id: str,

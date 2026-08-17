@@ -59,6 +59,9 @@ def test_openapi_snapshot_shape() -> None:
         "/api/v1/mappings",
         "/api/v1/enrollments",
         "/api/v1/reference/ranks",
+        "/api/v1/write-session",
+        "/api/v1/write-session/open",
+        "/api/v1/write-session/close",
     ):
         assert p in paths, f"missing path {p} in OpenAPI snapshot"
 
@@ -76,5 +79,6 @@ def test_openapi_snapshot_shape() -> None:
         "EnrollmentReserveResult",
         "EnrollmentTransitionResult",
         "EventTypesResponse",
+        "WriteSessionStatus",
     ):
         assert s in schemas, f"missing schema {s} in OpenAPI snapshot"

@@ -15,11 +15,17 @@ from pydantic import BaseModel, Field
 
 from app.api import repository
 from app.api.auth import ROLES_ADMIN_ONLY, ROLES_GENERAL_READ
-from app.api.dependencies import get_cfg, pagination, require_roles, require_writes
-from app.api.errors import ApiError, not_found
+from app.api.dependencies import (
+    get_cfg,
+    pagination,
+    require_roles,
+    require_write_session,
+    require_writes,
+)
+from app.api.errors import not_found
 from app.api.schemas import Mapping, MappingEligibility, Page
 from app.config import Config
-from app.mapping import MappingError, create_verified_mapping
+from app.mapping import create_verified_mapping
 
 router = APIRouter(tags=["mappings"])
 
@@ -102,21 +108,22 @@ class CreateMappingResponse(BaseModel):
     "/api/v1/mappings",
     response_model=CreateMappingResponse,
     status_code=201,
-    dependencies=[Depends(require_roles(ROLES_ADMIN_ONLY)), Depends(require_writes)],
+    dependencies=[
+        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
 )
 def create_mapping(payload: CreateMappingRequest, cfg: Config = Depends(get_cfg)):
-    try:
-        result = create_verified_mapping(
-            cfg,
-            employee_id=payload.employee_id,
-            device_user_pk=payload.device_user_pk,
-            enrollment_id=payload.enrollment_id,
-            controlled_attendance_id=payload.controlled_attendance_id,
-            verified_by=payload.verified_by,
-            verification_note=payload.verification_note,
-        )
-    except MappingError as e:
-        raise ApiError(409, "MAPPING_CONFLICT", str(e))
+    result = create_verified_mapping(
+        cfg,
+        employee_id=payload.employee_id,
+        device_user_pk=payload.device_user_pk,
+        enrollment_id=payload.enrollment_id,
+        controlled_attendance_id=payload.controlled_attendance_id,
+        verified_by=payload.verified_by,
+        verification_note=payload.verification_note,
+    )
     return {
         "mapping_id": result["mapping_id"],
         "employee_id": result["employee_id"],

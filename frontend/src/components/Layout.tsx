@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api, clearToken } from "../api/client";
 import { useAuth } from "../auth";
 import { useTranslation } from "../i18n";
-import { WriteGateStatusBadge } from "./Status";
+import { WriteSessionBadge } from "./WriteSessionControl";
 
 interface NavItem {
   to: string;
@@ -13,7 +13,7 @@ interface NavItem {
 
 export function Layout() {
   const navigate = useNavigate();
-  const { me, serverWriteEnabled } = useAuth();
+  const { me } = useAuth();
   const { locale, setLocale, t } = useTranslation();
 
   async function logout() {
@@ -206,7 +206,7 @@ export function Layout() {
               </button>
             </div>
 
-            <WriteGateStatusBadge writeEnabled={serverWriteEnabled} />
+            <WriteSessionBadge />
           </div>
         </header>
 

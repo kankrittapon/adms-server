@@ -3,12 +3,14 @@ import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
 import { ErrorBanner, Loading, StatusBadge } from "../components/Status";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { useTranslation } from "../i18n";
+import { verificationMethodLabels, enumLabel } from "../i18n/enumLabels";
 import type { MappingEligibilityItem } from "../api/types";
 
 export function Mappings() {
   const { isAdmin } = useAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { data, loading, error, reload } = useApi((s) => api.mappings({ limit: 100 }, s), []);
 
   return (
@@ -66,7 +68,7 @@ export function Mappings() {
                     </td>
                     <td>
                       <span className="inline-block rounded bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700 border border-purple-200">
-                        {m.verification_method}
+                        {m.verification_method ? enumLabel(verificationMethodLabels, m.verification_method, locale) : "—"}
                       </span>
                     </td>
                     <td className="font-medium text-slate-800">{m.verified_by}</td>
@@ -76,7 +78,7 @@ export function Mappings() {
             </table>
           </div>
           <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2 text-[11px] text-slate-500">
-            Temporal interval logic: <code>[valid_from, valid_to)</code> — historical scans evaluate strictly against interval validity.
+            {t.mappings.temporalFooterNote}
           </div>
         </div>
       )}
@@ -90,32 +92,29 @@ function fmt(iso: string): string {
 
 function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
   const { t } = useTranslation();
-  const { me, serverWriteEnabled } = useAuth();
+  const { me, canMutate } = useAuth();
   const elig = useApi((s) => api.mappingEligibility(s), []);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [verifiedBy, setVerifiedBy] = useState(me?.username ?? "");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const item: MappingEligibilityItem | null =
     elig.data?.items.find((e) => e.enrollment_id === selectedId) ?? null;
 
-  function submit() {
+  function requestSubmit() {
     if (!item || !verifiedBy.trim() || !note.trim()) {
       setError("Select an eligible enrollment, and fill verified_by + note.");
       return;
     }
-    if (
-      !window.confirm(
-        `Create VERIFIED mapping?\n\nHuman: ${item.employee_name} (${item.employee_id})\n` +
-          `Terminal account: ${item.device_user_id} (pk ${item.device_user_pk})\n` +
-          `Controlled scan: ${item.controlled_scan_time ?? "—"} (attendance id ${item.controlled_attendance_id ?? "?"})\n` +
-          `Enrollment #${item.enrollment_id} will be consumed (retired).`
-      )
-    ) {
-      return;
-    }
+    setError(null);
+    setConfirmOpen(true);
+  }
+
+  function confirmSubmit() {
+    if (!item) return;
     setBusy(true);
     setError(null);
     api
@@ -130,12 +129,16 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
       .then(() => {
         setSelectedId(null);
         setNote("");
+        setConfirmOpen(false);
         elig.reload();
         onCreated();
       })
       .catch((e: unknown) => {
-        if (e instanceof ApiClientError && e.code === "WRITE_DISABLED") {
-          setError(t.personnel.writesDisabledNotice);
+        setConfirmOpen(false);
+        if (e instanceof ApiClientError && (e.code === "WRITE_DISABLED" || e.code === "WRITE_SESSION_REQUIRED")) {
+          setError(t.enrollment.writeSessionLockedBody);
+        } else if (e instanceof ApiClientError && e.code === "WRITE_SESSION_EXPIRED") {
+          setError(t.enrollment.writeSessionExpiredMidWorkflow);
         } else if (e instanceof ApiClientError) {
           setError(`${e.code}: ${e.message}`);
         } else {
@@ -159,9 +162,9 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
         </span>
       </div>
 
-      {!serverWriteEnabled && (
+      {!canMutate && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-          {t.personnel.writesDisabledNotice}
+          {t.enrollment.writeSessionLockedBody}
         </div>
       )}
 
@@ -188,7 +191,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
                   setSelectedId(e.target.value ? Number(e.target.value) : null);
                   setError(null);
                 }}
-                disabled={!serverWriteEnabled || busy}
+                disabled={!canMutate || busy}
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 disabled:bg-slate-100"
               >
                 <option value="">— Select eligible session —</option>
@@ -205,7 +208,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
               <input
                 type="text"
                 value={verifiedBy}
-                disabled={!serverWriteEnabled || busy}
+                disabled={!canMutate || busy}
                 onChange={(e) => setVerifiedBy(e.target.value)}
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 disabled:bg-slate-100"
               />
@@ -216,7 +219,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
               <input
                 type="text"
                 value={note}
-                disabled={!serverWriteEnabled || busy}
+                disabled={!canMutate || busy}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Reference evidence log & physical check"
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 disabled:bg-slate-100"
@@ -240,14 +243,40 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
 
           <div className="pt-1">
             <button
-              onClick={submit}
-              disabled={!serverWriteEnabled || busy || !selectedId}
+              onClick={requestSubmit}
+              disabled={!canMutate || busy || !selectedId}
               className="rounded-md bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
             >
               {busy ? t.common.saving : t.mappings.createMappingButton}
             </button>
           </div>
         </div>
+      )}
+
+      {item && (
+        <ConfirmModal
+          open={confirmOpen}
+          title={t.mappings.confirmTitle}
+          tone="primary"
+          confirmLabel={t.mappings.createMappingButton}
+          busy={busy}
+          onConfirm={confirmSubmit}
+          onCancel={() => setConfirmOpen(false)}
+        >
+          <div>
+            <span className="font-semibold text-slate-500">{t.mappings.confirmPersonLabel}:</span>{" "}
+            <strong>{item.employee_name ?? "—"}</strong>
+          </div>
+          <div>
+            <span className="font-semibold text-slate-500">{t.mappings.confirmTerminalLabel}:</span>{" "}
+            <strong>{item.device_name ?? "—"}</strong>
+          </div>
+          <div>
+            <span className="font-semibold text-slate-500">{t.mappings.confirmScanLabel}:</span>{" "}
+            <strong>{item.controlled_scan_time ? fmt(item.controlled_scan_time) : "—"}</strong>
+          </div>
+          <p className="pt-2 text-[11px] text-slate-500 leading-relaxed">{t.mappings.confirmWarning}</p>
+        </ConfirmModal>
       )}
     </div>
   );

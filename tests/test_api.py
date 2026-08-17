@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.api.dependencies import OperatorContext
+from app.api.dependencies import OperatorContext, require_write_session
 from app.api.main import create_app
 from app.api.settings import ApiSettings
 
@@ -159,6 +159,11 @@ class ApiTestBase(unittest.TestCase):
 
     def make_write_client(self, role="OPERATOR"):
         app = create_app(settings=ApiSettings(write_enabled=True))
+        # These tests exercise domain-write routes, not the write-session
+        # mechanism itself (that's covered in tests/test_write_session.py) —
+        # bypass Layer 2 so route/role/write-gate behavior can be tested
+        # without a real Postgres connection.
+        app.dependency_overrides[require_write_session] = lambda: None
         client = TestClient(app)
         ctx = OperatorContext(operator_id=1, username="tester", display_name="Tester", role=role)
         p = patch("app.api.dependencies._load_token_context", return_value=ctx)
@@ -169,6 +174,7 @@ class ApiTestBase(unittest.TestCase):
     def make_role_client(self, role="ADMIN", write_enabled=False):
         """Authenticated client for an arbitrary role (read endpoints)."""
         app = create_app(settings=ApiSettings(write_enabled=write_enabled))
+        app.dependency_overrides[require_write_session] = lambda: None
         client = TestClient(app)
         ctx = OperatorContext(operator_id=1, username="tester", display_name="Tester", role=role)
         p = patch("app.api.dependencies._load_token_context", return_value=ctx)
@@ -618,6 +624,7 @@ class TestWriteGuard(ApiTestBase):
 
     def test_create_terminal_account_with_mock_device(self):
         app = create_app(settings=ApiSettings(write_enabled=True))
+        app.dependency_overrides[require_write_session] = lambda: None
         mock_device = MagicMock()
         mock_device.get_users.return_value = []
         mock_device.set_user.return_value = True

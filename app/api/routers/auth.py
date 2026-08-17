@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from app.api.auth import authenticate_operator, hash_password, issue_token, verify_password
 from app.api.dependencies import OperatorContext, get_cfg, rate_limit, require_auth
 from app.api.errors import ApiError
+from app.api.schemas import WriteSessionStatus
 from app.api.settings import ApiSettings, get_settings
 from app.config import Config
 from app.db import get_db_connection, log_sync_event
@@ -51,6 +52,7 @@ class MeResponse(BaseModel):
     display_name: str
     role: str
     write_enabled: bool = False
+    write_session: Optional[WriteSessionStatus] = None
 
 
 @router.post(
@@ -113,13 +115,21 @@ def logout(request: Request, cfg: Config = Depends(get_cfg), ctx: OperatorContex
 
 
 @router.get("/api/v1/auth/me", response_model=MeResponse)
-def me(ctx: OperatorContext = Depends(require_auth), settings: ApiSettings = Depends(get_settings)):
+def me(
+    cfg: Config = Depends(get_cfg),
+    ctx: OperatorContext = Depends(require_auth),
+    settings: ApiSettings = Depends(get_settings),
+):
+    from app.write_session import get_write_session_status
+
+    write_session = get_write_session_status(cfg)
     return MeResponse(
         operator_id=ctx.operator_id,
         username=ctx.username,
         display_name=ctx.display_name,
         role=ctx.role,
         write_enabled=settings.write_enabled,
+        write_session=WriteSessionStatus(**write_session),
     )
 
 

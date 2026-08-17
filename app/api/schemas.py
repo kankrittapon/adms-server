@@ -302,3 +302,20 @@ class RankReference(BaseModel):
     rank_en_abbreviation: str
     rank_category: str
     source: str
+
+
+# --- Write session (Layer 2 runtime write-control) -------------------------
+
+
+class WriteSessionStatus(BaseModel):
+    """GET/open/close all return this shape. When active is False, every
+    other field is absent."""
+
+    active: bool
+    session_id: Optional[int] = None
+    opened_by: Optional[int] = None
+    opened_by_name: Optional[str] = None
+    opened_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    reason: Optional[str] = None
+    closed_at: Optional[datetime] = None

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api } from "../api/client";
+import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { ErrorBanner, Loading, ScopeBadge } from "../components/Status";
 import { useApi } from "../hooks/useApi";
@@ -169,7 +169,7 @@ export function Personnel() {
 
 export function HumanDetail() {
   const { employeeId } = useParams<{ employeeId: string }>();
-  const { me, serverWriteEnabled } = useAuth();
+  const { me, canMutate } = useAuth();
   const { t } = useTranslation();
   const { data, loading, error, reload } = useApi((s) => api.human(employeeId as string, s), [employeeId]);
 
@@ -203,7 +203,11 @@ export function HumanDetail() {
       setEditingEnglish(false);
       reload();
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
+      if (err instanceof ApiClientError && (err.code === "WRITE_DISABLED" || err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_SESSION_EXPIRED")) {
+        setSaveError(t.personnel.writesDisabledNotice);
+      } else {
+        setSaveError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       setSaveBusy(false);
     }
@@ -280,8 +284,8 @@ export function HumanDetail() {
                     <button
                       type="button"
                       onClick={startEdit}
-                      disabled={!serverWriteEnabled}
-                      title={!serverWriteEnabled ? t.personnel.writesDisabledNotice : t.personnel.editEnglishName}
+                      disabled={!canMutate}
+                      title={!canMutate ? t.personnel.writesDisabledNotice : t.personnel.editEnglishName}
                       className="ml-3 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {t.common.edit}

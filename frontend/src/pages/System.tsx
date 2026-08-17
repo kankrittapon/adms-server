@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { Badge, ErrorBanner, Loading, StatCard } from "../components/Status";
+import { WriteSessionControl } from "../components/WriteSessionControl";
 import { useApi } from "../hooks/useApi";
 import { useTranslation } from "../i18n";
 
@@ -21,8 +22,11 @@ export function System() {
         <p className="text-xs text-slate-500">{t.system.subtitle}</p>
       </div>
 
+      {/* Runtime Write Session control (ADMIN opens/closes; every role sees status) */}
+      <WriteSessionControl />
+
       {/* System Telemetry Cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
         {health.loading ? (
           <div className="col-span-full">
             <Loading />
@@ -33,14 +37,21 @@ export function System() {
           </div>
         ) : health.data ? (
           <>
+            {/* A successful response to this request already proves the Web
+                API is reachable — no separate backend field needed. */}
             <StatCard
               label={t.system.apiService}
+              value={
+                <Badge tone="green">{t.system.apiReachable}</Badge>
+              }
+            />
+            <StatCard
+              label={t.system.databaseService}
               value={
                 <Badge tone={health.data.database === "HEALTHY" ? "green" : "red"}>
                   {health.data.database === "HEALTHY" ? t.status.dbHealthy : t.status.dbDegraded}
                 </Badge>
               }
-              hint={`Status: ${health.data.status}`}
             />
             <StatCard
               label={t.system.mqttService}
@@ -49,7 +60,7 @@ export function System() {
                   {health.data.mqtt === "HEALTHY" ? t.status.mqttHealthy : (health.data.mqtt ?? "—")}
                 </Badge>
               }
-              hint="Internal event broker"
+              hint={t.system.mqttHint}
             />
             <StatCard
               label={t.system.collectorService}
@@ -58,7 +69,7 @@ export function System() {
               tone={health.data.collector?.device_connected ? "highlight" : "normal"}
             />
             <StatCard
-              label="Telemetry Timestamp"
+              label={t.system.lastUpdatedLabel}
               value={health.data.timestamp ? new Date(health.data.timestamp).toLocaleTimeString() : "—"}
               hint={health.data.timestamp ? new Date(health.data.timestamp).toLocaleDateString() : ""}
             />
@@ -234,6 +245,7 @@ function OperatorAccountsManagement() {
   const [role, setRole] = useState("ENROLLMENT_OPERATOR");
   const [createBusy, setCreateBusy] = useState(false);
   const [createMsg, setCreateMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -263,11 +275,12 @@ function OperatorAccountsManagement() {
   }
 
   async function handleToggle(operatorId: number, currentActive: boolean) {
+    setToggleError(null);
     try {
       await api.toggleOperatorActive(operatorId, !currentActive);
       operators.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+      setToggleError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -280,6 +293,12 @@ function OperatorAccountsManagement() {
         </div>
         <Badge tone="purple">ADMIN ONLY</Badge>
       </div>
+
+      {toggleError && (
+        <div className="rounded-md border border-rose-300 bg-rose-50 p-3 text-xs font-medium text-rose-900">
+          {toggleError}
+        </div>
+      )}
 
       {createMsg && (
         <div
@@ -340,6 +359,15 @@ function OperatorAccountsManagement() {
               <option value="OPERATOR">{t.roles.operator}</option>
               <option value="ADMIN">{t.roles.admin}</option>
             </select>
+            <p className="mt-1 text-[11px] leading-snug text-slate-500">
+              {role === "ADMIN"
+                ? t.roles.adminDesc
+                : role === "OPERATOR"
+                ? t.roles.operatorDesc
+                : role === "ENROLLMENT_OPERATOR"
+                ? t.roles.enrollmentOperatorDesc
+                : t.roles.viewerDesc}
+            </p>
           </div>
           <div>
             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">

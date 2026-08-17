@@ -74,6 +74,10 @@ export interface Translations {
     enrollmentOperator: string;
     operator: string;
     admin: string;
+    viewerDesc: string;
+    enrollmentOperatorDesc: string;
+    operatorDesc: string;
+    adminDesc: string;
   };
   login: {
     title: string;
@@ -157,16 +161,25 @@ export interface Translations {
     cancelledTitle: string;
     selectPerson: string;
     selectDevice: string;
+    selectPersonDeviceOperatorRequired: string;
     terminalDisplayName: string;
     liveScanDetected: string;
     cancelSession: string;
+    cancelReasonPlaceholder: string;
+    cancelReasonRequired: string;
+    scanTimestampLabel: string;
+    scanTimestampRequired: string;
     metadataInspector: string;
+    writeSessionLockedTitle: string;
+    writeSessionLockedBody: string;
+    writeSessionExpiredMidWorkflow: string;
   };
   attendance: {
     title: string;
     subtitle: string;
     liveStreamBadge: string;
     timeColumn: string;
+    timeColumnSuffix: string;
     personColumn: string;
     rankColumn: string;
     terminalIdColumn: string;
@@ -205,6 +218,13 @@ export interface Translations {
     adminAuthorityTitle: string;
     adminAuthorityDesc: string;
     createMappingButton: string;
+    temporalFooterNote: string;
+    confirmTitle: string;
+    confirmPersonLabel: string;
+    confirmTerminalLabel: string;
+    confirmScanLabel: string;
+    confirmEffectiveLabel: string;
+    confirmWarning: string;
   };
   audit: {
     title: string;
@@ -220,9 +240,12 @@ export interface Translations {
     subtitle: string;
     healthTitle: string;
     apiService: string;
+    apiReachable: string;
     databaseService: string;
     mqttService: string;
+    mqttHint: string;
     collectorService: string;
+    lastUpdatedLabel: string;
     changePasswordTitle: string;
     currentPassword: string;
     newPassword: string;
@@ -241,5 +264,30 @@ export interface Translations {
     toggleActive: string;
     deactivate: string;
     activate: string;
+  };
+  stream: {
+    connected: string;
+    connecting: string;
+    disconnected: string;
+    retry: string;
+  };
+  writeSession: {
+    title: string;
+    lockedTitle: string;
+    lockedBody: string;
+    activeTitle: string;
+    openedByLabel: string;
+    remainingLabel: string;
+    reasonLabel: string;
+    reasonPlaceholder: string;
+    openButton: string;
+    closeButton: string;
+    opening: string;
+    closing: string;
+    openFailed: string;
+    alreadyActive: string;
+    adminOnlyHint: string;
+    badgeLocked: string;
+    badgeActive: string;
   };
 }

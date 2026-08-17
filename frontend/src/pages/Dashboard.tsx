@@ -1,11 +1,10 @@
 import { api } from "../api/client";
 import { useApi } from "../hooks/useApi";
-import { ErrorBanner, Loading, StatCard, StatusBadge, WriteGateStatusBadge } from "../components/Status";
-import { useAuth } from "../auth";
+import { ErrorBanner, Loading, StatCard, StatusBadge } from "../components/Status";
+import { WriteSessionBadge } from "../components/WriteSessionControl";
 import { useTranslation } from "../i18n";
 
 export function Dashboard() {
-  const { serverWriteEnabled } = useAuth();
   const { t } = useTranslation();
   const { data, loading, error, reload } = useApi((s) => api.dashboard(s), []);
 
@@ -34,7 +33,7 @@ export function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <WriteGateStatusBadge writeEnabled={serverWriteEnabled} />
+          <WriteSessionBadge />
           <button
             onClick={() => reload()}
             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"

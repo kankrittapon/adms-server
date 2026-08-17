@@ -655,6 +655,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/write-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Status */
+        get: operations["get_status_api_v1_write_session_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/write-session/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close Session */
+        post: operations["close_session_api_v1_write_session_close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/write-session/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open Session */
+        post: operations["open_session_api_v1_write_session_open_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1302,6 +1353,15 @@ export interface components {
              * @default false
              */
             write_enabled: boolean;
+            write_session?: components["schemas"]["WriteSessionStatus"] | null;
+        };
+        /** OpenWriteSessionRequest */
+        OpenWriteSessionRequest: {
+            /**
+             * Reason
+             * @description Why writes are being opened, e.g. 'Enrollment session — Bldg 3'
+             */
+            reason: string;
         };
         /** OperatorOut */
         OperatorOut: {
@@ -1551,6 +1611,29 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * WriteSessionStatus
+         * @description GET/open/close all return this shape. When active is False, every
+         *     other field is absent.
+         */
+        WriteSessionStatus: {
+            /** Active */
+            active: boolean;
+            /** Closed At */
+            closed_at?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Opened At */
+            opened_at?: string | null;
+            /** Opened By */
+            opened_by?: number | null;
+            /** Opened By Name */
+            opened_by_name?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Session Id */
+            session_id?: number | null;
         };
     };
     responses: never;
@@ -2740,6 +2823,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_status_api_v1_write_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteSessionStatus"];
+                };
+            };
+        };
+    };
+    close_session_api_v1_write_session_close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteSessionStatus"];
+                };
+            };
+        };
+    };
+    open_session_api_v1_write_session_open_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenWriteSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteSessionStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

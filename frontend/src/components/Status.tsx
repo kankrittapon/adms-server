@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "../i18n";
+import { enrollmentStatusLabels, mappingStatusLabels, attendanceStatusLabels, enumLabel } from "../i18n/enumLabels";
 
 export type BadgeTone = "green" | "red" | "amber" | "blue" | "indigo" | "purple" | "neutral";
 
@@ -38,13 +39,23 @@ export function Badge({
   );
 }
 
+/** Displays enrollment/mapping status enums with their translated label
+ * (see i18n/enumLabels.ts) instead of the raw backend SNAKE_CASE value —
+ * the badge color logic still keys off the raw value, only the visible
+ * text changes. */
 export function StatusBadge({ status }: { status: string }) {
+  const { locale } = useTranslation();
   const s = status?.toUpperCase() ?? "";
+  const label = [enrollmentStatusLabels, mappingStatusLabels, attendanceStatusLabels].reduce(
+    (acc, map) => (acc !== s ? acc : enumLabel(map, s, locale)),
+    s
+  );
+
   if (s === "ON_TIME" || s === "VERIFIED" || s === "HEALTHY" || s === "LIVE" || s === "ACTIVE") {
     return (
       <Badge tone="green">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-        {status}
+        {label}
       </Badge>
     );
   }
@@ -52,18 +63,18 @@ export function StatusBadge({ status }: { status: string }) {
     return (
       <Badge tone="amber">
         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-        {status}
+        {label}
       </Badge>
     );
   }
   if (s === "CANCELLED" || s === "RETIRED" || s === "REVOKED" || s === "INACTIVE") {
-    return <Badge tone="neutral">{status}</Badge>;
+    return <Badge tone="neutral">{label}</Badge>;
   }
   if (s.includes("PENDING") || s.includes("RESERVED")) {
     return (
       <Badge tone="blue">
         <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-        {status}
+        {label}
       </Badge>
     );
   }
@@ -71,11 +82,11 @@ export function StatusBadge({ status }: { status: string }) {
     return (
       <Badge tone="purple">
         <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
-        {status}
+        {label}
       </Badge>
     );
   }
-  return <Badge tone="neutral">{status || "—"}</Badge>;
+  return <Badge tone="neutral">{label || "—"}</Badge>;
 }
 
 export function ScopeBadge({ scope }: { scope: boolean }) {
@@ -104,6 +115,54 @@ export function WriteGateStatusBadge({ writeEnabled }: { writeEnabled: boolean }
     <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-2xs">
       <span className="h-2 w-2 rounded-full bg-slate-500" />
       {t.status.writesLocked}
+    </span>
+  );
+}
+
+export type StreamStatus = "connecting" | "connected" | "disconnected";
+
+/** Realtime connection indicator, shared by any page that consumes
+ * useAttendanceStream (Attendance's live feed, Enrollments' controlled-scan
+ * step). Plain language only — no MQTT/SSE protocol jargon in the label or
+ * tooltip; canonical data always remains available via GET history
+ * regardless of this indicator's state. */
+export function StreamStatusBadge({
+  status,
+  onRetry,
+}: {
+  status: StreamStatus;
+  onRetry?: () => void;
+}) {
+  const { t } = useTranslation();
+  const styles: Record<StreamStatus, string> = {
+    connected: "bg-emerald-50 text-emerald-700 border-emerald-300",
+    connecting: "bg-amber-50 text-amber-700 border-amber-300",
+    disconnected: "bg-slate-100 text-slate-500 border-slate-300",
+  };
+  const labels: Record<StreamStatus, string> = {
+    connected: t.stream.connected,
+    connecting: t.stream.connecting,
+    disconnected: t.stream.disconnected,
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${styles[status]}`}
+    >
+      <span
+        className={`inline-block h-2 w-2 rounded-full ${
+          status === "connected" ? "animate-pulse bg-emerald-500" : "bg-current opacity-50"
+        }`}
+      />
+      {labels[status]}
+      {status === "disconnected" && onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="ml-1 rounded border border-current px-1.5 py-0.2 text-[10px] font-bold hover:bg-white/60"
+        >
+          {t.stream.retry}
+        </button>
+      )}
     </span>
   );
 }

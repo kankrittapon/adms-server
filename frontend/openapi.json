@@ -1728,6 +1728,16 @@
             "default": false,
             "title": "Write Enabled",
             "type": "boolean"
+          },
+          "write_session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WriteSessionStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1737,6 +1747,22 @@
           "role"
         ],
         "title": "MeResponse",
+        "type": "object"
+      },
+      "OpenWriteSessionRequest": {
+        "properties": {
+          "reason": {
+            "description": "Why writes are being opened, e.g. 'Enrollment session \u2014 Bldg 3'",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "OpenWriteSessionRequest",
         "type": "object"
       },
       "OperatorOut": {
@@ -2413,6 +2439,100 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WriteSessionStatus": {
+        "description": "GET/open/close all return this shape. When active is False, every\nother field is absent.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "opened_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened At"
+          },
+          "opened_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened By"
+          },
+          "opened_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened By Name"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "required": [
+          "active"
+        ],
+        "title": "WriteSessionStatus",
         "type": "object"
       }
     }
@@ -4378,6 +4498,89 @@
         "summary": "Realtime attendance events (SSE)",
         "tags": [
           "stream"
+        ]
+      }
+    },
+    "/api/v1/write-session": {
+      "get": {
+        "operationId": "get_status_api_v1_write_session_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteSessionStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "write-session"
+        ]
+      }
+    },
+    "/api/v1/write-session/close": {
+      "post": {
+        "operationId": "close_session_api_v1_write_session_close_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteSessionStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Close Session",
+        "tags": [
+          "write-session"
+        ]
+      }
+    },
+    "/api/v1/write-session/open": {
+      "post": {
+        "operationId": "open_session_api_v1_write_session_open_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenWriteSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteSessionStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open Session",
+        "tags": [
+          "write-session"
         ]
       }
     },

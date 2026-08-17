@@ -4,7 +4,8 @@ import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
 import { useAttendanceStream } from "../hooks/useAttendanceStream";
-import { ErrorBanner, Loading, StatusBadge, WriteGateStatusBadge } from "../components/Status";
+import { ErrorBanner, Loading, StatusBadge, StreamStatusBadge } from "../components/Status";
+import { WriteSessionBadge } from "../components/WriteSessionControl";
 import { useTranslation } from "../i18n";
 import type { Enrollment, EnrollmentNextActions } from "../api/types";
 
@@ -32,7 +33,7 @@ function getStepIndex(status: string): number {
 }
 
 export function Enrollments() {
-  const { me, serverWriteEnabled, canMutate } = useAuth();
+  const { me, serverWriteEnabled, writeSessionActive, canMutate } = useAuth();
   const { t } = useTranslation();
   const list = useApi((s) => api.enrollments({ limit: 100 }, s), []);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -73,20 +74,20 @@ export function Enrollments() {
           <p className="text-xs text-slate-500">{t.enrollment.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
-          <WriteGateStatusBadge writeEnabled={serverWriteEnabled} />
+          <WriteSessionBadge />
         </div>
       </div>
 
-      {/* Proactive Write Gate Banner */}
-      {!serverWriteEnabled && (
+      {/* Proactive write-session banner — plain language, no infra jargon */}
+      {!(serverWriteEnabled && writeSessionActive) && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 shadow-2xs">
           <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 font-bold text-amber-900">
             !
           </div>
           <div>
-            <div className="font-bold">{t.status.writesLocked}</div>
+            <div className="font-bold">{t.enrollment.writeSessionLockedTitle}</div>
             <div className="mt-0.5 text-amber-800 leading-relaxed">
-              {t.personnel.writesDisabledNotice}
+              {t.enrollment.writeSessionLockedBody}
             </div>
           </div>
         </div>
@@ -103,7 +104,6 @@ export function Enrollments() {
       <ReserveCard
         operatorName={me?.username ?? ""}
         canMutate={canMutate}
-        serverWriteEnabled={serverWriteEnabled}
         onReserved={(newId) => {
           setActionError(null);
           setActionSuccess("Enrollment reserved successfully.");
@@ -223,7 +223,11 @@ export function Enrollments() {
                   list.reload();
                   nextActions.reload();
                 } catch (err: unknown) {
-                  if (err instanceof ApiClientError) {
+                  if (err instanceof ApiClientError && err.code === "WRITE_SESSION_EXPIRED") {
+                    setActionError(t.enrollment.writeSessionExpiredMidWorkflow);
+                  } else if (err instanceof ApiClientError && (err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_DISABLED")) {
+                    setActionError(t.enrollment.writeSessionLockedBody);
+                  } else if (err instanceof ApiClientError) {
                     setActionError(`${err.code}: ${err.message}`);
                   } else {
                     setActionError(err instanceof Error ? err.message : String(err));
@@ -247,12 +251,10 @@ export function Enrollments() {
 function ReserveCard({
   operatorName,
   canMutate,
-  serverWriteEnabled,
   onReserved,
 }: {
   operatorName: string;
   canMutate: boolean;
-  serverWriteEnabled: boolean;
   onReserved: (newId: number) => void;
 }) {
   const { t } = useTranslation();
@@ -278,7 +280,7 @@ function ReserveCard({
 
   function submit() {
     if (!employeeId || !deviceId || !operator.trim()) {
-      setError("Please select a Human, a Device, and enter the operator name.");
+      setError(t.enrollment.selectPersonDeviceOperatorRequired);
       return;
     }
     setBusy(true);
@@ -290,8 +292,10 @@ function ReserveCard({
         onReserved(res.enrollment_id);
       })
       .catch((e: unknown) => {
-        if (e instanceof ApiClientError && e.code === "WRITE_DISABLED") {
-          setError(t.personnel.writesDisabledNotice);
+        if (e instanceof ApiClientError && (e.code === "WRITE_DISABLED" || e.code === "WRITE_SESSION_REQUIRED")) {
+          setError(t.enrollment.writeSessionLockedBody);
+        } else if (e instanceof ApiClientError && e.code === "WRITE_SESSION_EXPIRED") {
+          setError(t.enrollment.writeSessionExpiredMidWorkflow);
         } else if (e instanceof ApiClientError) {
           setError(`${e.code}: ${e.message}`);
         } else {
@@ -373,9 +377,9 @@ function ReserveCard({
         </div>
       </div>
 
-      {!serverWriteEnabled && (
+      {!canMutate && (
         <div className="mt-2 text-[11px] text-amber-800">
-          {t.personnel.writesDisabledNotice}
+          {t.enrollment.writeSessionLockedBody}
         </div>
       )}
 
@@ -401,10 +405,12 @@ function ActiveEnrollmentInspector({
   const currentStep = getStepIndex(enrollment.status);
   const [displayName, setDisplayName] = useState(enrollment.employee_name ?? "");
   const [scanTime, setScanTime] = useState("");
+  const [scanTimeError, setScanTimeError] = useState(false);
   const [cancelNotes, setCancelNotes] = useState("");
+  const [cancelError, setCancelError] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
 
-  const { lastEvent } = useAttendanceStream();
+  const { status: streamStatus, lastEvent, reconnect } = useAttendanceStream();
   const [detectedScan, setDetectedScan] = useState<string | null>(null);
 
   useEffect(() => {
@@ -483,14 +489,25 @@ function ActiveEnrollmentInspector({
           <div className="font-bold text-rose-900">{t.enrollment.cancelSession}</div>
           <input
             type="text"
-            placeholder="Cancellation reason (required)"
+            placeholder={t.enrollment.cancelReasonPlaceholder}
             value={cancelNotes}
-            onChange={(e) => setCancelNotes(e.target.value)}
-            className="w-full rounded-md border border-rose-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
+            onChange={(e) => {
+              setCancelNotes(e.target.value);
+              if (cancelError) setCancelError(false);
+            }}
+            className={`w-full rounded-md border bg-white px-2.5 py-1.5 text-xs text-slate-900 ${
+              cancelError ? "border-rose-500 ring-1 ring-rose-300" : "border-rose-300"
+            }`}
           />
+          {cancelError && (
+            <div className="text-[11px] font-semibold text-rose-700">{t.enrollment.cancelReasonRequired}</div>
+          )}
           <button
             onClick={() => {
-              if (!cancelNotes.trim()) return alert("Enter a cancellation reason.");
+              if (!cancelNotes.trim()) {
+                setCancelError(true);
+                return;
+              }
               onRunAction("cancel", { notes: cancelNotes.trim() });
             }}
             className="rounded-md bg-rose-600 px-3 py-1 font-bold text-white hover:bg-rose-700"
@@ -604,6 +621,10 @@ function ActiveEnrollmentInspector({
             </p>
           </div>
 
+          <div className="flex items-center justify-between">
+            <StreamStatusBadge status={streamStatus} onRetry={reconnect} />
+          </div>
+
           {detectedScan && (
             <div className="flex items-center justify-between rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900 animate-pulse">
               <div className="flex items-center gap-2">
@@ -618,18 +639,29 @@ function ActiveEnrollmentInspector({
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[200px]">
-                <label className="block text-[11px] font-bold text-slate-700">Scan Timestamp</label>
+                <label className="block text-[11px] font-bold text-slate-700">{t.enrollment.scanTimestampLabel}</label>
                 <input
                   type="datetime-local"
                   value={scanTime}
-                  onChange={(e) => setScanTime(e.target.value)}
+                  onChange={(e) => {
+                    setScanTime(e.target.value);
+                    if (scanTimeError) setScanTimeError(false);
+                  }}
                   disabled={!canMutate || busyAction === "confirm-controlled-scan"}
-                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                  className={`mt-1 w-full rounded-md border bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:ring-1 focus:ring-blue-600 ${
+                    scanTimeError ? "border-rose-500 ring-1 ring-rose-300" : "border-slate-300 focus:border-blue-600"
+                  }`}
                 />
+                {scanTimeError && (
+                  <div className="mt-1 text-[11px] font-semibold text-rose-700">{t.enrollment.scanTimestampRequired}</div>
+                )}
               </div>
               <button
                 onClick={() => {
-                  if (!scanTime) return alert("Select scan timestamp.");
+                  if (!scanTime) {
+                    setScanTimeError(true);
+                    return;
+                  }
                   onRunAction("confirm-controlled-scan", { scan_time: new Date(scanTime).toISOString() });
                 }}
                 disabled={!canMutate || busyAction === "confirm-controlled-scan" || !scanTime}
