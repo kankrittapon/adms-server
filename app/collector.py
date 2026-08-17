@@ -103,6 +103,7 @@ class CollectorStateEngine:
                     EnrollmentError,
                     TerminalAccountConflict,
                     TerminalAccountUnconfirmed,
+                    TerminalRosterUnavailable,
                     create_or_reconcile_terminal_account,
                 )
                 enrollment_id = int(params["enrollment_id"])
@@ -119,6 +120,16 @@ class CollectorStateEngine:
                     command_id,
                     success=True,
                     result=result
+                )
+            except TerminalRosterUnavailable as e:
+                # PRE-MUTATION failure — set_user() was never reached. Must
+                # not be reported as ENROLLMENT_CONFLICT (implies a state
+                # issue) or TERMINAL_ACCOUNT_UNCONFIRMED (implies a write was
+                # attempted) — neither is true here.
+                log.error("Device command %s: pre-mutation roster read failed: %s", command_id, e)
+                self.mqtt_service.publish_command_response(
+                    command_id, success=False, error=str(e),
+                    error_code="DEVICE_UNAVAILABLE",
                 )
             except TerminalAccountConflict as e:
                 log.error("Device command %s: terminal account conflict: %s", command_id, e)

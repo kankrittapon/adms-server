@@ -1,6 +1,8 @@
 # ADMS Current Status
 
-**Latest PromptID**: `ADMS-FullSystem-P0P1-Hardening-007-PhaseF` (Phases A–F complete — deployed to production)
+**Latest PromptID**: `ADMS-DeviceCommandBus-TimeoutMargin-010` (deployed to production — see [docs/reports/ADMS-DeviceCommandBus-TimeoutMargin-010.md](docs/reports/ADMS-DeviceCommandBus-TimeoutMargin-010.md))
+
+**Incident record correction (010)**: Terminal User 1002's earlier disappearance from the terminal roster was **not** a firmware/software persistence failure. The OWNER manually deleted User 1002 from the physical terminal after an earlier browser operation reported an error (itself a real, separately-fixed bug — see PromptID `ADMS-ZEM560-TerminalAccount-Idempotency-Recovery-008`). This is the authoritative account; no further hardware investigation is open on this incident.
 
 ---
 
@@ -35,7 +37,7 @@ Full engineering detail: [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](do
 
 - **Repository HEAD**: see `git log -1` (this checkpoint's commits are recorded in the Phase F report)
 - **Database Migrations Applied to Production**: through `012_write_session_schema.sql` (12 migrations, additive-only — applied during Phase F, verified pre/post backups taken).
-- **Automated Test Baseline**: **429 passed / 0 failed** (410 pre-existing + 19 write-session tests, across 22 test modules — `pytest tests/`)
+- **Automated Test Baseline**: **467 passed / 0 failed** (`pytest tests/`, includes the write-session, terminal-account-idempotency, and DeviceCommandBus timeout-margin matrices)
 - **Frontend Typecheck & Build**: `tsc --noEmit` PASS (0 errors), `vite build` PASS
 - **OpenAPI Drift Guard**: PASS (`tests/test_openapi_contract.py`, covers the `/write-session` endpoints)
 - **Production write-control verification**: full two-layer matrix (Layer-1-only block, role enforcement, session open/close/idempotent-close, expiry-does-not-block-reopen, Layer-1-overrides-Layer-2) verified live against production via temporary, fully-cleaned-up test-fixture accounts — see the Phase F report.
@@ -87,6 +89,11 @@ Full engineering detail: [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](do
 
 ### DEPLOYED
 - **Phase F** — migration 012 applied, `api`/`web` redeployed with the write-session backend live, `API_WRITE_ENABLED` transitioned to `true`. See the Phase F report for the full verification matrix.
+- **PromptID 008** — idempotent, read-back-verified terminal-account creation (`create_or_reconcile_terminal_account`); root-caused and fixed the pyzk `set_user()` return-value bug.
+- **PromptID 010** — derived (non-arbitrary) `DeviceCommandBus` outer timeout, distinct `DEVICE_UNAVAILABLE`/`TerminalRosterUnavailable` pre-mutation error category end-to-end, dedupe-key safety hardening. No DB migration; `api`/`web`/`listener` rebuilt. See [docs/reports/ADMS-DeviceCommandBus-TimeoutMargin-010.md](docs/reports/ADMS-DeviceCommandBus-TimeoutMargin-010.md).
+
+### OWNER GATE PENDING
+- **Enrollment #2 canonical recovery** — a real production data split-state (terminal account exists, DB row does not / vice versa, resulting from the original incident). Not recovered. Requires explicit owner approval before any real `set_user()`/`delete_user()` call on production hardware — see the PromptID-010 report's closing gate.
 
 ### READY FOR EXECUTION
 - **Real Personnel Enrollment**: ready for on-site physical enrollment following the **normal browser-controlled procedure** in `docs/ENROLLMENT_SESSION_RUNBOOK.md` — an ADMIN opens a work session from the System page; no SSH/`.env` step is required for a routine session anymore.

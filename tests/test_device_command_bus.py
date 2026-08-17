@@ -4,6 +4,7 @@ PromptID: ADMS-Frontend-FullControlUX-002
 """
 
 import json
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -151,7 +152,10 @@ class TestDeviceCommandBus(unittest.TestCase):
 
         # Manually seed an in-flight key, as if a first execute() call were
         # still waiting (avoids needing a second real thread in this test).
-        bus._inflight_keys["enrollment:1"] = "existing-command-id"
+        bus._inflight_keys["enrollment:1"] = {
+            "command_id": "existing-command-id",
+            "expires_at": time.time() + 60,
+        }
 
         with self.assertRaises(DeviceCommandBusy) as ctx:
             bus.execute(

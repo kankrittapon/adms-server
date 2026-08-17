@@ -2,7 +2,8 @@
 
 ## 0. Latest Report
 
-- [**ADMS-FullSystem-P0P1-Hardening-007-PhaseF**](ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md) — **deployment record.** Migration 012 applied to production, `adms_api`/`adms_web` redeployed, `API_WRITE_ENABLED` transitioned to `true`, full two-layer write-control verification matrix (13/13 checks passed) run live against production. Read this together with the implementation report below.
+- [**ADMS-DeviceCommandBus-TimeoutMargin-010**](ADMS-DeviceCommandBus-TimeoutMargin-010.md) — **latest.** Derived (non-arbitrary) `DeviceCommandBus` outer timeout, distinct pre-mutation `DEVICE_UNAVAILABLE`/`TerminalRosterUnavailable` error category end-to-end, dedupe-key safety hardening. Also the authoritative, owner-corrected record of the User 1002 incident: **manual owner deletion, not a firmware/software persistence bug.** No DB migration; `api`/`web`/`listener` redeployed.
+- [ADMS-FullSystem-P0P1-Hardening-007-PhaseF](ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md) — deployment record. Migration 012 applied to production, `adms_api`/`adms_web` redeployed, `API_WRITE_ENABLED` transitioned to `true`, full two-layer write-control verification matrix (13/13 checks passed) run live against production. Read this together with the implementation report below.
 - [ADMS-FullSystem-P0P1-Hardening-007](ADMS-FullSystem-P0P1-Hardening-007.md) — the implementation report: security correctness fixes, runtime write-session architecture, enrollment/UX hardening, i18n cleanup (Phases A–E). Kept alongside this index rather than archived, since the Phase F report actively references and extends it.
 
 ## 1. About Historical Reports
@@ -54,3 +55,5 @@ All completed phase reports have been preserved in the [Archive](file:///d:/Dev/
 | `ADMS-Frontend-I18n-RBAC-Personnel-004` | I18n & RBAC | TH/EN localization, `ENROLLMENT_OPERATOR`, English name edit | (Integrated across codebase) |
 | `ADMS-FullSystem-P0P1-Hardening-007` | Security + UX Hardening | Two-layer write-session model, operator-management write-gate fix, alert/confirm removal, centralized i18n enum labels. | [ADMS-FullSystem-P0P1-Hardening-007.md](ADMS-FullSystem-P0P1-Hardening-007.md) *(kept alongside this index, not archived — see §0)* |
 | `ADMS-FullSystem-P0P1-Hardening-007-PhaseF` | Production Deployment | Migration 012 applied, containers redeployed, `API_WRITE_ENABLED=true`, two-layer write control verified live (13/13). | [ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md](ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md) |
+| `ADMS-ZEM560-TerminalAccount-Idempotency-Recovery-008` | Reliability | Idempotent, read-back-verified terminal-account creation; root-caused pyzk `set_user()` return-value bug. | *(no separate file — deployed and referenced from `ADMS-DeviceCommandBus-TimeoutMargin-010.md`)* |
+| `ADMS-DeviceCommandBus-TimeoutMargin-010` | Reliability | Derived outer timeout for `DeviceCommandBus`, distinct pre-mutation `DEVICE_UNAVAILABLE` error category, dedupe-key safety hardening; owner-corrected record of the User 1002 incident (manual deletion, not a device bug). | [ADMS-DeviceCommandBus-TimeoutMargin-010.md](ADMS-DeviceCommandBus-TimeoutMargin-010.md) |

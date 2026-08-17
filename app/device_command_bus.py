@@ -66,7 +66,22 @@ class DeviceCommandBus:
         # execute() call with the same key while one is outstanding is
         # rejected immediately rather than dispatched, so at most one
         # set_user()-class command reaches the device per key at a time.
-        self._inflight_keys: Dict[str, str] = {}
+        #
+        # Each entry is {"command_id": ..., "expires_at": <monotonic time>}.
+        # IMPORTANT: this is NOT released when the caller's own wait times
+        # out — the Collector may still genuinely be executing the command
+        # (it has no idea the caller gave up). Releasing it immediately on a
+        # client-side timeout would let an eager retry/double-click dispatch
+        # a second command while the first is still physically in flight on
+        # the device. It is released when: (a) the response actually arrives
+        # (on time or late — see _on_message), or (b) `expires_at` has
+        # passed, as a bounded safety net against a permanently stuck key if
+        # the response is truly lost forever (e.g. Collector crash).
+        self._inflight_keys: Dict[str, Dict[str, Any]] = {}
+        # command_id -> dedupe_key, kept alive past a client-side timeout
+        # (unlike _pending) so a late response can still find and release
+        # the right _inflight_keys entry.
+        self._command_dedupe_keys: Dict[str, str] = {}
         self.connected = False
 
     def _ensure_connected(self) -> None:
@@ -104,6 +119,17 @@ class DeviceCommandBus:
     def _on_disconnect(self, client, userdata, flags, rc, properties=None):
         self.connected = False
 
+    def _release_dedupe_key_for_command(self, command_id: str) -> None:
+        """Releases the in-flight dedupe key associated with command_id, if
+        any — called whenever we learn the command has truly finished
+        (on-time OR late response). Thread-safe."""
+        with self._lock:
+            dedupe_key = self._command_dedupe_keys.pop(command_id, None)
+            if dedupe_key is not None:
+                entry = self._inflight_keys.get(dedupe_key)
+                if entry is not None and entry.get("command_id") == command_id:
+                    self._inflight_keys.pop(dedupe_key, None)
+
     def _on_message(self, client, userdata, msg):
         try:
             payload = json.loads(msg.payload.decode("utf-8", errors="replace"))
@@ -112,18 +138,23 @@ class DeviceCommandBus:
                 entry = self._pending[command_id]
                 entry["response"] = payload
                 entry["event"].set()
+                self._release_dedupe_key_for_command(command_id)
             elif command_id:
                 # Late response for a command the caller already timed out on
                 # (its pending entry was popped). The caller can no longer act
                 # on this directly, but it's valuable diagnostic evidence that
                 # the timeout was scenario C (late completion) rather than a
                 # genuine failure — log it instead of silently discarding it.
+                # Also release the dedupe key now that we know the command is
+                # truly finished, so a subsequent retry isn't stuck waiting
+                # out the full safety-net expiry unnecessarily.
                 log.warning(
                     "DeviceCommandBus received a response for command_id=%s "
                     "with no matching pending entry (likely a late response "
                     "after the caller's timeout) — success=%s",
                     command_id, payload.get("success"),
                 )
+                self._release_dedupe_key_for_command(command_id)
         except Exception as e:
             log.warning("DeviceCommandBus error processing response: %s", e)
 
@@ -142,23 +173,13 @@ class DeviceCommandBus:
         DeviceCommandBusy immediately instead of dispatching a second
         command — this is defense-in-depth against concurrent device I/O,
         independent of (and in addition to) the DB-level row lock the caller
-        should also be holding for anything that mutates device state.
+        should also be holding for anything that mutates device state. The
+        key is held until the response actually arrives (on time or late),
+        not merely until this call's own wait expires — see the
+        _inflight_keys docstring in __init__ for why.
         """
-        if dedupe_key is not None:
-            with self._lock:
-                if dedupe_key in self._inflight_keys:
-                    raise DeviceCommandBusy(
-                        "a terminal command is already in progress for %s "
-                        "(command_id=%s) — please wait for it to finish rather "
-                        "than retrying" % (dedupe_key, self._inflight_keys[dedupe_key]),
-                        error_code="DEVICE_COMMAND_IN_PROGRESS",
-                    )
-
         self._ensure_connected()
         if not self._client or not self.connected:
-            if dedupe_key is not None:
-                with self._lock:
-                    self._inflight_keys.pop(dedupe_key, None)
             raise DeviceCommandError(
                 "MQTT broker unavailable; cannot reach terminal collector",
                 error_code="DEVICE_UNAVAILABLE",
@@ -168,9 +189,44 @@ class DeviceCommandBus:
         event = threading.Event()
         entry = {"event": event, "response": None}
         self._pending[command_id] = entry
+
+        # Check-and-reserve the dedupe key atomically under one lock
+        # acquisition — checking busy-ness and registering this command_id
+        # as the new holder must not be two separate critical sections, or
+        # two concurrent callers could both observe "available" and both
+        # proceed to dispatch (the exact double-submit this key exists to
+        # prevent).
         if dedupe_key is not None:
             with self._lock:
-                self._inflight_keys[dedupe_key] = command_id
+                now = time.time()
+                existing = self._inflight_keys.get(dedupe_key)
+                if existing is not None:
+                    if existing["expires_at"] > now:
+                        del self._pending[command_id]
+                        raise DeviceCommandBusy(
+                            "a terminal command is already in progress for %s "
+                            "(command_id=%s) — please wait for it to finish "
+                            "rather than retrying" % (dedupe_key, existing["command_id"]),
+                            error_code="DEVICE_COMMAND_IN_PROGRESS",
+                        )
+                    # Safety-net expiry passed with no response ever having
+                    # arrived (Collector crash or similarly total loss) —
+                    # auto-recover: treat the key as available again.
+                    log.warning(
+                        "DeviceCommandBus: in-flight key %s (command_id=%s) "
+                        "exceeded its safety-net expiry with no response ever "
+                        "received — releasing it to allow a new attempt.",
+                        dedupe_key, existing["command_id"],
+                    )
+                    self._command_dedupe_keys.pop(existing["command_id"], None)
+                # expires_at bounds how long this key can remain held even if
+                # the response is lost forever — derived from this call's own
+                # timeout budget, which already represents "the maximum time
+                # this operation could legitimately take" (see
+                # app.enrollment's derived timing constants for
+                # CREATE_TERMINAL_ACCOUNT).
+                self._inflight_keys[dedupe_key] = {"command_id": command_id, "expires_at": now + timeout}
+                self._command_dedupe_keys[command_id] = dedupe_key
 
         req_payload = {
             "command_id": command_id,
@@ -185,9 +241,9 @@ class DeviceCommandBus:
                 # UNKNOWN OUTCOME, not guaranteed failure — see DeviceCommandError
                 # docstring. We stop waiting here, but the Collector may still be
                 # executing (or may have already completed) the command; if its
-                # response arrives after this point it is logged, not silently
-                # dropped, so operators have a diagnostic trail even though the
-                # caller can no longer act on it directly.
+                # response arrives after this point it is logged (and releases
+                # the dedupe key then), not silently dropped — the dedupe key
+                # is deliberately NOT released here (see __init__ docstring).
                 raise DeviceCommandError(
                     f"Terminal operation timed out after {timeout:.1f}s. The "
                     "command may still complete on the device — outcome is "
@@ -203,11 +259,13 @@ class DeviceCommandBus:
                 raise DeviceCommandError(err_msg, error_code=err_code)
             return res.get("result", {})
         finally:
+            # _pending cleanup always happens — the waiter itself (the Event)
+            # is done being useful either way. _inflight_keys/
+            # _command_dedupe_keys are intentionally NOT touched here on a
+            # timeout; _on_message releases them when the real response
+            # arrives (on time, this already happened inside the `if` above
+            # via _release_dedupe_key_for_command — see _on_message).
             self._pending.pop(command_id, None)
-            if dedupe_key is not None:
-                with self._lock:
-                    if self._inflight_keys.get(dedupe_key) == command_id:
-                        self._inflight_keys.pop(dedupe_key, None)
 
     def stop(self) -> None:
         with self._lock:

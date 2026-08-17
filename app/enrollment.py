@@ -24,6 +24,7 @@ Safety invariants enforced here:
 """
 
 import logging
+import os
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -145,6 +146,14 @@ class TerminalAccountUnconfirmed(EnrollmentError):
     exist) but the terminal ID could not be confirmed present via bounded
     roster read-back. This is a genuine failure, distinct from a conflict —
     retrying (which re-enters this same function) is safe and expected."""
+
+
+class TerminalRosterUnavailable(EnrollmentError):
+    """The PRE-MUTATION roster read failed or timed out — set_user() was
+    NEVER attempted. Distinct from TerminalAccountUnconfirmed (mutation WAS
+    attempted, just unconfirmed) so callers/frontend can correctly say "no
+    write was attempted" instead of implying a possibly-successful write.
+    (ADMS-DeviceCommandBus-TimeoutMargin-010)"""
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +430,67 @@ def reserve_next_device_user_id(
 READBACK_RETRIES = 3
 READBACK_DELAY_SECONDS = 2.0
 
+# ---------------------------------------------------------------------------
+# Timing budget (ADMS-DeviceCommandBus-TimeoutMargin-010)
+#
+# Derived from the actually-installed pyzk implementation and this app's own
+# config, NOT arbitrary. Every pyzk socket operation shares ONE blocking
+# per-call timeout, set once at connect time via `sock.settimeout(timeout)`
+# (see zk.base.ZK.__init__) and never changed thereafter — it applies to
+# every individual `recv()` inside every command, not to a whole operation.
+#
+# Round-trip counts per operation (confirmed by reading the installed pyzk
+# source, not assumed):
+#   - device.get_users() -> ZK.read_sizes() (1 command) then
+#     ZK.read_with_buffer() (1 command, 2 for a large roster that needs a
+#     second chunk read — this device has 1 user, well under one chunk) = 2
+#     round trips in the realistic worst case. This matches observed
+#     production evidence: a stalled get_users() call in the Collector log
+#     took ~10.04s to time out with ZK_TIMEOUT=5s, i.e. almost exactly 2x the
+#     per-call timeout.
+#   - device.set_user() -> one CMD_USER_WRQ write, then pyzk's set_user()
+#     unconditionally calls self.refresh_data() internally (CMD_REFRESHDATA,
+#     a second, separate command) before returning = 2 round trips.
+ZK_ROUNDTRIPS_PER_ROSTER_READ = 2
+ZK_ROUNDTRIPS_PER_SET_USER = 2
+
+
+def _zk_socket_timeout_seconds() -> float:
+    """The per-socket-call timeout pyzk was constructed with (ZK_TIMEOUT env,
+    default 5s — see Config.device_timeout / app/collector.py's ZK(...)
+    call). Read live, not cached, so a future .env change is honored without
+    a code change."""
+    return float(os.getenv("ZK_TIMEOUT", "5"))
+
+
+def create_terminal_account_collector_budget_seconds() -> float:
+    """Worst-case realistic duration the Collector's own
+    create_or_reconcile_terminal_account() call can legitimately take,
+    derived from the round-trip counts above — i.e. the number the OUTER
+    DeviceCommandBus timeout must exceed. Does not attempt to accommodate a
+    fully-dead device (unbounded stalls) — that case should genuinely time
+    out; this bounds the case of a slow-but-functioning device."""
+    per_call = _zk_socket_timeout_seconds()
+    initial_roster_read = ZK_ROUNDTRIPS_PER_ROSTER_READ * per_call
+    mutation = ZK_ROUNDTRIPS_PER_SET_USER * per_call
+    bounded_readback = READBACK_RETRIES * ZK_ROUNDTRIPS_PER_ROSTER_READ * per_call
+    readback_inter_attempt_delays = (READBACK_RETRIES - 1) * READBACK_DELAY_SECONDS
+    return initial_roster_read + mutation + bounded_readback + readback_inter_attempt_delays
+
+
+# MQTT publish/subscribe latency (both directions), JSON (de)serialization,
+# and thread/event-loop scheduling jitter between the API process and the
+# Collector process — not a hardware timeout, a transport/scheduling margin.
+DEVICE_COMMAND_TRANSPORT_MARGIN_SECONDS = 3.0
+
+# The value app/device_command_bus.py's execute() must be called with for the
+# CREATE_TERMINAL_ACCOUNT command — computed, not hand-picked, and re-derives
+# automatically if READBACK_RETRIES/READBACK_DELAY_SECONDS/ZK_TIMEOUT change.
+# Invariant: outer_timeout > collector_budget + transport_margin.
+CREATE_TERMINAL_ACCOUNT_DEVICE_TIMEOUT_SECONDS = (
+    create_terminal_account_collector_budget_seconds() + DEVICE_COMMAND_TRANSPORT_MARGIN_SECONDS
+)
+
 # States from which terminal-account creation/reconciliation may run. RESERVED
 # is the normal entry point; TERMINAL_ACCOUNT_CREATED makes a repeat call
 # idempotent (retry after a timeout, browser double-submit that lost the
@@ -550,7 +620,11 @@ def create_or_reconcile_terminal_account(
             try:
                 roster = device.get_users() or []
             except Exception as e:
-                raise EnrollmentError(
+                # PRE-MUTATION failure — set_user() has not been called at
+                # all. Must be distinguishable from TerminalAccountUnconfirmed
+                # (where a write WAS attempted) so the API/frontend never
+                # implies a write might have happened when it didn't.
+                raise TerminalRosterUnavailable(
                     "failed to read terminal roster for device %s: %s"
                     % (enroll["device_id"], e)
                 )

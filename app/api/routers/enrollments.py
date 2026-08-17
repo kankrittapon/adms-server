@@ -37,8 +37,10 @@ from app.config import Config
 from app.enrollment import (
     ALLOWED_TRANSITIONS,
     ENROLLMENT_ACTIONS,
+    CREATE_TERMINAL_ACCOUNT_DEVICE_TIMEOUT_SECONDS,
     TerminalAccountConflict,
     TerminalAccountUnconfirmed,
+    TerminalRosterUnavailable,
     cancel_enrollment,
     confirm_controlled_scan,
     confirm_fingerprint_enrolled,
@@ -203,6 +205,9 @@ def create_terminal_account(
                 display_name=payload.display_name,
                 device=request.app.state.device_executor,
             )
+        except TerminalRosterUnavailable as e:
+            # PRE-MUTATION failure — set_user() was never reached.
+            raise ApiError(503, "DEVICE_UNAVAILABLE", str(e))
         except TerminalAccountConflict as e:
             raise ApiError(409, "TERMINAL_ACCOUNT_CONFLICT", str(e))
         except TerminalAccountUnconfirmed as e:
@@ -228,7 +233,15 @@ def create_terminal_account(
                 "display_name": payload.display_name,
                 "operator": payload.operator,
             },
-            timeout=10.0,
+            # Derived, not arbitrary — see app.enrollment's timing-budget
+            # constants. Must exceed the Collector's own worst-case realistic
+            # operation duration (roster read + set_user + bounded read-back)
+            # plus transport margin, so a genuine Collector-side result
+            # (success OR a specific error) always has time to arrive before
+            # this outer timeout fires. When it does fire, it should mean
+            # only "no authoritative response arrived at all" — not race
+            # against and mask a real Collector answer.
+            timeout=CREATE_TERMINAL_ACCOUNT_DEVICE_TIMEOUT_SECONDS,
             dedupe_key="enrollment:%s" % enrollment_id,
         )
     except DeviceCommandBusy as e:
@@ -246,10 +259,17 @@ def create_terminal_account(
             raise ApiError(503, code, err_str)
         if code == "ENROLLMENT_CONFLICT":
             raise ApiError(409, code, err_str)
+        if code == "DEVICE_UNAVAILABLE":
+            # Pre-mutation roster failure reported by the Collector itself
+            # (TerminalRosterUnavailable) — set_user() was never reached.
+            raise ApiError(503, code, err_str)
         if getattr(e, "timed_out", False):
             # UNKNOWN OUTCOME, not guaranteed failure — the frontend should
             # offer "Verify / Reconcile" (re-issuing this same request is
-            # safe and idempotent), not a plain "failed, try again".
+            # safe and idempotent), not a plain "failed, try again". Because
+            # the outer timeout now exceeds the Collector's own worst-case
+            # budget, this should only fire when no response arrived at all,
+            # not as a race against a real Collector-side answer.
             raise ApiError(503, "DEVICE_COMMAND_TIMEOUT", err_str)
         if "already exists" in err_str or "state" in err_str or "expected RESERVED" in err_str:
             raise ApiError(409, "ENROLLMENT_CONFLICT", err_str)

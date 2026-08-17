@@ -182,6 +182,8 @@ export const en: Translations = {
     terminalUnconfirmedTitle: "Could not confirm the terminal account",
     terminalUnconfirmedBody: "The system tried to create the account but couldn't confirm it on the terminal yet. It's safe to try again.",
     terminalInProgressBody: "A terminal command for this enrollment is still running. Please wait a moment before trying again.",
+    terminalUnavailableTitle: "Could not reach the terminal",
+    terminalUnavailableBody: "No account was created or changed — the system could not read the terminal's account list before attempting anything. It's safe to try again once the terminal is reachable.",
     terminalReconciledSuccess: "Terminal account verified — it already existed on the device and now matches this enrollment.",
     terminalCreatedSuccess: "Terminal account created on device.",
   },

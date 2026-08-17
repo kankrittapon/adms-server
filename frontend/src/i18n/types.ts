@@ -181,6 +181,8 @@ export interface Translations {
     terminalUnconfirmedTitle: string;
     terminalUnconfirmedBody: string;
     terminalInProgressBody: string;
+    terminalUnavailableTitle: string;
+    terminalUnavailableBody: string;
     terminalReconciledSuccess: string;
     terminalCreatedSuccess: string;
   };

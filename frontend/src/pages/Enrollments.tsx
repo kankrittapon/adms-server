@@ -242,6 +242,12 @@ export function Enrollments() {
                     } else if (err.code === "DEVICE_COMMAND_IN_PROGRESS") {
                       setActionError(t.enrollment.terminalInProgressBody);
                       setTerminalAccountUncertain(true);
+                    } else if (err.code === "DEVICE_UNAVAILABLE") {
+                      // Pre-mutation failure — set_user() was never attempted.
+                      // Must not be conflated with the unconfirmed-after-write
+                      // case, which implies a device-side operation happened.
+                      setActionError(`${t.enrollment.terminalUnavailableTitle}. ${t.enrollment.terminalUnavailableBody}`);
+                      setTerminalAccountUncertain(false);
                     } else if (err.code === "WRITE_SESSION_EXPIRED") {
                       setActionError(t.enrollment.writeSessionExpiredMidWorkflow);
                     } else if (err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_DISABLED") {
