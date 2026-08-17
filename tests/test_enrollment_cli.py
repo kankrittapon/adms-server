@@ -79,7 +79,7 @@ class EnrollmentCliTest(unittest.TestCase):
     # --- create-terminal-account (full canonical path) --------------------
 
     def test_create_terminal_account_full_path(self):
-        """Runs the real create_reserved_terminal_account() with a FakeDevice."""
+        """Runs the real create_or_reconcile_terminal_account() with a FakeDevice."""
         # first fetch: CLI pre-write status check; second: canonical _fetch_enrollment
         cur = FakeCursor(
             fetchone_queue=[make_enrollment_tuple(), make_enrollment_tuple()],
@@ -114,10 +114,36 @@ class EnrollmentCliTest(unittest.TestCase):
             )
         )
 
-    def test_create_terminal_account_refuses_existing_account(self):
-        """Roster contains the reserved ID -> canonical function fails safely."""
-        cur = FakeCursor(fetchone_queue=[make_enrollment_tuple()])
-        device = FakeDevice(users=[FakeUser("1001", uid=7, name="Someone Else")])
+    def test_create_terminal_account_reconciles_existing_matching_account(self):
+        """Roster already has the reserved ID with matching (NORMAL) privilege
+        -> canonical function reconciles without calling set_user() again."""
+        # first fetch: CLI pre-write status check; second: canonical function
+        cur = FakeCursor(fetchone_queue=[make_enrollment_tuple(), make_enrollment_tuple()])
+        device = FakeDevice(users=[FakeUser("1001", uid=7, name="Someone Else")], commit_on_set_user=False)
+        with (
+            patch("app.enrollment_cli._connect_device", return_value=device),
+            patch("app.enrollment.get_db_connection") as m,
+            patch("app.enrollment.ensure_device_user", return_value=42),
+            patch("app.enrollment.log_sync_event"),
+        ):
+            make_db(m, cur)
+            rc, out = self._run(
+                cmd_create_terminal_account,
+                self._create_ns(enrollment_id=1, display_name="Somchai S.", confirm=True),
+            )
+        self.assertEqual(rc, 0)
+        self.assertIn("OK: terminal account reconciled", out)
+        self.assertEqual(device.set_user_calls, [])  # never overwritten
+
+    def test_create_terminal_account_refuses_conflicting_account(self):
+        """Roster has the reserved ID but with the wrong privilege -> STOP,
+        never overwrite/delete."""
+        # first fetch: CLI pre-write status check; second: canonical function
+        cur = FakeCursor(fetchone_queue=[make_enrollment_tuple(), make_enrollment_tuple()])
+        device = FakeDevice(
+            users=[FakeUser("1001", uid=7, name="Someone Else", privilege=14)],
+            commit_on_set_user=False,
+        )
         with (
             patch("app.enrollment_cli._connect_device", return_value=device),
             patch("app.enrollment.get_db_connection") as m,
@@ -128,7 +154,7 @@ class EnrollmentCliTest(unittest.TestCase):
                 self._create_ns(enrollment_id=1, display_name="Somchai S.", confirm=True),
             )
         self.assertEqual(rc, 1)
-        self.assertIn("ERROR", out)
+        self.assertIn("CONFLICT", out)
         self.assertEqual(device.set_user_calls, [])  # never overwritten
 
     def test_create_terminal_account_wrong_state_fails(self):

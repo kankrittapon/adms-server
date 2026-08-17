@@ -59,7 +59,14 @@ class MQTTService:
                 except Exception as e:
                     log.warning("MQTT command message handler error: %s", e)
 
-    def publish_command_response(self, command_id: str, success: bool, result: Optional[dict] = None, error: Optional[str] = None) -> bool:
+    def publish_command_response(
+        self,
+        command_id: str,
+        success: bool,
+        result: Optional[dict] = None,
+        error: Optional[str] = None,
+        error_code: Optional[str] = None,
+    ) -> bool:
         if not self.client or not self.connected:
             return False
         try:
@@ -68,6 +75,7 @@ class MQTTService:
                 "success": success,
                 "result": result,
                 "error": error,
+                "error_code": error_code,
                 "timestamp": datetime.now().isoformat()
             })
             topic = f"adms/device/command/response/{command_id}"

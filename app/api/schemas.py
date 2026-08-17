@@ -247,6 +247,9 @@ class Enrollment(BaseModel):
     created_at: datetime
     updated_at: datetime
     employee_name: Optional[str] = None
+    english_name: Optional[str] = Field(
+        None, description="Canonical terminal-safe (ASCII) name, when set on the Human Master record."
+    )
     device_name: Optional[str] = None
 
 
@@ -276,6 +279,12 @@ class EnrollmentTransitionResult(BaseModel):
 
     enrollment_id: int
     status: str
+    reconciled: Optional[bool] = Field(
+        None,
+        description="create-terminal-account only: true if the terminal account already "
+        "existed and this call reconciled ADMS state without a new set_user() call; "
+        "false if this call performed the mutation; null for every other transition.",
+    )
 
 
 class EventTypesResponse(BaseModel):

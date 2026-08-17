@@ -25,6 +25,7 @@ Safety invariants enforced here:
 
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
@@ -132,6 +133,20 @@ class EnrollmentError(Exception):
     """Raised when an enrollment operation violates a safety or workflow rule."""
 
 
+class TerminalAccountConflict(EnrollmentError):
+    """Terminal ID exists on the device but cannot be proven to belong to this
+    enrollment (identity fields don't match what we expect). The caller must
+    never overwrite, inherit, or delete in response to this — it requires a
+    human to look at the device and the enrollment and decide."""
+
+
+class TerminalAccountUnconfirmed(EnrollmentError):
+    """A set_user() attempt was made (or the account was expected to already
+    exist) but the terminal ID could not be confirmed present via bounded
+    roster read-back. This is a genuine failure, distinct from a conflict —
+    retrying (which re-enters this same function) is safe and expected."""
+
+
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
@@ -217,6 +232,24 @@ def _normalize_scan_time(scan_time: datetime) -> datetime:
 def _fetch_enrollment(cur: Any, enrollment_id: int) -> Dict[str, Any]:
     cur.execute(
         "SELECT %s FROM device_user_enrollments WHERE enrollment_id = %%s;"
+        % ", ".join(_ENROLLMENT_COLUMNS),
+        (enrollment_id,),
+    )
+    row = cur.fetchone()
+    if row is None:
+        raise EnrollmentError("enrollment %s not found" % enrollment_id)
+    return dict(zip(_ENROLLMENT_COLUMNS, row))
+
+
+def _fetch_enrollment_locked(cur: Any, enrollment_id: int) -> Dict[str, Any]:
+    """Same as _fetch_enrollment but takes a row lock (FOR UPDATE) so a
+    second concurrent call for the same enrollment_id blocks until this
+    transaction commits/rolls back — the DB-level half of double-submit
+    protection for terminal-account creation (see create_or_reconcile_
+    terminal_account). Only used on the terminal-account write path; plain
+    reads elsewhere should keep using _fetch_enrollment."""
+    cur.execute(
+        "SELECT %s FROM device_user_enrollments WHERE enrollment_id = %%s FOR UPDATE;"
         % ", ".join(_ENROLLMENT_COLUMNS),
         (enrollment_id,),
     )
@@ -382,28 +415,129 @@ def reserve_next_device_user_id(
     }
 
 
-def create_reserved_terminal_account(
+# Bounded read-back tuning. ZEM560/pyzk set_user() return values are not
+# authoritative (observed in production: returns False on a call the device
+# actually committed) — ground truth is always a subsequent roster read.
+READBACK_RETRIES = 3
+READBACK_DELAY_SECONDS = 2.0
+
+# States from which terminal-account creation/reconciliation may run. RESERVED
+# is the normal entry point; TERMINAL_ACCOUNT_CREATED makes a repeat call
+# idempotent (retry after a timeout, browser double-submit that lost the
+# race, or an explicit "Verify / Reconcile" action) instead of erroring.
+_TERMINAL_ACCOUNT_ALLOWED_STATES = ("RESERVED", "TERMINAL_ACCOUNT_CREATED")
+
+
+def _match_roster_user(roster: List[Any], target_id: str) -> Optional[Any]:
+    for u in roster or []:
+        if str(getattr(u, "user_id", "")) == str(target_id):
+            return u
+    return None
+
+
+def _identity_matches(user: Any, target_id: str) -> bool:
+    """Verifies only the fields this device/library combination can reliably
+    expose: user_id (matched by the caller before this is invoked) and
+    privilege. Display name is intentionally NOT used as a match criterion —
+    ZK firmware can truncate/alter it, so treating it as authoritative would
+    invent a guarantee the hardware doesn't provide."""
+    privilege = getattr(user, "privilege", None)
+    if privilege is None:
+        return False
+    try:
+        return int(privilege) == PRIVILEGE_NORMAL_USER
+    except (TypeError, ValueError):
+        return False
+
+
+def _bounded_roster_readback(
+    device: Any,
+    target_id: str,
+    retries: int = READBACK_RETRIES,
+    delay: float = READBACK_DELAY_SECONDS,
+    sleep_fn: Optional[Any] = None,
+) -> Optional[Any]:
+    """Polls the roster up to `retries` times, waiting `delay` seconds between
+    attempts, until the target ID appears. Returns the matching roster entry,
+    or None if it never appeared within the bound. A transport error on any
+    individual read is treated as "not yet visible" and retried, not raised —
+    only exhausting all retries is reported to the caller.
+
+    sleep_fn defaults to None and resolves to time.sleep at call time (not as
+    a bound default-argument value) specifically so tests can patch
+    app.enrollment.time.sleep — a default argument bound at function-
+    definition time would capture the function object directly and be immune
+    to later patching of the time module attribute.
+    """
+    _sleep = sleep_fn or time.sleep
+    for attempt in range(retries):
+        try:
+            roster = device.get_users() or []
+        except Exception as e:
+            log.warning(
+                "roster read-back attempt %d/%d failed for terminal ID %s: %s",
+                attempt + 1, retries, target_id, e,
+            )
+            roster = []
+        match = _match_roster_user(roster, target_id)
+        if match is not None:
+            return match
+        if attempt < retries - 1:
+            _sleep(delay)
+    return None
+
+
+def create_or_reconcile_terminal_account(
     cfg: Config,
     enrollment_id: int,
     display_name: str,
     device: Any,
 ) -> Dict[str, Any]:
     """
-    Creates the terminal account for a RESERVED enrollment using set_user().
+    Idempotently creates OR reconciles the terminal account for an enrollment.
 
-    Requires an injected device connection (never auto-connects: the LIVE
-    collector holds the terminal's single connection). Verifies the reservation
-    state, refuses to overwrite an existing terminal account, and creates the
-    account with NORMAL user privilege only. No Human mapping is created.
+    This is the single canonical entry point for turning a RESERVED enrollment
+    into TERMINAL_ACCOUNT_CREATED, safe against:
+      - set_user() returning False/None/raising on a call the device actually
+        committed (observed ZEM560/pyzk behavior — never trusted alone).
+      - retries after a DeviceCommandBus timeout of unknown outcome.
+      - duplicate browser clicks / concurrent callers for the same enrollment
+        (serialized via a DB row lock on the enrollment; see
+        _fetch_enrollment_locked).
+      - re-entry on an enrollment that is already TERMINAL_ACCOUNT_CREATED
+        (idempotent success, no second set_user() call, no state corruption).
+
+    Algorithm:
+      1. Lock + load the enrollment row; must be RESERVED or
+         TERMINAL_ACCOUNT_CREATED.
+      2. Read the roster once, before any mutation decision.
+      3. If the reserved ID is absent: call set_user() exactly once (its
+         return value is logged but never treated as authoritative), then
+         perform a bounded read-back. Still absent after the bound -> raise
+         TerminalAccountUnconfirmed (genuine failure; state unchanged, safe
+         to retry — retry re-enters this same function).
+      4. If the reserved ID is present (either from the start, or from the
+         read-back above): verify identity (privilege only — see
+         _identity_matches). Mismatch -> raise TerminalAccountConflict
+         (STOP; never overwrite/inherit/delete). Match -> reconcile.
+      5. Reconcile: idempotently transition to TERMINAL_ACCOUNT_CREATED
+         (no-op if already there), set terminal_created_at only if unset,
+         capture device_uid, ensure the canonical device_users row. Emits a
+         TERMINAL_ACCOUNT_CREATED audit event if this call performed the
+         set_user() mutation, or TERMINAL_ACCOUNT_RECONCILED if it didn't
+         (the account already existed on entry, from a prior attempt whose
+         result was previously unknown to this enrollment).
+
+    No Human mapping is created or touched here, ever.
     """
     name = validate_terminal_display_name(display_name)
     with get_db_connection(cfg) as conn:
         with conn.cursor() as cur:
-            enroll = _fetch_enrollment(cur, enrollment_id)
-            if enroll["status"] != "RESERVED":
+            enroll = _fetch_enrollment_locked(cur, enrollment_id)
+            if enroll["status"] not in _TERMINAL_ACCOUNT_ALLOWED_STATES:
                 raise EnrollmentError(
-                    "enrollment %s is in state %s, expected RESERVED"
-                    % (enrollment_id, enroll["status"])
+                    "enrollment %s is in state %s, expected one of %s"
+                    % (enrollment_id, enroll["status"], _TERMINAL_ACCOUNT_ALLOWED_STATES)
                 )
             if device is None:
                 raise EnrollmentError(
@@ -411,6 +545,8 @@ def create_reserved_terminal_account(
                 )
 
             target_id = enroll["reserved_device_user_id"]
+            was_reserved = enroll["status"] == "RESERVED"
+
             try:
                 roster = device.get_users() or []
             except Exception as e:
@@ -418,120 +554,80 @@ def create_reserved_terminal_account(
                     "failed to read terminal roster for device %s: %s"
                     % (enroll["device_id"], e)
                 )
-            roster_ids = {str(getattr(u, "user_id", "")) for u in roster}
-            if target_id in roster_ids:
-                raise EnrollmentError(
-                    "terminal account %s already exists — FAIL SAFE, refusing to "
-                    "overwrite" % target_id
+            match = _match_roster_user(roster, target_id)
+
+            mutated = False
+            if match is None:
+                mutated = True
+                try:
+                    ok = device.set_user(
+                        user_id=target_id,
+                        name=name,
+                        privilege=PRIVILEGE_NORMAL_USER,
+                        password="",
+                    )
+                    log.info(
+                        "set_user(%s) returned %r for enrollment %s — not treated as "
+                        "authoritative, confirming via roster read-back",
+                        target_id, ok, enrollment_id,
+                    )
+                except Exception as e:
+                    log.warning(
+                        "set_user raised for terminal ID %s (enrollment %s), continuing "
+                        "to bounded read-back rather than failing immediately: %s",
+                        target_id, enrollment_id, e,
+                    )
+                match = _bounded_roster_readback(device, target_id)
+                if match is None:
+                    raise TerminalAccountUnconfirmed(
+                        "terminal account creation for %s could not be confirmed "
+                        "after bounded read-back (%d attempts) — enrollment remains "
+                        "%s; safe to retry" % (target_id, READBACK_RETRIES, enroll["status"])
+                    )
+
+            if not _identity_matches(match, target_id):
+                raise TerminalAccountConflict(
+                    "terminal ID %s exists on the device but does not match the "
+                    "expected identity (privilege=%s, expected %s) — refusing to "
+                    "overwrite, inherit, or delete. Manual review required."
+                    % (target_id, getattr(match, "privilege", None), PRIVILEGE_NORMAL_USER)
                 )
 
-            try:
-                ok = device.set_user(
-                    user_id=target_id,
-                    name=name,
-                    privilege=PRIVILEGE_NORMAL_USER,
-                    password="",
-                )
-            except Exception as e:
-                raise EnrollmentError(
-                    "set_user failed for terminal ID %s: %s" % (target_id, e)
-                )
-            if not ok:
-                raise EnrollmentError(
-                    "set_user returned False for terminal ID %s" % target_id
-                )
+            uid = getattr(match, "uid", None)
 
-            # Record the device_users row (audit only; no Human mapping)
+            # Canonical device_users row (idempotent — safe to call repeatedly).
             ensure_device_user(cur, enroll["device_id"], target_id, name)
 
             cur.execute(
                 "UPDATE device_user_enrollments "
-                "SET status = 'TERMINAL_ACCOUNT_CREATED', terminal_created_at = now(), "
-                "updated_at = now() "
-                "WHERE enrollment_id = %s AND status = 'RESERVED';",
-                (enrollment_id,),
+                "SET status = 'TERMINAL_ACCOUNT_CREATED', "
+                "    terminal_created_at = COALESCE(terminal_created_at, now()), "
+                "    device_uid = COALESCE(device_uid, %s), "
+                "    updated_at = now() "
+                "WHERE enrollment_id = %s AND status IN ('RESERVED', 'TERMINAL_ACCOUNT_CREATED');",
+                (uid, enrollment_id),
             )
             if cur.rowcount != 1:
                 raise EnrollmentError(
-                    "enrollment state changed concurrently; terminal account may "
-                    "exist — manual roster review required"
+                    "enrollment state changed concurrently during terminal account "
+                    "reconciliation; manual roster review required"
                 )
             conn.commit()
 
+    event_type = "TERMINAL_ACCOUNT_CREATED" if mutated else "TERMINAL_ACCOUNT_RECONCILED"
     log_sync_event(
         cfg,
-        "ENROLLMENT_ACCOUNT_CREATED",
-        "enrollment_id=%s terminal_id=%s display_name=%s"
-        % (enrollment_id, target_id, name),
+        event_type,
+        "enrollment_id=%s terminal_id=%s display_name=%s device_uid=%s "
+        "mutated=%s was_reserved=%s"
+        % (enrollment_id, target_id, name, uid, mutated, was_reserved),
     )
     return {
         "enrollment_id": enrollment_id,
         "status": "TERMINAL_ACCOUNT_CREATED",
         "terminal_id": target_id,
-    }
-
-
-def verify_terminal_account_created(
-    cfg: Config,
-    enrollment_id: int,
-    roster_users: List[Any],
-) -> Dict[str, Any]:
-    """
-    Verifies a successful roster snapshot contains the reserved terminal ID,
-    captures the terminal device_uid, and confirms NORMAL user privilege.
-    Does NOT create any Human mapping.
-    """
-    with get_db_connection(cfg) as conn:
-        with conn.cursor() as cur:
-            enroll = _fetch_enrollment(cur, enrollment_id)
-            if enroll["status"] != "TERMINAL_ACCOUNT_CREATED":
-                raise EnrollmentError(
-                    "enrollment %s is in state %s, expected TERMINAL_ACCOUNT_CREATED"
-                    % (enrollment_id, enroll["status"])
-                )
-            target_id = enroll["reserved_device_user_id"]
-            match = None
-            for u in roster_users or []:
-                if str(getattr(u, "user_id", "")) == target_id:
-                    match = u
-                    break
-            if match is None:
-                raise EnrollmentError(
-                    "terminal ID %s not found in roster — account not verified"
-                    % target_id
-                )
-            privilege = getattr(match, "privilege", None)
-            # 0 is the NORMAL user privilege — must not be treated as missing.
-            if privilege is None or int(privilege) != PRIVILEGE_NORMAL_USER:
-                raise EnrollmentError(
-                    "terminal ID %s has privilege %s, expected %s (normal user)"
-                    % (target_id, privilege, PRIVILEGE_NORMAL_USER)
-                )
-            uid = getattr(match, "uid", None)
-            cur.execute(
-                "UPDATE device_user_enrollments SET device_uid = %s, updated_at = now() "
-                "WHERE enrollment_id = %s;",
-                (uid, enrollment_id),
-            )
-            cur.execute(
-                "UPDATE device_users "
-                "SET device_uid = COALESCE(%s, device_uid), privilege = %s, "
-                "device_display_name = COALESCE(device_display_name, %s), "
-                "updated_at = now() "
-                "WHERE device_id = %s AND device_user_id = %s;",
-                (
-                    uid,
-                    PRIVILEGE_NORMAL_USER,
-                    getattr(match, "name", None),
-                    enroll["device_id"],
-                    target_id,
-                ),
-            )
-            conn.commit()
-    return {
-        "enrollment_id": enrollment_id,
-        "status": "TERMINAL_ACCOUNT_CREATED",
         "device_uid": uid,
+        "reconciled": not mutated,
     }
 
 

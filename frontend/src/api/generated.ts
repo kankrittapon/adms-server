@@ -1079,6 +1079,11 @@ export interface components {
             employee_id: string;
             /** Employee Name */
             employee_name?: string | null;
+            /**
+             * English Name
+             * @description Canonical terminal-safe (ASCII) name, when set on the Human Master record.
+             */
+            english_name?: string | null;
             /** Enrollment Id */
             enrollment_id: number;
             /** Fingerprint Confirmed At */
@@ -1146,6 +1151,11 @@ export interface components {
         EnrollmentTransitionResult: {
             /** Enrollment Id */
             enrollment_id: number;
+            /**
+             * Reconciled
+             * @description create-terminal-account only: true if the terminal account already existed and this call reconciled ADMS state without a new set_user() call; false if this call performed the mutation; null for every other transition.
+             */
+            reconciled?: boolean | null;
             /** Status */
             status: string;
         };

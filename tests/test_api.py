@@ -633,11 +633,12 @@ class TestWriteGuard(ApiTestBase):
         client = TestClient(app)
         admin_ctx = OperatorContext(operator_id=1, username="admin", display_name="Admin", role="ADMIN")
         with patch("app.api.dependencies._load_token_context", return_value=admin_ctx):
-            with patch("app.api.routers.enrollments.create_reserved_terminal_account") as mock_create:
+            with patch("app.api.routers.enrollments.create_or_reconcile_terminal_account") as mock_create:
                 mock_create.return_value = {
                     "enrollment_id": 1,
                     "status": "TERMINAL_ACCOUNT_CREATED",
                     "terminal_id": "1001",
+                    "reconciled": False,
                 }
                 resp = client.post(
                     "/api/v1/enrollments/1/create-terminal-account",

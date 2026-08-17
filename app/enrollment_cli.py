@@ -1,13 +1,12 @@
 """Operator CLI for the physical steps of an ADMS enrollment session.
 
-PromptID: ADMS-Frontend-WriteEnablement-001
+PromptID: ADMS-Frontend-WriteEnablement-001 / ADMS-ZEM560-TerminalAccount-Idempotency-Recovery-008
 
-The API deliberately keeps terminal-facing steps out of HTTP
-(``create-terminal-account`` is 501 NOT_IMPLEMENTED) because the physical
-account creation requires a live ZK device connection, and the running
-Collector holds the terminal's single connection. This CLI runs on ai-brain
-inside the listener container to perform the operator-driven physical step
-while the Collector is paused.
+Emergency/fallback tooling only — the normal workflow is the browser-driven
+create-terminal-account endpoint (dispatched over the DeviceCommandBus to the
+live Collector). This CLI exists for the rare case where that path is
+unavailable; it runs on ai-brain inside the listener container to perform the
+operator-driven physical step while the Collector is paused.
 
 Run inside the listener container (pyzk + DB env + device env present):
 
@@ -19,8 +18,12 @@ Run inside the listener container (pyzk + DB env + device env present):
 Subcommands:
 
   status                     Read-only enrollment state (safe anytime).
-  create-terminal-account    Physical set_user() via the canonical
-                             create_reserved_terminal_account(); requires
+  create-terminal-account    Idempotent create/reconcile via the canonical
+                             create_or_reconcile_terminal_account() — safe
+                             to re-run (e.g. after an uncertain outcome);
+                             never calls set_user() a second time if the
+                             account already exists and matches, and never
+                             overwrites a conflicting account. Requires
                              --confirm-collector-paused (the Collector holds
                              the terminal's single connection and MUST be
                              stopped before this runs).
@@ -37,7 +40,9 @@ from typing import Any, Dict, Optional
 from app.config import Config
 from app.enrollment import (
     EnrollmentError,
-    create_reserved_terminal_account,
+    TerminalAccountConflict,
+    TerminalAccountUnconfirmed,
+    create_or_reconcile_terminal_account,
     get_enrollment,
 )
 
@@ -109,9 +114,27 @@ def cmd_create_terminal_account(args: argparse.Namespace) -> int:
     conn: Optional[Any] = None
     try:
         conn = _connect_device(cfg)
-        result = create_reserved_terminal_account(
+        result = create_or_reconcile_terminal_account(
             cfg, args.enrollment_id, args.display_name, conn
         )
+    except TerminalAccountConflict as err:
+        print("CONFLICT: %s" % err, file=sys.stderr)
+        print(
+            "The terminal ID exists but does not match this enrollment's "
+            "expected identity. NOT overwritten, NOT deleted. Manual review "
+            "required before proceeding.",
+            file=sys.stderr,
+        )
+        return 1
+    except TerminalAccountUnconfirmed as err:
+        print("UNCONFIRMED: %s" % err, file=sys.stderr)
+        print(
+            "The account could not be confirmed present after bounded "
+            "read-back. Enrollment state is unchanged — re-running this "
+            "same command is safe.",
+            file=sys.stderr,
+        )
+        return 1
     except EnrollmentError as err:
         print("ERROR: %s" % err, file=sys.stderr)
         return 1
@@ -122,10 +145,11 @@ def cmd_create_terminal_account(args: argparse.Namespace) -> int:
             except Exception:  # pragma: no cover - best-effort teardown
                 pass
 
-    print("OK: terminal account created.")
+    print("OK: terminal account %s." % ("reconciled" if result.get("reconciled") else "created"))
     print("  enrollment_id: %s" % result.get("enrollment_id"))
     print("  status: %s" % result.get("status"))
-    print("  reserved_device_user_id: %s" % result.get("reserved_device_user_id"))
+    print("  terminal_id: %s" % result.get("terminal_id"))
+    print("  device_uid: %s" % result.get("device_uid"))
     print("NEXT: restart the Collector, then enroll the fingerprint at the "
           "terminal UI and use the console to confirm.")
     return 0

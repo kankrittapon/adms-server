@@ -27,6 +27,8 @@ from unittest.mock import MagicMock, patch
 from app.config import Config
 from app.enrollment import (
     EnrollmentError,
+    TerminalAccountConflict,
+    TerminalAccountUnconfirmed,
     PRODUCTION_NAMESPACE_START,
     PRIVILEGE_NORMAL_USER,
     _ENROLLMENT_COLUMNS,
@@ -34,7 +36,7 @@ from app.enrollment import (
     cancel_enrollment,
     confirm_controlled_scan,
     confirm_fingerprint_enrolled,
-    create_reserved_terminal_account,
+    create_or_reconcile_terminal_account,
     get_enrollment,
     mark_ready_for_mapping,
     reserve_next_device_user_id,
@@ -43,7 +45,6 @@ from app.enrollment import (
     start_fingerprint_enrollment,
     validate_status_transition,
     validate_terminal_display_name,
-    verify_terminal_account_created,
 )
 
 NOW = datetime(2026, 8, 12, 12, 0, 0, tzinfo=timezone.utc)
@@ -124,12 +125,33 @@ class FakeUser:
 
 
 class FakeDevice:
-    """Records calls; destructive methods fail loudly if invoked."""
+    """Records calls; destructive methods fail loudly if invoked.
 
-    def __init__(self, users=None):
+    set_user_return / set_user_raises / commit_on_set_user let tests
+    independently control (a) what set_user() reports and (b) what the
+    device actually does — modeling the real ZEM560/pyzk behavior where
+    these can disagree (e.g. returns False on a call the device commits).
+    commit_on_set_user=True (the default) auto-appends a matching FakeUser
+    to the roster on set_user(), which is what "the device actually
+    committed" means for these tests; set it False to simulate a genuine
+    failure (device does not commit).
+    """
+
+    def __init__(
+        self,
+        users=None,
+        set_user_return=True,
+        set_user_raises=None,
+        commit_on_set_user=True,
+        next_uid=100,
+    ):
         self._users = list(users or [])
         self.calls = []
         self.set_user_calls = []
+        self.set_user_return = set_user_return
+        self.set_user_raises = set_user_raises
+        self.commit_on_set_user = commit_on_set_user
+        self._next_uid = next_uid
 
     def get_users(self):
         self.calls.append("get_users")
@@ -138,7 +160,19 @@ class FakeDevice:
     def set_user(self, **kwargs):
         self.calls.append("set_user")
         self.set_user_calls.append(kwargs)
-        return True
+        if self.commit_on_set_user:
+            self._users.append(
+                FakeUser(
+                    kwargs.get("user_id"),
+                    uid=self._next_uid,
+                    name=kwargs.get("name", ""),
+                    privilege=kwargs.get("privilege", PRIVILEGE_NORMAL_USER),
+                )
+            )
+            self._next_uid += 1
+        if self.set_user_raises is not None:
+            raise self.set_user_raises
+        return self.set_user_return
 
     # Destructive operations must never be triggered by enrollment code.
     def delete_user(self, *a, **k):
@@ -464,6 +498,11 @@ class TestReservation(unittest.TestCase):
 
 
 class TestTerminalAccountCreation(unittest.TestCase):
+    """Basic coverage of create_or_reconcile_terminal_account's happy path,
+    guard rails, and DB-transaction safety. The full idempotency/read-back/
+    conflict/concurrency matrix lives in test_terminal_account_idempotency.py
+    (ADMS-ZEM560-TerminalAccount-Idempotency-Recovery-008)."""
+
     def setUp(self):
         self.cfg = Config.from_env()
         self.employee_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
@@ -475,14 +514,15 @@ class TestTerminalAccountCreation(unittest.TestCase):
     def test_set_user_gets_correct_parameters(self, mock_conn_fn, mock_ensure, mock_log):
         cur = FakeCursor(fetchone_queue=[self.enroll_row])
         make_db(mock_conn_fn, cur)
-        device = FakeDevice(users=[])
+        device = FakeDevice(users=[])  # commit_on_set_user=True by default
 
-        result = create_reserved_terminal_account(
+        result = create_or_reconcile_terminal_account(
             self.cfg, enrollment_id=1, display_name="Somchai S.", device=device
         )
 
         self.assertEqual(result["terminal_id"], "1001")
         self.assertEqual(result["status"], "TERMINAL_ACCOUNT_CREATED")
+        self.assertFalse(result["reconciled"])
         self.assertEqual(len(device.set_user_calls), 1)
         call = device.set_user_calls[0]
         self.assertEqual(call["user_id"], "1001")  # exact reserved ID
@@ -494,15 +534,37 @@ class TestTerminalAccountCreation(unittest.TestCase):
         mock_ensure.assert_called_once_with(cur, 1, "1001", "Somchai S.")
 
     @patch("app.enrollment.ensure_device_user", return_value=42)
+    @patch("app.enrollment.log_sync_event")
     @patch("app.enrollment.get_db_connection")
-    def test_existing_terminal_id_fails_safe(self, mock_conn_fn, mock_ensure):
+    def test_existing_terminal_id_with_matching_identity_reconciles(self, mock_conn_fn, mock_log, mock_ensure):
         cur = FakeCursor(fetchone_queue=[self.enroll_row])
         make_db(mock_conn_fn, cur)
-        # Roster already contains reserved ID 1001.
-        device = FakeDevice(users=[FakeUser("1001", uid=7, name="Someone Else")])
+        # Reserved ID already on the device (e.g. from a prior attempt whose
+        # API result was lost) with the expected NORMAL privilege.
+        device = FakeDevice(users=[FakeUser("1001", uid=7, name="Someone Else")], commit_on_set_user=False)
 
-        with self.assertRaises(EnrollmentError):
-            create_reserved_terminal_account(
+        result = create_or_reconcile_terminal_account(
+            self.cfg, enrollment_id=1, display_name="Somchai S.", device=device
+        )
+
+        self.assertEqual(result["status"], "TERMINAL_ACCOUNT_CREATED")
+        self.assertTrue(result["reconciled"])
+        self.assertEqual(len(device.set_user_calls), 0)  # never overwritten
+
+    @patch("app.enrollment.ensure_device_user", return_value=42)
+    @patch("app.enrollment.get_db_connection")
+    def test_existing_terminal_id_with_mismatched_identity_conflicts(self, mock_conn_fn, mock_ensure):
+        cur = FakeCursor(fetchone_queue=[self.enroll_row])
+        make_db(mock_conn_fn, cur)
+        # Reserved ID exists but with ADMIN privilege (14), not NORMAL (0) —
+        # cannot be proven to belong to this enrollment.
+        device = FakeDevice(
+            users=[FakeUser("1001", uid=7, name="Someone Else", privilege=14)],
+            commit_on_set_user=False,
+        )
+
+        with self.assertRaises(TerminalAccountConflict):
+            create_or_reconcile_terminal_account(
                 self.cfg, enrollment_id=1, display_name="Somchai S.", device=device
             )
         self.assertEqual(len(device.set_user_calls), 0)  # never overwritten
@@ -518,33 +580,32 @@ class TestTerminalAccountCreation(unittest.TestCase):
                 raise OSError("connection lost")
 
         with self.assertRaises(EnrollmentError):
-            create_reserved_terminal_account(
+            create_or_reconcile_terminal_account(
                 self.cfg, enrollment_id=1, display_name="Somchai S.", device=DeadDevice()
             )
 
+    @patch("app.enrollment.time.sleep")
     @patch("app.enrollment.get_db_connection")
-    def test_set_user_false_fails(self, mock_conn_fn):
+    def test_set_user_false_and_genuinely_absent_fails(self, mock_conn_fn, mock_sleep):
         cur = FakeCursor(fetchone_queue=[self.enroll_row])
         make_db(mock_conn_fn, cur)
+        # False AND the device never actually commits — a real failure,
+        # distinct from the "False but actually succeeded" case covered in
+        # the dedicated idempotency test file.
+        device = FakeDevice(users=[], set_user_return=False, commit_on_set_user=False)
 
-        class RejectingDevice:
-            def get_users(self):
-                return []
-
-            def set_user(self, **kwargs):
-                return False
-
-        with self.assertRaises(EnrollmentError):
-            create_reserved_terminal_account(
-                self.cfg, enrollment_id=1, display_name="Somchai S.", device=RejectingDevice()
+        with self.assertRaises(TerminalAccountUnconfirmed):
+            create_or_reconcile_terminal_account(
+                self.cfg, enrollment_id=1, display_name="Somchai S.", device=device
             )
+        mock_sleep.assert_called()  # bounded read-back actually waited between attempts
 
     @patch("app.enrollment.get_db_connection")
     def test_device_none_rejected(self, mock_conn_fn):
         cur = FakeCursor(fetchone_queue=[self.enroll_row])
         make_db(mock_conn_fn, cur)
         with self.assertRaises(EnrollmentError):
-            create_reserved_terminal_account(self.cfg, enrollment_id=1, display_name="Somchai S.", device=None)
+            create_or_reconcile_terminal_account(self.cfg, enrollment_id=1, display_name="Somchai S.", device=None)
 
     @patch("app.enrollment.get_db_connection")
     def test_invalid_display_name_rejected_before_set_user(self, mock_conn_fn):
@@ -552,7 +613,7 @@ class TestTerminalAccountCreation(unittest.TestCase):
         make_db(mock_conn_fn, cur)
         device = FakeDevice(users=[])
         with self.assertRaises(EnrollmentError):
-            create_reserved_terminal_account(
+            create_or_reconcile_terminal_account(
                 self.cfg, enrollment_id=1, display_name="สมชาย", device=device
             )
         self.assertEqual(len(device.set_user_calls), 0)
@@ -564,7 +625,7 @@ class TestTerminalAccountCreation(unittest.TestCase):
         make_db(mock_conn_fn, cur)
         device = FakeDevice(users=[])
         with self.assertRaises(EnrollmentError):
-            create_reserved_terminal_account(
+            create_or_reconcile_terminal_account(
                 self.cfg, enrollment_id=1, display_name="Somchai S.", device=device
             )
 
@@ -576,50 +637,9 @@ class TestTerminalAccountCreation(unittest.TestCase):
         make_db(mock_conn_fn, cur)
         device = FakeDevice(users=[])
         with self.assertRaises(EnrollmentError):
-            create_reserved_terminal_account(
+            create_or_reconcile_terminal_account(
                 self.cfg, enrollment_id=1, display_name="Somchai S.", device=device
             )
-
-
-class TestRosterVerification(unittest.TestCase):
-    def setUp(self):
-        self.cfg = Config.from_env()
-        self.enroll_row = make_enrollment_tuple(status="TERMINAL_ACCOUNT_CREATED")
-
-    @patch("app.enrollment.get_db_connection")
-    def test_verifies_and_captures_uid(self, mock_conn_fn):
-        cur = FakeCursor(fetchone_queue=[self.enroll_row])
-        conn = make_db(mock_conn_fn, cur)
-        roster = [FakeUser("1001", uid=77, name="Somchai S.")]
-
-        result = verify_terminal_account_created(self.cfg, 1, roster)
-
-        self.assertEqual(result["device_uid"], 77)
-        self.assertEqual(result["status"], "TERMINAL_ACCOUNT_CREATED")
-        conn.commit.assert_called()
-
-    @patch("app.enrollment.get_db_connection")
-    def test_missing_from_roster_fails(self, mock_conn_fn):
-        cur = FakeCursor(fetchone_queue=[self.enroll_row])
-        make_db(mock_conn_fn, cur)
-        with self.assertRaises(EnrollmentError):
-            verify_terminal_account_created(self.cfg, 1, [FakeUser("1002", uid=9)])
-
-    @patch("app.enrollment.get_db_connection")
-    def test_admin_privilege_rejected(self, mock_conn_fn):
-        cur = FakeCursor(fetchone_queue=[self.enroll_row])
-        make_db(mock_conn_fn, cur)
-        roster = [FakeUser("1001", uid=77, name="Somchai S.", privilege=14)]
-        with self.assertRaises(EnrollmentError):
-            verify_terminal_account_created(self.cfg, 1, roster)
-
-    @patch("app.enrollment.get_db_connection")
-    def test_wrong_state_rejected(self, mock_conn_fn):
-        row = make_enrollment_tuple(status="RESERVED")
-        cur = FakeCursor(fetchone_queue=[row])
-        make_db(mock_conn_fn, cur)
-        with self.assertRaises(EnrollmentError):
-            verify_terminal_account_created(self.cfg, 1, [FakeUser("1001")])
 
 
 # ---------------------------------------------------------------------------
@@ -802,7 +822,9 @@ class TestSafetyInvariants(unittest.TestCase):
             )
             all_sql.extend(cur.sql())
 
-        # 2. Create terminal account
+        # 2. Create terminal account (verification, uid capture, and the state
+        # transition all happen atomically inside this single call now — no
+        # separate "verify roster" step).
         with (
             patch("app.enrollment.log_sync_event"),
             patch("app.enrollment.ensure_device_user", return_value=42),
@@ -811,21 +833,12 @@ class TestSafetyInvariants(unittest.TestCase):
             cur = FakeCursor(fetchone_queue=[make_enrollment_tuple(employee_id=self.employee_id)])
             make_db(m2, cur)
             device = FakeDevice(users=[])
-            create_reserved_terminal_account(
+            create_or_reconcile_terminal_account(
                 self.cfg, 1, "Somchai S.", device
             )
             all_sql.extend(cur.sql())
 
-        # 3. Verify roster
-        with patch("app.enrollment.get_db_connection") as m3:
-            cur = FakeCursor(
-                fetchone_queue=[make_enrollment_tuple(status="TERMINAL_ACCOUNT_CREATED")]
-            )
-            make_db(m3, cur)
-            verify_terminal_account_created(self.cfg, 1, [FakeUser("1001", uid=77, name="Somchai S.")])
-            all_sql.extend(cur.sql())
-
-        # 4. Fingerprint + scan + ready
+        # 3. Fingerprint + scan + ready
         # Each step: (cursor row state, transition function, target state)
         steps = [
             ("TERMINAL_ACCOUNT_CREATED", start_fingerprint_enrollment, "FINGERPRINT_ENROLLMENT_PENDING"),
@@ -876,10 +889,11 @@ class TestSafetyInvariants(unittest.TestCase):
             cur = FakeCursor(fetchone_queue=[make_enrollment_tuple()])
             make_db(m, cur)
             device = FakeDevice(users=[])
-            create_reserved_terminal_account(self.cfg, 1, "Somchai S.", device)
+            create_or_reconcile_terminal_account(self.cfg, 1, "Somchai S.", device)
 
-        # Only read roster + create account were touched.
-        self.assertEqual(device.calls, ["get_users", "set_user"])
+        # Only read roster + create account + confirm read-back were touched
+        # — no destructive operation anywhere in the call sequence.
+        self.assertEqual(device.calls, ["get_users", "set_user", "get_users"])
         self.assertEqual(device.set_user_calls[0]["privilege"], PRIVILEGE_NORMAL_USER)
 
     def test_reservation_never_touches_device(self):

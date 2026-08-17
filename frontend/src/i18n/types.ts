@@ -173,6 +173,16 @@ export interface Translations {
     writeSessionLockedTitle: string;
     writeSessionLockedBody: string;
     writeSessionExpiredMidWorkflow: string;
+    terminalNameNoEnglishHint: string;
+    creatingOrVerifying: string;
+    verifyReconcileButton: string;
+    terminalConflictTitle: string;
+    terminalConflictBody: string;
+    terminalUnconfirmedTitle: string;
+    terminalUnconfirmedBody: string;
+    terminalInProgressBody: string;
+    terminalReconciledSuccess: string;
+    terminalCreatedSuccess: string;
   };
   attendance: {
     title: string;

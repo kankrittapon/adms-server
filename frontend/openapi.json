@@ -953,6 +953,18 @@
             ],
             "title": "Employee Name"
           },
+          "english_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical terminal-safe (ASCII) name, when set on the Human Master record.",
+            "title": "English Name"
+          },
           "enrollment_id": {
             "title": "Enrollment Id",
             "type": "integer"
@@ -1105,6 +1117,18 @@
           "enrollment_id": {
             "title": "Enrollment Id",
             "type": "integer"
+          },
+          "reconciled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "create-terminal-account only: true if the terminal account already existed and this call reconciled ADMS state without a new set_user() call; false if this call performed the mutation; null for every other transition.",
+            "title": "Reconciled"
           },
           "status": {
             "title": "Status",

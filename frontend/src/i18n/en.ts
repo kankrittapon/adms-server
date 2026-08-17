@@ -174,6 +174,16 @@ export const en: Translations = {
     writeSessionLockedBody: "Ask an administrator to open an enrollment work session.",
     writeSessionExpiredMidWorkflow:
       "Your work session expired. Your progress is saved — ask an administrator to reopen a work session to continue.",
+    terminalNameNoEnglishHint: "No English name on file for this person. Ask an administrator to set one in Personnel, or enter one now (English letters and numbers only).",
+    creatingOrVerifying: "Creating / verifying terminal account...",
+    verifyReconcileButton: "Verify / Reconcile",
+    terminalConflictTitle: "This terminal ID belongs to someone else",
+    terminalConflictBody: "The terminal account already exists but doesn't match this enrollment. Nothing was changed or deleted. Ask an administrator to check the terminal before continuing.",
+    terminalUnconfirmedTitle: "Could not confirm the terminal account",
+    terminalUnconfirmedBody: "The system tried to create the account but couldn't confirm it on the terminal yet. It's safe to try again.",
+    terminalInProgressBody: "A terminal command for this enrollment is still running. Please wait a moment before trying again.",
+    terminalReconciledSuccess: "Terminal account verified — it already existed on the device and now matches this enrollment.",
+    terminalCreatedSuccess: "Terminal account created on device.",
   },
   attendance: {
     title: "Attendance Monitor",

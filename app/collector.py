@@ -99,10 +99,15 @@ class CollectorStateEngine:
                 )
                 return
             try:
-                from app.enrollment import create_reserved_terminal_account
+                from app.enrollment import (
+                    EnrollmentError,
+                    TerminalAccountConflict,
+                    TerminalAccountUnconfirmed,
+                    create_or_reconcile_terminal_account,
+                )
                 enrollment_id = int(params["enrollment_id"])
                 display_name = str(params["display_name"])
-                result = create_reserved_terminal_account(
+                result = create_or_reconcile_terminal_account(
                     self.cfg,
                     enrollment_id=enrollment_id,
                     display_name=display_name,
@@ -114,6 +119,24 @@ class CollectorStateEngine:
                     command_id,
                     success=True,
                     result=result
+                )
+            except TerminalAccountConflict as e:
+                log.error("Device command %s: terminal account conflict: %s", command_id, e)
+                self.mqtt_service.publish_command_response(
+                    command_id, success=False, error=str(e),
+                    error_code="TERMINAL_ACCOUNT_CONFLICT",
+                )
+            except TerminalAccountUnconfirmed as e:
+                log.error("Device command %s: terminal account unconfirmed: %s", command_id, e)
+                self.mqtt_service.publish_command_response(
+                    command_id, success=False, error=str(e),
+                    error_code="TERMINAL_ACCOUNT_UNCONFIRMED",
+                )
+            except EnrollmentError as e:
+                log.error("Device command execution failed for %s: %s", command_id, e)
+                self.mqtt_service.publish_command_response(
+                    command_id, success=False, error=str(e),
+                    error_code="ENROLLMENT_CONFLICT",
                 )
             except Exception as e:
                 log.error("Device command execution failed for %s: %s", command_id, e)

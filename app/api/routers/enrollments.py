@@ -37,10 +37,12 @@ from app.config import Config
 from app.enrollment import (
     ALLOWED_TRANSITIONS,
     ENROLLMENT_ACTIONS,
+    TerminalAccountConflict,
+    TerminalAccountUnconfirmed,
     cancel_enrollment,
     confirm_controlled_scan,
     confirm_fingerprint_enrolled,
-    create_reserved_terminal_account,
+    create_or_reconcile_terminal_account,
     get_enrollment,
     mark_ready_for_mapping,
     reserve_next_device_user_id,
@@ -194,21 +196,29 @@ def create_terminal_account(
 ):
     # Check if a direct test device is injected into app state (e.g. unit tests)
     if hasattr(request.app.state, "device_executor") and request.app.state.device_executor is not None:
-        create_reserved_terminal_account(
-            cfg,
-            enrollment_id=enrollment_id,
-            display_name=payload.display_name,
-            device=request.app.state.device_executor,
-        )
+        try:
+            result = create_or_reconcile_terminal_account(
+                cfg,
+                enrollment_id=enrollment_id,
+                display_name=payload.display_name,
+                device=request.app.state.device_executor,
+            )
+        except TerminalAccountConflict as e:
+            raise ApiError(409, "TERMINAL_ACCOUNT_CONFLICT", str(e))
+        except TerminalAccountUnconfirmed as e:
+            raise ApiError(503, "TERMINAL_ACCOUNT_UNCONFIRMED", str(e))
         return {
             "enrollment_id": enrollment_id,
             "status": "TERMINAL_ACCOUNT_CREATED",
             "action": "create-terminal-account",
             "operator": payload.operator,
+            "reconciled": result.get("reconciled", False),
         }
 
-    # Serialized dispatch over DeviceCommandBus to the live Collector
-    from app.device_command_bus import get_command_bus, DeviceCommandError
+    # Serialized dispatch over DeviceCommandBus to the live Collector.
+    # dedupe_key ties concurrent/duplicate requests for this enrollment
+    # together so at most one set_user() reaches the device at a time.
+    from app.device_command_bus import get_command_bus, DeviceCommandBusy, DeviceCommandError
     bus = get_command_bus(cfg)
     try:
         res = bus.execute(
@@ -219,9 +229,28 @@ def create_terminal_account(
                 "operator": payload.operator,
             },
             timeout=10.0,
+            dedupe_key="enrollment:%s" % enrollment_id,
         )
+    except DeviceCommandBusy as e:
+        raise ApiError(409, "DEVICE_COMMAND_IN_PROGRESS", str(e))
     except DeviceCommandError as e:
         err_str = str(e)
+        # Prefer the structured error_code from the Collector's response when
+        # present — only fall back to substring matching for exceptions that
+        # didn't carry one (e.g. a transport-level failure with no Collector
+        # response at all).
+        code = getattr(e, "error_code", None)
+        if code == "TERMINAL_ACCOUNT_CONFLICT":
+            raise ApiError(409, code, err_str)
+        if code == "TERMINAL_ACCOUNT_UNCONFIRMED":
+            raise ApiError(503, code, err_str)
+        if code == "ENROLLMENT_CONFLICT":
+            raise ApiError(409, code, err_str)
+        if getattr(e, "timed_out", False):
+            # UNKNOWN OUTCOME, not guaranteed failure — the frontend should
+            # offer "Verify / Reconcile" (re-issuing this same request is
+            # safe and idempotent), not a plain "failed, try again".
+            raise ApiError(503, "DEVICE_COMMAND_TIMEOUT", err_str)
         if "already exists" in err_str or "state" in err_str or "expected RESERVED" in err_str:
             raise ApiError(409, "ENROLLMENT_CONFLICT", err_str)
         raise ApiError(503, "DEVICE_UNAVAILABLE", err_str)
@@ -231,6 +260,7 @@ def create_terminal_account(
         "status": res.get("status", "TERMINAL_ACCOUNT_CREATED"),
         "action": "create-terminal-account",
         "operator": payload.operator,
+        "reconciled": res.get("reconciled", False),
     }
 
 

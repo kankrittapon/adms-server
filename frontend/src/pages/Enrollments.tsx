@@ -40,6 +40,7 @@ export function Enrollments() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [terminalAccountUncertain, setTerminalAccountUncertain] = useState(false);
 
   const STEPS = [
     { id: "RESERVED", label: t.enrollment.step1Title },
@@ -148,6 +149,7 @@ export function Enrollments() {
                       setSelectedId(e.enrollment_id);
                       setActionError(null);
                       setActionSuccess(null);
+                      setTerminalAccountUncertain(false);
                     }}
                     className={`cursor-pointer rounded-lg border p-3.5 text-xs transition-all ${
                       isSelected
@@ -189,18 +191,22 @@ export function Enrollments() {
               steps={STEPS}
               canMutate={canMutate}
               busyAction={busyAction}
+              terminalAccountUncertain={terminalAccountUncertain}
               onRunAction={async (action, payload) => {
                 setBusyAction(action);
                 setActionError(null);
                 setActionSuccess(null);
                 try {
                   if (action === "create-terminal-account") {
-                    await api.createTerminalAccount(
+                    const res = await api.createTerminalAccount(
                       selected.enrollment_id,
                       payload.display_name as string,
                       me?.username ?? "operator"
                     );
-                    setActionSuccess("Terminal account created on device.");
+                    setActionSuccess(
+                      res.reconciled ? t.enrollment.terminalReconciledSuccess : t.enrollment.terminalCreatedSuccess
+                    );
+                    setTerminalAccountUncertain(false);
                   } else if (action === "start-fingerprint-enrollment") {
                     await api.startFingerprintEnrollment(selected.enrollment_id, me?.username ?? "operator");
                     setActionSuccess("Fingerprint enrollment window active.");
@@ -223,7 +229,27 @@ export function Enrollments() {
                   list.reload();
                   nextActions.reload();
                 } catch (err: unknown) {
-                  if (err instanceof ApiClientError && err.code === "WRITE_SESSION_EXPIRED") {
+                  if (action === "create-terminal-account" && err instanceof ApiClientError) {
+                    if (err.code === "TERMINAL_ACCOUNT_CONFLICT") {
+                      setActionError(`${t.enrollment.terminalConflictTitle}. ${t.enrollment.terminalConflictBody}`);
+                      setTerminalAccountUncertain(false);
+                    } else if (err.code === "TERMINAL_ACCOUNT_UNCONFIRMED") {
+                      setActionError(`${t.enrollment.terminalUnconfirmedTitle}. ${t.enrollment.terminalUnconfirmedBody}`);
+                      setTerminalAccountUncertain(true);
+                    } else if (err.code === "DEVICE_COMMAND_TIMEOUT") {
+                      setActionError(t.enrollment.terminalUnconfirmedBody);
+                      setTerminalAccountUncertain(true);
+                    } else if (err.code === "DEVICE_COMMAND_IN_PROGRESS") {
+                      setActionError(t.enrollment.terminalInProgressBody);
+                      setTerminalAccountUncertain(true);
+                    } else if (err.code === "WRITE_SESSION_EXPIRED") {
+                      setActionError(t.enrollment.writeSessionExpiredMidWorkflow);
+                    } else if (err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_DISABLED") {
+                      setActionError(t.enrollment.writeSessionLockedBody);
+                    } else {
+                      setActionError(`${err.code}: ${err.message}`);
+                    }
+                  } else if (err instanceof ApiClientError && err.code === "WRITE_SESSION_EXPIRED") {
                     setActionError(t.enrollment.writeSessionExpiredMidWorkflow);
                   } else if (err instanceof ApiClientError && (err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_DISABLED")) {
                     setActionError(t.enrollment.writeSessionLockedBody);
@@ -231,6 +257,13 @@ export function Enrollments() {
                     setActionError(`${err.code}: ${err.message}`);
                   } else {
                     setActionError(err instanceof Error ? err.message : String(err));
+                  }
+                  if (action === "create-terminal-account") {
+                    // Outcome may be uncertain (timeout/unconfirmed/in-progress) —
+                    // refresh from the server so the UI reflects ground truth if
+                    // the backend actually committed despite the error response.
+                    list.reload();
+                    nextActions.reload();
                   }
                 } finally {
                   setBusyAction(null);
@@ -394,16 +427,21 @@ function ActiveEnrollmentInspector({
   canMutate,
   busyAction,
   onRunAction,
+  terminalAccountUncertain,
 }: {
   enrollment: Enrollment;
   steps: { id: string; label: string }[];
   canMutate: boolean;
   busyAction: string | null;
   onRunAction: (action: string, payload: Record<string, unknown>) => Promise<void>;
+  terminalAccountUncertain: boolean;
 }) {
   const { t } = useTranslation();
   const currentStep = getStepIndex(enrollment.status);
-  const [displayName, setDisplayName] = useState(enrollment.employee_name ?? "");
+  // Prefer the canonical terminal-safe English name; never default to the
+  // Thai display name, which would always fail the ASCII guard and forces
+  // operators to hand-type an ad hoc transliteration every time.
+  const [displayName, setDisplayName] = useState(enrollment.english_name ?? "");
   const [scanTime, setScanTime] = useState("");
   const [scanTimeError, setScanTimeError] = useState(false);
   const [cancelNotes, setCancelNotes] = useState("");
@@ -540,13 +578,20 @@ function ActiveEnrollmentInspector({
                 disabled={!canMutate || busyAction === "create-terminal-account"}
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
               />
+              {!enrollment.english_name && (
+                <p className="mt-1 text-[11px] text-blue-800/80 leading-snug">{t.enrollment.terminalNameNoEnglishHint}</p>
+              )}
             </div>
             <button
-              onClick={() => onRunAction("create-terminal-account", { display_name: displayName.trim() || enrollment.employee_name })}
+              onClick={() => onRunAction("create-terminal-account", { display_name: displayName.trim() })}
               disabled={!canMutate || busyAction === "create-terminal-account" || !displayName.trim()}
               className="rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {busyAction === "create-terminal-account" ? t.common.saving : t.enrollment.step2Button}
+              {busyAction === "create-terminal-account"
+                ? t.enrollment.creatingOrVerifying
+                : terminalAccountUncertain
+                ? t.enrollment.verifyReconcileButton
+                : t.enrollment.step2Button}
             </button>
           </div>
         </div>
