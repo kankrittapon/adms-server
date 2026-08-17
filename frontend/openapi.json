@@ -2215,6 +2215,27 @@
         "title": "RankReference",
         "type": "object"
       },
+      "ReconcileScanEvidenceRequest": {
+        "description": "ADMS-ControlledScan-EvidenceBinding-018-Deploy: narrow, ADMIN-only,\none-time correction of controlled_scan_time for enrollments recorded\nunder the pre-018 estimate-based architecture. See\napp.enrollment.reconcile_controlled_scan_evidence for the five\nre-verified evidence criteria this operation enforces before writing\nanything.",
+        "properties": {
+          "attendance_id": {
+            "description": "the independently-verified attendance_logs id",
+            "title": "Attendance Id",
+            "type": "integer"
+          },
+          "operator": {
+            "description": "explicit ADMIN identity performing the reconciliation",
+            "title": "Operator",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attendance_id",
+          "operator"
+        ],
+        "title": "ReconcileScanEvidenceRequest",
+        "type": "object"
+      },
       "ReserveRequest": {
         "properties": {
           "device_id": {
@@ -3842,6 +3863,58 @@
           }
         },
         "summary": "Get Next Actions",
+        "tags": [
+          "enrollments"
+        ]
+      }
+    },
+    "/api/v1/enrollments/{enrollment_id}/reconcile-scan-evidence": {
+      "post": {
+        "operationId": "reconcile_scan_evidence_api_v1_enrollments__enrollment_id__reconcile_scan_evidence_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "enrollment_id",
+            "required": true,
+            "schema": {
+              "title": "Enrollment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcileScanEvidenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentTransitionResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reconcile Scan Evidence",
         "tags": [
           "enrollments"
         ]

@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
 from app.api import repository
-from app.api.auth import ROLES_ENROLLMENT_MUTATE, ROLES_ENROLLMENT_READ
+from app.api.auth import ROLES_ADMIN_ONLY, ROLES_ENROLLMENT_MUTATE, ROLES_ENROLLMENT_READ
 from app.api.dependencies import (
     get_cfg,
     pagination,
@@ -46,6 +46,7 @@ from app.enrollment import (
     create_or_reconcile_terminal_account,
     get_enrollment,
     mark_ready_for_mapping,
+    reconcile_controlled_scan_evidence,
     reserve_next_device_user_id,
     start_controlled_scan_window,
     start_fingerprint_enrollment,
@@ -382,6 +383,42 @@ def confirm_scan(
     cfg: Config = Depends(get_cfg),
 ):
     return confirm_controlled_scan(cfg, enrollment_id, payload.operator, None)
+
+
+class ReconcileScanEvidenceRequest(BaseModel):
+    """ADMS-ControlledScan-EvidenceBinding-018-Deploy: narrow, ADMIN-only,
+    one-time correction of controlled_scan_time for enrollments recorded
+    under the pre-018 estimate-based architecture. See
+    app.enrollment.reconcile_controlled_scan_evidence for the five
+    re-verified evidence criteria this operation enforces before writing
+    anything."""
+
+    attendance_id: int = Field(description="the independently-verified attendance_logs id")
+    operator: str = Field(description="explicit ADMIN identity performing the reconciliation")
+
+
+@router.post(
+    "/api/v1/enrollments/{enrollment_id}/reconcile-scan-evidence",
+    response_model=EnrollmentTransitionResult,
+    dependencies=[
+        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
+)
+def reconcile_scan_evidence(
+    enrollment_id: int,
+    payload: ReconcileScanEvidenceRequest,
+    cfg: Config = Depends(get_cfg),
+):
+    result = reconcile_controlled_scan_evidence(
+        cfg, enrollment_id, payload.attendance_id, payload.operator
+    )
+    return {
+        "enrollment_id": result["enrollment_id"],
+        "status": result["status"],
+        "controlled_scan_time": result["controlled_scan_time"],
+    }
 
 
 @router.post(

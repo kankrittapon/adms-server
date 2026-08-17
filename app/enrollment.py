@@ -874,6 +874,171 @@ def confirm_controlled_scan(
     }
 
 
+def reconcile_controlled_scan_evidence(
+    cfg: Config,
+    enrollment_id: int,
+    attendance_id: int,
+    operator: str,
+) -> Dict[str, Any]:
+    """
+    Narrow, ADMIN-only, one-time correction of controlled_scan_time to a
+    specific, independently-verified attendance_logs row — ADMS-
+    ControlledScan-EvidenceBinding-018-Deploy.
+
+    Exists only for enrollments whose controlled_scan_time was recorded
+    under the pre-018 estimate-based architecture and therefore does not
+    bit-for-bit match the real evidence confirm_controlled_scan() would
+    have bound had the new code been live at the time. This is NOT a
+    general enrollment-edit backdoor: it re-verifies, INSIDE THIS SAME
+    TRANSACTION, every one of the five canonical binding criteria before
+    touching anything —
+
+      1. the attendance row exists and belongs to the enrollment's own
+         device (via device_id -> device_users -> device_user_pk),
+      2. it belongs to the enrollment's own reserved terminal user
+         (device_user_pk match, active device_users row),
+      3. it falls within the enrollment's own recorded controlled-scan
+         window,
+      4. the device_user's account_incarnation is unambiguous (a single,
+         currently-active incarnation — this function does not attempt to
+         reconcile across a reincarnated/recycled terminal ID), and
+      5. no other attendance row for the same device_user_pk also falls in
+         the window (no competing-scan ambiguity).
+
+    Only controlled_scan_time is written. terminal_created_at, device_uid,
+    fingerprint_confirmed_at, confirmed_by/confirmed_at, status, the
+    terminal account, the attendance row itself, device_users, and any
+    mapping are never touched. Emits exactly one
+    ENROLLMENT_SCAN_EVIDENCE_RECONCILED audit event.
+
+    Caller (the API route) is responsible for enforcing API_WRITE_ENABLED,
+    an active Runtime Write Session, and ADMIN role — this function only
+    re-verifies the EVIDENCE preconditions, not the authorization ones.
+    """
+    if not operator or not str(operator).strip():
+        raise EnrollmentError("operator is required for evidence reconciliation")
+
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            enroll = _fetch_enrollment_locked(cur, enrollment_id)
+            until = enroll["controlled_scan_window_until"]
+            existing_scan_time = enroll["controlled_scan_time"]
+            if until is None or existing_scan_time is None:
+                raise EnrollmentError(
+                    "enrollment %s has no recorded controlled-scan window/time — "
+                    "nothing to reconcile" % enrollment_id
+                )
+            # Window start is not independently recoverable after later
+            # transitions have overwritten updated_at (the same reason
+            # confirm_controlled_scan()'s own window_start technique only
+            # works at confirm-time) — for this narrow reconciliation path,
+            # the window is instead reconstructed from the already-stored
+            # window end and the fixed default duration, exactly as done
+            # during the read-only verification this operation is
+            # authorizing.
+            window_start = until - timedelta(minutes=DEFAULT_CONTROLLED_SCAN_WINDOW_MINUTES)
+
+            # 1 & 2. Device + terminal-user constraint, active account.
+            cur.execute(
+                "SELECT device_user_pk, active, account_incarnation FROM device_users "
+                "WHERE device_id = %s AND device_user_id = %s;",
+                (enroll["device_id"], enroll["reserved_device_user_id"]),
+            )
+            du = cur.fetchone()
+            if du is None:
+                raise EnrollmentError(
+                    "enrollment %s has no device_users row on record — cannot "
+                    "reconcile evidence" % enrollment_id
+                )
+            device_user_pk, du_active, incarnation = du
+            if not du_active:
+                raise EnrollmentError(
+                    "device_user_pk %s is inactive — refusing to reconcile evidence "
+                    "against an inactive/recycled account" % device_user_pk
+                )
+
+            # 3. Target attendance row must exist, belong to this
+            # device_user_pk, and fall inside the window.
+            cur.execute(
+                "SELECT id, device_user_pk, scan_time FROM attendance_logs WHERE id = %s;",
+                (attendance_id,),
+            )
+            att = cur.fetchone()
+            if att is None:
+                raise EnrollmentError("attendance id %s does not exist" % attendance_id)
+            att_id, att_pk, att_scan_time = att
+            if att_pk != device_user_pk:
+                raise EnrollmentError(
+                    "attendance id %s belongs to device_user_pk %s, not %s — "
+                    "mismatched terminal user, refusing to reconcile"
+                    % (attendance_id, att_pk, device_user_pk)
+                )
+            if not (window_start <= att_scan_time <= until):
+                raise EnrollmentError(
+                    "attendance id %s scan_time %s falls outside the reconstructed "
+                    "controlled-scan window [%s, %s] — refusing to reconcile"
+                    % (attendance_id, att_scan_time.isoformat(), window_start.isoformat(), until.isoformat())
+                )
+
+            # 5. No competing candidate for the same device_user_pk in the
+            # same window — ambiguity must never be silently resolved.
+            cur.execute(
+                "SELECT id FROM attendance_logs "
+                "WHERE device_user_pk = %s AND scan_time BETWEEN %s AND %s;",
+                (device_user_pk, window_start, until),
+            )
+            candidates = [r[0] for r in cur.fetchall()]
+            if candidates != [attendance_id]:
+                raise EnrollmentError(
+                    "ambiguous evidence: attendance candidates %s found for "
+                    "device_user_pk %s in the window — refusing to reconcile "
+                    "automatically" % (candidates, device_user_pk)
+                )
+
+            # No competing VERIFIED mapping already exists (defense-in-depth
+            # — create_verified_mapping() re-checks this independently too).
+            cur.execute(
+                "SELECT 1 FROM employee_device_mappings "
+                "WHERE device_user_pk = %s AND mapping_status = 'VERIFIED' "
+                "AND (valid_to IS NULL OR valid_to > %s) LIMIT 1;",
+                (device_user_pk, att_scan_time),
+            )
+            if cur.fetchone() is not None:
+                raise EnrollmentError(
+                    "a conflicting VERIFIED mapping already exists for device_user_pk "
+                    "%s — refusing to reconcile" % device_user_pk
+                )
+
+            cur.execute(
+                "UPDATE device_user_enrollments "
+                "SET controlled_scan_time = %s, updated_at = now() "
+                "WHERE enrollment_id = %s;",
+                (att_scan_time, enrollment_id),
+            )
+            if cur.rowcount != 1:
+                raise EnrollmentError(
+                    "enrollment %s not updated (concurrent state change?)" % enrollment_id
+                )
+            conn.commit()
+
+    log_sync_event(
+        cfg,
+        "ENROLLMENT_SCAN_EVIDENCE_RECONCILED",
+        "enrollment_id=%s attendance_id=%s old_scan_time=%s new_scan_time=%s "
+        "device_user_pk=%s account_incarnation=%s reconciled_by=%s"
+        % (
+            enrollment_id, attendance_id, existing_scan_time.isoformat(),
+            att_scan_time.isoformat(), device_user_pk, incarnation, operator,
+        ),
+    )
+    return {
+        "enrollment_id": enrollment_id,
+        "status": enroll["status"],  # this operation never changes status
+        "controlled_attendance_id": attendance_id,
+        "controlled_scan_time": att_scan_time,
+    }
+
+
 def mark_ready_for_mapping(
     cfg: Config,
     enrollment_id: int,

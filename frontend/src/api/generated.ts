@@ -437,6 +437,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/enrollments/{enrollment_id}/reconcile-scan-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reconcile Scan Evidence */
+        post: operations["reconcile_scan_evidence_api_v1_enrollments__enrollment_id__reconcile_scan_evidence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/enrollments/{enrollment_id}/start-controlled-scan": {
         parameters: {
             query?: never;
@@ -1515,6 +1532,27 @@ export interface components {
             /** Source */
             source: string;
         };
+        /**
+         * ReconcileScanEvidenceRequest
+         * @description ADMS-ControlledScan-EvidenceBinding-018-Deploy: narrow, ADMIN-only,
+         *     one-time correction of controlled_scan_time for enrollments recorded
+         *     under the pre-018 estimate-based architecture. See
+         *     app.enrollment.reconcile_controlled_scan_evidence for the five
+         *     re-verified evidence criteria this operation enforces before writing
+         *     anything.
+         */
+        ReconcileScanEvidenceRequest: {
+            /**
+             * Attendance Id
+             * @description the independently-verified attendance_logs id
+             */
+            attendance_id: number;
+            /**
+             * Operator
+             * @description explicit ADMIN identity performing the reconciliation
+             */
+            operator: string;
+        };
         /** ReserveRequest */
         ReserveRequest: {
             /**
@@ -2391,6 +2429,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnrollmentNextActions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_scan_evidence_api_v1_enrollments__enrollment_id__reconcile_scan_evidence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enrollment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileScanEvidenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollmentTransitionResult"];
                 };
             };
             /** @description Validation Error */
