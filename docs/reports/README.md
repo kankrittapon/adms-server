@@ -2,7 +2,8 @@
 
 ## 0. Latest Report
 
-- [**ADMS-FullSystem-P0P1-Hardening-007**](ADMS-FullSystem-P0P1-Hardening-007.md) — security correctness fixes, runtime write-session architecture, enrollment/UX hardening, i18n cleanup. Phases A–E complete in source; Phase F production deployment pending a separate owner gate. This report lives alongside this index (not in `archive/`) because it documents work not yet fully deployed — it will move to `archive/` once Phase F ships and a subsequent checkpoint supersedes it.
+- [**ADMS-FullSystem-P0P1-Hardening-007-PhaseF**](ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md) — **deployment record.** Migration 012 applied to production, `adms_api`/`adms_web` redeployed, `API_WRITE_ENABLED` transitioned to `true`, full two-layer write-control verification matrix (13/13 checks passed) run live against production. Read this together with the implementation report below.
+- [ADMS-FullSystem-P0P1-Hardening-007](ADMS-FullSystem-P0P1-Hardening-007.md) — the implementation report: security correctness fixes, runtime write-session architecture, enrollment/UX hardening, i18n cleanup (Phases A–E). Kept alongside this index rather than archived, since the Phase F report actively references and extends it.
 
 ## 1. About Historical Reports
 
@@ -51,4 +52,5 @@ All completed phase reports have been preserved in the [Archive](file:///d:/Dev/
 | `ADMS-Frontend-FullControlUX-002` | Hardware UX | Browser-driven terminal account creation via Command Bus | [ADMS-Frontend-FullControlUX-002](archive/) |
 | `ADMS-Frontend-DesignSystem-003` | Design System | Enterprise UI design system implementation across all pages | (Integrated into `frontend/`) |
 | `ADMS-Frontend-I18n-RBAC-Personnel-004` | I18n & RBAC | TH/EN localization, `ENROLLMENT_OPERATOR`, English name edit | (Integrated across codebase) |
-| `ADMS-FullSystem-P0P1-Hardening-007` | Security + UX Hardening | Two-layer write-session model, operator-management write-gate fix, alert/confirm removal, centralized i18n enum labels. Phase F deployment pending. | [ADMS-FullSystem-P0P1-Hardening-007.md](ADMS-FullSystem-P0P1-Hardening-007.md) *(kept alongside this index, not archived — see §0)* |
+| `ADMS-FullSystem-P0P1-Hardening-007` | Security + UX Hardening | Two-layer write-session model, operator-management write-gate fix, alert/confirm removal, centralized i18n enum labels. | [ADMS-FullSystem-P0P1-Hardening-007.md](ADMS-FullSystem-P0P1-Hardening-007.md) *(kept alongside this index, not archived — see §0)* |
+| `ADMS-FullSystem-P0P1-Hardening-007-PhaseF` | Production Deployment | Migration 012 applied, containers redeployed, `API_WRITE_ENABLED=true`, two-layer write control verified live (13/13). | [ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md](ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md) |

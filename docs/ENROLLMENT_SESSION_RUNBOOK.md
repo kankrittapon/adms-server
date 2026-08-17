@@ -6,18 +6,14 @@ This runbook defines the authoritative end-to-end procedure for enrolling a real
 
 ---
 
-> ## ⚠ PRODUCTION STATE NOTICE — READ BEFORE STARTING A REAL SESSION
+> ## ✅ PRODUCTION STATE NOTICE
 >
-> `ADMS-FullSystem-P0P1-Hardening-007` (Phases A–E) added a browser-controlled
-> runtime write-session feature so an ADMIN can open/close write access for an
-> enrollment session without SSH — **this feature exists in source only.**
-> **Phase F (production deployment) has NOT occurred.** Production today still
-> runs the pre-Hardening-007 model: **§3 (Temporary Write Gate Enablement,
-> server-owner SSH step) is still required for every real enrollment session**
-> until Phase F is deployed and this notice is removed.
->
-> Do not skip §3 based on the "Normal Procedure" framing below — that section
-> describes the **target end-state**, not what production currently supports.
+> `ADMS-FullSystem-P0P1-Hardening-007` Phase F is **deployed and live**. The
+> browser-controlled runtime write-session feature described in §3 is the
+> **normal procedure for every real enrollment session** — no SSH or `.env`
+> edit is required to open write access for routine enrollment work. The
+> infrastructure master gate (`API_WRITE_ENABLED`) is now `true` as the
+> steady-state baseline and is a server-owner emergency lock only — see §3b.
 
 ---
 
@@ -46,9 +42,9 @@ This step is required regardless of which write-gate procedure below applies.
 
 ## 3. Opening Write Access for the Session
 
-### 3a. Normal Procedure (target end-state — active only after Phase F is deployed)
+### 3a. Normal Procedure (use this for every real session)
 
-Once Phase F ships, opening write access for a session is a browser action, not an SSH action:
+Opening write access for a session is a browser action, not an SSH action:
 
 1. An **ADMIN** signs in to the console and opens **System** (`/system`).
 2. In the **Production Changes** panel, enter a reason (e.g. "Enrollment session — Bldg 3") and click **Open work session**.
@@ -56,20 +52,21 @@ Once Phase F ships, opening write access for a session is a browser action, not 
 4. If more time is needed, the ADMIN opens a fresh session — there is no "leave it on" option by design.
 5. The ADMIN (or any ADMIN) can close the session early from the same panel once the session's work is done.
 
-This still requires the server-owner-controlled infrastructure master gate (`API_WRITE_ENABLED`) to be `true` — see §3b's role once Phase F ships: it becomes a rarely-touched emergency lock, not a per-session toggle.
+This requires the server-owner-controlled infrastructure master gate (`API_WRITE_ENABLED`) to already be `true` — which it is, as the standing production baseline (see §3b). If it has been turned off for an emergency lockdown, opening a session will fail until a server owner restores it.
 
-### 3b. Current Interim Procedure (use this today — production has not deployed Phase F)
+### 3b. Infrastructure Master Gate (server-owner emergency lock only — not part of the normal procedure)
 
-Enable the master production write flag on `ai-brain`:
+`API_WRITE_ENABLED=true` is the standing production baseline; a server owner only needs to touch this for a genuine emergency (e.g. suspected credential compromise, a bad deployment) or a maintenance window:
 
 ```bash
 cd /home/kanfullbuster/adms-server
-# Update .env or pass environment variable:
-# API_WRITE_ENABLED=true
+# Set API_WRITE_ENABLED=false in .env to hard-lock all writes immediately
+docker compose up -d api
+# Set back to true (API_WRITE_ENABLED=true) to restore normal operation
 docker compose up -d api
 ```
 
-Verify that the dashboard shows the write-enabled indicator (amber badge).
+This overrides the runtime write session unconditionally — while it is `false`, no ADMIN can open a session and no domain write can succeed, regardless of write-session state.
 
 ---
 
@@ -135,24 +132,11 @@ docker compose start listener
 
 ## 6. Post-Session Lock Down & Verification
 
-### 6a. Normal Procedure (target end-state, post-Phase F)
 1. If not already closed, an ADMIN closes the runtime write session from the System page (or lets it auto-expire — no action is required, it cannot be left open indefinitely).
-2. **Verify Telemetry**: Collector is `LIVE` and `device_connected=true`; the new scan on the Attendance page is attributed to the correct person.
-3. **Post-Session Backup** (§6c).
-
-### 6b. Current Interim Procedure (use this today)
-1. **Restore Write Lock**:
+2. **Verify Telemetry**: Collector is `LIVE` and `device_connected=true`; the new scan on the Attendance page is attributed to the correct person; the header badge shows the locked state.
+3. **Post-Session Backup**:
    ```bash
-   cd /home/kanfullbuster/adms-server
-   # Set API_WRITE_ENABLED=false in .env
-   docker compose up -d api
+   docker exec adms_postgres pg_dump -U adms -d adms -Fc -f /tmp/adms_post_enroll_$(date +%Y%m%d_%H%M%S).dump
    ```
-2. **Verify Telemetry**:
-   - Verify Collector is `LIVE` and `device_connected=true`.
-   - Verify that the new scan on the Attendance page is attributed to the correct Human.
-   - Verify that the write-disabled indicator displays on the dashboard.
 
-### 6c. Post-Session Backup (both procedures)
-```bash
-docker exec adms_postgres pg_dump -U adms -d adms -Fc -f /tmp/adms_post_enroll_$(date +%Y%m%d_%H%M%S).dump
-```
+The infrastructure master gate (`API_WRITE_ENABLED`) does **not** need to be touched as part of routine session lock-down — it stays `true` as the standing baseline; only a server owner performing an emergency lockdown would flip it (§3b).

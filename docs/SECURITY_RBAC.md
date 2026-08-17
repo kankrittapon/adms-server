@@ -1,6 +1,6 @@
 # ADMS Security & Role-Based Access Control (RBAC)
 
-> **Production state note (`ADMS-FullSystem-P0P1-Hardening-007`)**: this document describes the target two-layer write model implemented in source across Phases A–E. **Production has not yet deployed Phase F** — today, production enforces Layer 1 only (`API_WRITE_ENABLED`, currently `false`), exactly as before this hardening work. Layer 2 (runtime write session) is schema- and code-complete but inert in production until migration 012 is applied and the hardened `api`/`web` containers are deployed. See [STATUS.md](../STATUS.md) and [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](reports/ADMS-FullSystem-P0P1-Hardening-007.md).
+> **Production state note (`ADMS-FullSystem-P0P1-Hardening-007`)**: this document describes the two-layer write model, **live in production as of Phase F**. `API_WRITE_ENABLED` (Layer 1) is now `true` — the steady-state infrastructure baseline. The runtime write session (Layer 2) is closed by default; production stays write-locked until an ADMIN explicitly opens one. See [STATUS.md](../STATUS.md), [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](reports/ADMS-FullSystem-P0P1-Hardening-007.md), and [docs/reports/ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md](reports/ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md).
 
 ## 1. Security Architecture Principles
 
@@ -18,9 +18,9 @@ allow_write =
     AND role_permits_action          (RBAC — role-set check)
 ```
 
-**Layer 1 — Infrastructure master gate** (`API_WRITE_ENABLED`, unchanged from prior design): env-controlled, server-owner-only, fail-closed. Production value today: `false`. Overrides Layer 2 unconditionally — if Layer 1 is closed, Layer 2 is never even evaluated, and no runtime session can be opened.
+**Layer 1 — Infrastructure master gate** (`API_WRITE_ENABLED`, unchanged from prior design): env-controlled, server-owner-only, fail-closed. Production value: `true` (the steady-state deploy-time baseline as of Phase F — a rarely-touched emergency lock, not a daily toggle). Overrides Layer 2 unconditionally — if Layer 1 is closed, Layer 2 is never even evaluated, and no runtime session can be opened. This override behavior was explicitly verified live during Phase F deployment.
 
-**Layer 2 — Runtime write session** (new in Hardening-007, source-complete, not yet production-active): a short-lived, ADMIN-opened, auditable permission window (`app/write_session.py`, table `write_sessions`, migration 012). ADMIN-only open/close; fixed 30-minute duration with no automatic renewal; at most one session active at a time, enforced by a Postgres transaction-scoped advisory lock so concurrent open attempts cannot both succeed and an expired-but-unclosed session is reaped (and audited exactly once) before it can block a new open.
+**Layer 2 — Runtime write session** (new in Hardening-007, **live in production as of Phase F**): a short-lived, ADMIN-opened, auditable permission window (`app/write_session.py`, table `write_sessions`, migration 012 — applied). ADMIN-only open/close; fixed 30-minute duration with no automatic renewal; at most one session active at a time, enforced by a Postgres transaction-scoped advisory lock so concurrent open attempts cannot both succeed and an expired-but-unclosed session is reaped (and audited exactly once) before it can block a new open. Closed by default — no session is open unless an ADMIN explicitly opens one.
 
 **Auth/session-maintenance exemption**: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/change-password` are exempt from **both** write layers — they establish or terminate the caller's own authentication session, not domain state (Human/Device/Enrollment/Mapping/Operator records). An operator must always be able to log in or change a compromised password even while all domain writes are locked. The invariant: *any endpoint that creates, modifies, or invalidates domain state requires both write layers; endpoints that only establish/terminate the caller's own session do not.*
 
@@ -53,7 +53,7 @@ allow_write =
 | **Operator Management**: `POST /api/v1/operators`, `POST .../toggle-active` (write) | 403 | 403 | 403 | **Allowed (Admin Only, Write Gated)** — was previously ungated; fixed in Hardening-007 Phase A |
 | **Audit Log Trail**: `GET /api/v1/audit/events` | 403 | 403 | 403 | **Allowed (Admin Only)** |
 | **Write Session Status**: `GET /api/v1/write-session` | Allowed | Allowed | Allowed | Allowed |
-| **Write Session Open/Close**: `POST /api/v1/write-session/*` | 403 | 403 | 403 | **Allowed (Admin Only)** — source-complete, inert until Phase F |
+| **Write Session Open/Close**: `POST /api/v1/write-session/*` | 403 | 403 | 403 | **Allowed (Admin Only)** — live in production as of Phase F |
 
 ---
 
@@ -70,7 +70,7 @@ allow_write =
 
 ### `OPERATOR`
 - **Purpose**: Standard operational role for personnel enrollment and workflow management.
-- **Access Scope**: Inherits `VIEWER` visibility and can execute enrollment reservations, terminal account creations, and controlled scan confirmations when writes are open (today: `API_WRITE_ENABLED=true`; once Phase F is deployed: both `API_WRITE_ENABLED=true` and an active runtime write session).
+- **Access Scope**: Inherits `VIEWER` visibility and can execute enrollment reservations, terminal account creations, and controlled scan confirmations when writes are open — both `API_WRITE_ENABLED=true` and an active runtime write session are required.
 
 ### `ADMIN`
 - **Purpose**: System administrator and identity authority.

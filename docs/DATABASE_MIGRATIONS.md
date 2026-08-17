@@ -21,13 +21,13 @@ The ADMS PostgreSQL database (`adms`) is designed with strict additive schema pr
 | `009_device_user_lifecycle_hardening.sql` | Adds account incarnation counter for recycled terminal IDs. | Adds `account_incarnation INTEGER NOT NULL DEFAULT 1` to `device_users`. |
 | `010_enrollment_operator_role.sql` | Adds `ENROLLMENT_OPERATOR` role constraint. | Updates check constraints on `operators` and `api_tokens` to allow `'ENROLLMENT_OPERATOR'`. |
 | `011_human_english_name.sql` | Adds optional English full name for personnel. | Adds `english_name TEXT` column to `human_employees`. |
-| `012_write_session_schema.sql` | Runtime write-session (Layer 2 write control). **IMPLEMENTED / PENDING PRODUCTION APPLICATION** — see note below. | Creates `write_sessions` table. |
+| `012_write_session_schema.sql` | Runtime write-session (Layer 2 write control). **APPLIED TO PRODUCTION** — see note below. | Creates `write_sessions` table. |
 
 ---
 
 ### Migration 012 — Runtime Write Session (`012_write_session_schema.sql`)
 
-**Status: IMPLEMENTED / PENDING PRODUCTION APPLICATION.** This migration exists in the repository (`ADMS-FullSystem-P0P1-Hardening-007`, Phase B) and has been validated against the mocked test suite, but **has NOT been applied to the production database**. It requires a separate Phase F Owner Gate before application — see [STATUS.md](../STATUS.md).
+**Status: APPLIED TO PRODUCTION** (`ADMS-FullSystem-P0P1-Hardening-007-PhaseF`). This migration was implemented in Phase B, validated against the mocked test suite, and applied to the production database during Phase F deployment, following a verified pre-migration `pg_dump` backup (SHA256 + `pg_restore -l` sanity check) and confirmed with a verified post-migration backup. See [docs/reports/ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md](reports/ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md) for the full deployment record.
 
 - **Additive only.** Creates one new table, `write_sessions`; no existing table is altered, no column added/removed elsewhere, no backfill of any kind.
 - **Schema:**
@@ -46,7 +46,7 @@ The ADMS PostgreSQL database (`adms`) is designed with strict additive schema pr
   Plus a partial unique index guaranteeing at most one row with `closed_at IS NULL` at any time, and a supporting index on `opened_by`.
 - **Concurrency protection**: the "at most one active session" invariant is primarily enforced at the application layer via a **PostgreSQL transaction-scoped advisory lock** (`pg_advisory_xact_lock`, `app/write_session.py`) held for the duration of every open/close/status-read transaction — this is what makes reap-then-check-then-insert atomic and prevents two concurrent open attempts from both succeeding. The partial unique index is a database-level backstop behind that, not the primary mechanism (it only guarantees uniqueness of unclosed rows, independent of expiry — expiry is evaluated at read time via `expires_at > now()`, which cannot itself be encoded in a static partial-index predicate).
 - **Rollback**: dropping the `write_sessions` table is sufficient and safe in isolation — no other table has a foreign key into it, and no other migration depends on it. If Phase F's code deployment is also rolled back, any production `.env` change to `API_WRITE_ENABLED` made as part of that deployment must be reverted together with the code, not independently (see the Hardening-007 report's rollback plan).
-- **Do not mark this migration as applied to production** until a Phase F deployment has actually run `psql -f sql/012_write_session_schema.sql` (or the project's standard migration-apply procedure) against `adms_postgres`, following the pre-migration backup step in §2 of this document's general procedure / the Enrollment Session Runbook.
+- **Applied**: run against `adms_postgres` during Phase F, preceded by a verified `pg_dump` backup per the pre-migration backup procedure in the Enrollment Session Runbook, and followed by a verified post-migration backup.
 
 ---
 

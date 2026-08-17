@@ -1,9 +1,11 @@
 # ADMS-FullSystem-P0P1-Hardening-007
 
+> **Update:** Phase F has since been deployed — see [ADMS-FullSystem-P0P1-Hardening-007-PhaseF](ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md) for the deployment record (migration 012 applied, `API_WRITE_ENABLED=true`, two-layer write control verified live). The status/production-impact lines immediately below describe this document's state *as of the end of Phase E*, before that deployment — preserved as-written for the historical record; do not read them as describing current production state.
+
 **Type:** Engineering report — security hardening + usability hardening implementation
 **Depends on:** `ADMS-FullSystem-UsabilityReview-006` (read-only findings review)
-**Status:** Phases A–E **COMPLETE IN SOURCE**. Phase F (production deployment) **PENDING a separate Owner Gate — not yet executed.**
-**Production impact of this report:** none yet. `API_WRITE_ENABLED` unchanged (`false`), migration 012 not applied, Collector/MQTT/device untouched, no real enrollment performed.
+**Status (as of end of Phase E):** Phases A–E **COMPLETE IN SOURCE**. Phase F (production deployment) **PENDING a separate Owner Gate — not yet executed.**
+**Production impact (as of end of Phase E):** none yet. `API_WRITE_ENABLED` unchanged (`false`), migration 012 not applied, Collector/MQTT/device untouched, no real enrollment performed.
 
 ---
 

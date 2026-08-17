@@ -1,12 +1,12 @@
 # ADMS API Contract (F1 / F5 / F3 / F4 / P0P1-Hardening-007)
 
 **PromptID:** `ADMS-Frontend-F1-API-001` / `ADMS-Frontend-F5-Auth-001` / `ADMS-FullSystem-P0P1-Hardening-007`
-**Status:** IMPLEMENTED / LIVE (backend foundation remains 100% COMPLETE). The write-session endpoints and two-layer write model described in §1a below are **implemented in source (Phases A–E) but not yet deployed to production** — see [STATUS.md](../STATUS.md) and [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](reports/ADMS-FullSystem-P0P1-Hardening-007.md). Production currently still enforces only the Layer-1 `API_WRITE_ENABLED` gate described below, with `API_WRITE_ENABLED=false`.
+**Status:** IMPLEMENTED / LIVE (backend foundation remains 100% COMPLETE). The write-session endpoints and two-layer write model described in §1a below are **live in production as of Phase F** — see [STATUS.md](../STATUS.md), [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](reports/ADMS-FullSystem-P0P1-Hardening-007.md), and [docs/reports/ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md](reports/ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md).
 **Base URL:** `http://192.168.1.248:8081` (LAN-only)
 **OpenAPI:** `http://192.168.1.248:8081/openapi.json` · Swagger UI `/docs`
 **Frontend types (codegen):** committed snapshot `frontend/openapi.json` + `openapi-typescript` → `frontend/src/api/generated.ts`; `types.ts` re-exports generated components. Regenerate with `npm run codegen:api`; `tests/test_openapi_contract.py` fails when the snapshot is stale (`ADMS-Frontend-Codegen-001`).
 **Auth (F5):** DB-backed operator accounts, opaque Bearer tokens, roles VIEWER/ENROLLMENT_OPERATOR/OPERATOR/ADMIN — strict fail-closed (no/invalid token → 401, insufficient role → 403)
-**Write gate:** two layers as of Hardening-007 — see §1a. `API_WRITE_ENABLED=false` by default (Layer 1, defense-in-depth on top of role auth; production value today).
+**Write gate:** two layers, both live in production — see §1a. `API_WRITE_ENABLED=true` (Layer 1, now the deploy-time infrastructure baseline); the runtime write session (Layer 2) is the daily control and is closed by default.
 
 ---
 
@@ -15,7 +15,7 @@
 - `POST /api/v1/auth/login` `{username, password}` → `{token, role, expires_at, operator_id, username, display_name}` (token TTL default 12h, `API_TOKEN_TTL_HOURS`; per-IP rate limit default 5/min → 429 `RATE_LIMITED` + `Retry-After`)
 - `POST /api/v1/auth/logout` — revokes the presented token (reversible via `revoked_at`)
 - `POST /api/v1/auth/change-password` `{current_password, new_password ≥ 12}` — rehashes and revokes all other sessions (keeps current); logs `AUTH_PASSWORD_CHANGE`
-- `GET /api/v1/auth/me` — current operator context; response now additionally includes `write_session` (see §1a), reflecting the Layer-2 status even though Layer 2 is not yet production-active
+- `GET /api/v1/auth/me` — current operator context; response now additionally includes `write_session` (see §1a)
 - Send `Authorization: Bearer <token>` on all other endpoints.
 - Tokens stored only as SHA-256 hashes; passwords PBKDF2-SHA256 (never plaintext).
 - First ADMIN bootstrapped via `python -m app.api.bootstrap_admin --username X --password Y` (one-time).
@@ -35,17 +35,19 @@
 | `/healthz`, `/api/v1/auth/login` | public |
 | `/api/v1/auth/logout`, `/api/v1/auth/me`, `/api/v1/auth/change-password` | any authenticated |
 
-All domain-mutating writes require `API_WRITE_ENABLED=true` (Layer 1; 403 `WRITE_DISABLED` otherwise) — this now correctly includes operator management, which previously bypassed the gate (fixed in Hardening-007 Phase A). Once Phase F is deployed, the same writes additionally require an active runtime write session (Layer 2; see §1a).
+All domain-mutating writes require `API_WRITE_ENABLED=true` (Layer 1; 403 `WRITE_DISABLED` otherwise) — this now correctly includes operator management, which previously bypassed the gate (fixed in Hardening-007 Phase A). Production also requires an active runtime write session (Layer 2; see §1a) — both layers are enforced live.
 
-## 1a. Write-Session Endpoints (Layer 2 — source-complete, not yet production-active)
+## 1a. Write-Session Endpoints (Layer 2 — live in production as of Phase F)
 
-Implemented in `app/api/routers/write_session.py`. Requires migration `012_write_session_schema.sql`, which has not yet been applied to production — these endpoints will 500 against the production database until Phase F applies it.
+Implemented in `app/api/routers/write_session.py`, backed by migration `012_write_session_schema.sql` (applied to production during Phase F).
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | GET | `/api/v1/write-session` | any authenticated | Read-only status: `{active, session_id?, opened_by?, opened_by_name?, opened_at?, expires_at?, reason?, closed_at?}`. Also lazily reaps (and audits, at most once) an expired-but-unclosed session as a side effect. |
 | POST | `/api/v1/write-session/open` | ADMIN | Body `{reason}`. Fixed 30-minute duration (not client-configurable). Requires Layer 1 (`API_WRITE_ENABLED=true`) to succeed — Layer 1 unconditionally gates Layer 2. Rejected with `WRITE_SESSION_ALREADY_ACTIVE` (409) if one is already open. |
 | POST | `/api/v1/write-session/close` | ADMIN | No body. Idempotent — closing when nothing is active returns `{active: false, closed_at: null}`, not an error. **Not** gated by Layer 1 — closing (a de-escalation) must always be available to an ADMIN even if the infrastructure gate is already off. |
+
+No write session is open by default — production remains write-locked for domain mutations until an ADMIN explicitly opens one.
 
 At most one session may be active at a time, enforced via a Postgres transaction-scoped advisory lock (`pg_advisory_xact_lock`) so concurrent open attempts across any number of API workers cannot both succeed. Effective write permission for every domain-mutating endpoint:
 
@@ -82,11 +84,11 @@ Every error uses the envelope:
 |---|---|---|
 | 400 | (domain) | validation / domain error |
 | 403 | `WRITE_DISABLED` | Layer 1 write guard (API_WRITE_ENABLED=false) |
-| 403 | `WRITE_SESSION_REQUIRED` | Layer 2 — no runtime write session active (source-complete, inert until Phase F) |
-| 403 | `WRITE_SESSION_EXPIRED` | Layer 2 — session existed but expired (source-complete, inert until Phase F) |
+| 403 | `WRITE_SESSION_REQUIRED` | Layer 2 — no runtime write session active |
+| 403 | `WRITE_SESSION_EXPIRED` | Layer 2 — session existed but expired |
 | 404 | `NOT_FOUND` | missing resource |
 | 409 | `MAPPING_CONFLICT` / `ENROLLMENT_CONFLICT` | state conflict, duplicate reservation, mapping conflict |
-| 409 | `WRITE_SESSION_ALREADY_ACTIVE` | a write session is already open (source-complete, inert until Phase F) |
+| 409 | `WRITE_SESSION_ALREADY_ACTIVE` | a write session is already open |
 | 422 | `VALIDATION_ERROR` | request validation |
 | 500 | `INTERNAL_ERROR` | unexpected internal error (no secrets/stack/SQL leaked) |
 
@@ -202,20 +204,17 @@ Attendance `scan_time` is canonical UTC; timezone normalization is owned by
 
 ## 7. Write safety (defense-in-depth)
 
-`API_WRITE_ENABLED=false` (default) → all domain-mutating POST/PATCH routes
-return `403 WRITE_DISABLED` even for ADMIN tokens. F5 auth (roles) is live;
-the write flag is an additional master switch (Layer 1), independent of role
-authorization. Enabling writes today is a server-owner decision
-(`API_WRITE_ENABLED=true` in compose env, requiring an `api` container
-recreate) — this remains the only mechanism in production.
+`API_WRITE_ENABLED=false` → all domain-mutating POST/PATCH routes return
+`403 WRITE_DISABLED` even for ADMIN tokens. Production now runs with
+`API_WRITE_ENABLED=true` as the steady-state infrastructure baseline (Layer
+1) — it is a server-owner emergency lock, not a per-session toggle. F5 auth
+(roles) is live and independent of this flag.
 
-As of Hardening-007 (Phases A–E, source-complete), a second independent
-layer exists: a runtime write session (§1a), opened/closed by an ADMIN from
-the browser, auto-expiring after 30 minutes. Both layers are required for a
-write to succeed once Phase F is deployed; until then, Layer 2 is present in
-the code and schema but has no effect in production because migration 012
-has not been applied and the deployed `api`/`web` containers predate this
-work.
+As of Hardening-007 Phase F, a second independent layer is live in
+production: a runtime write session (§1a), opened/closed by an ADMIN from
+the browser, auto-expiring after 30 minutes. Both layers are required for
+any domain write to succeed; a write session is closed by default, so
+production remains write-locked until an ADMIN explicitly opens one.
 
 ## 8. Environment variables (API container)
 

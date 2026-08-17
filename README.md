@@ -14,11 +14,10 @@ An Attendance Device Management System connecting physical ZKTeco biometric term
 - **VERIFIED temporal identity mapping**: implemented and running.
 - **Role-based access control (RBAC)**: implemented — `VIEWER`, `ENROLLMENT_OPERATOR`, `OPERATOR`, `ADMIN`.
 - **OpenAPI-generated TypeScript client**: implemented; `frontend/src/api/generated.ts` is derived from the live backend contract and drift-guarded by a test.
-- **Runtime write-session feature** (`ADMS-FullSystem-P0P1-Hardening-007`, Phases A–E): **implemented in source, merged to `main`. Not yet active in production.**
-  - Production **Phase F deployment has NOT occurred**.
-  - Migration `012_write_session_schema.sql` has **NOT been applied** to the production database.
-  - `API_WRITE_ENABLED` currently **remains `false`** in production, using the pre-existing infrastructure-only write gate.
-  - See [STATUS.md](STATUS.md) and [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md) for the full picture and the pending Phase F owner gate.
+- **Runtime write-session feature** (`ADMS-FullSystem-P0P1-Hardening-007`): **live in production as of Phase F.**
+  - Migration `012_write_session_schema.sql` has been applied to the production database.
+  - `API_WRITE_ENABLED` is now `true` in production — the infrastructure gate is the deploy-time baseline; daily write control is the runtime write session (Layer 2), which is closed by default.
+  - See [STATUS.md](STATUS.md), [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md), and [docs/reports/ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md](docs/reports/ADMS-FullSystem-P0P1-Hardening-007-PhaseF.md) for the full picture and deployment verification record.
 
 ---
 
@@ -112,17 +111,18 @@ These descriptions match the TH/EN copy shown in the console's operator-account 
 
 ## Write Safety Model
 
-ADMS uses a **two-layer write-control model**. Layer 2 exists in source as of Phases A–E; **production has not yet transitioned onto it (Phase F pending)**.
+ADMS uses a **two-layer write-control model**, live in production as of Phase F.
 
 **Layer 1 — Infrastructure master gate** (`API_WRITE_ENABLED`)
-Server-owner controlled, environment-variable driven, fail-closed. This is the pre-existing mechanism and is what production currently uses exclusively (`false` today).
+Server-owner controlled, environment-variable driven, fail-closed. Now `true` in production as the steady-state deploy-time baseline — a rarely-touched emergency lock, not a daily toggle.
 
-**Layer 2 — Runtime write session** (new, in source only)
+**Layer 2 — Runtime write session**
 An ADMIN-opened, time-boxed permission window:
-- ADMIN-only open/close, from the browser.
+- ADMIN-only open/close, from the browser (System page).
 - Fixed 30-minute duration, no automatic renewal.
 - Auto-expiring; every open/close/expiry is audited.
 - At most one session active at a time.
+- **Closed by default** — no write session is open unless an ADMIN explicitly opens one.
 
 Effective write permission:
 
@@ -133,15 +133,13 @@ allow_write =
     AND role_permits_action
 ```
 
-Layer 1 unconditionally overrides Layer 2 — if the infrastructure gate is off, no runtime session can be opened or can authorize anything, regardless of its state in the database.
-
-**Current production reality:** because Phase F has not been deployed, production still runs the pre-existing Layer-1-only model — writes are enabled by a server owner editing `.env` and recreating the `api` container for the duration of a session, exactly as before. Once Phase F is approved and deployed, that step is replaced by an ADMIN opening a work session from the browser for routine enrollment sessions; the infrastructure flag becomes a rarely-touched emergency lock instead of a daily toggle.
+Layer 1 unconditionally overrides Layer 2 — if a server owner sets the infrastructure gate off, no runtime session can be opened or can authorize anything, regardless of its state in the database. This was verified in production during Phase F deployment.
 
 ---
 
 ## Enrollment Workflow
 
-The **target end-state** workflow (active once Phase F is deployed):
+The normal, browser-controlled workflow (live in production):
 
 1. ADMIN opens a work session from the browser (System page).
 2. Enrollment Operator selects the Human to enroll.
@@ -153,7 +151,7 @@ The **target end-state** workflow (active once Phase F is deployed):
 8. ADMIN reviews the human-readable evidence and creates the `VERIFIED` mapping.
 9. Work session closes (manually or by expiry) — no lingering write access.
 
-**Until Phase F is deployed**, step 1 is instead a server-owner action (`.env` edit + container recreate) — see [docs/ENROLLMENT_SESSION_RUNBOOK.md](docs/ENROLLMENT_SESSION_RUNBOOK.md) for the exact current procedure and its explicit production-state notice.
+See [docs/ENROLLMENT_SESSION_RUNBOOK.md](docs/ENROLLMENT_SESSION_RUNBOOK.md) for the full step-by-step procedure.
 
 The CLI-based terminal-account creation path (`app.enrollment_cli`) is **emergency/fallback tooling only** — used when the browser→Collector command path is unavailable — never the normal workflow.
 
