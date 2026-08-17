@@ -116,6 +116,7 @@ _ENROLLMENT_COLUMNS = [
     "confirmed_by",
     "confirmed_at",
     "notes",
+    "updated_at",
 ]
 
 # Columns _transition() is permitted to write via its extra dict. Anything
@@ -215,23 +216,6 @@ def validate_terminal_display_name(name: str) -> str:
     if not re.search(r"[A-Za-z]", name):
         raise EnrollmentError("display name must contain at least one letter")
     return name
-
-
-def _normalize_scan_time(scan_time: datetime) -> datetime:
-    """
-    Returns a timezone-aware scan_time.
-
-    Contract: controlled-scan evidence is compared against the DB-stored
-    window deadline (TIMESTAMPTZ, UTC). A naive datetime is interpreted as
-    UTC, so callers feeding device-local normalized timestamps MUST pass
-    tz-aware values (the collector's normalize_device_timestamp returns
-    tz-aware UTC) or the window comparison will be skewed.
-    """
-    if scan_time is None:
-        raise EnrollmentError("scan_time is required evidence")
-    if scan_time.tzinfo is None:
-        scan_time = scan_time.replace(tzinfo=timezone.utc)
-    return scan_time
 
 
 # ---------------------------------------------------------------------------
@@ -790,15 +774,33 @@ def start_controlled_scan_window(
 def confirm_controlled_scan(
     cfg: Config,
     enrollment_id: int,
-    scan_time: datetime,
     operator: str,
     notes: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Records that a matching attendance event was observed inside the active
-    controlled-scan window. Does NOT create a mapping.
+    Resolves and BINDS the real controlled-scan attendance evidence —
+    ADMS-ControlledScan-EvidenceBinding-018.
+
+    No operator/SSE-derived scan_time is accepted as input anymore (that
+    architecture — estimate now, rediscover-by-timestamp-proximity later —
+    is exactly what produced the "Attendance ID #?" incident class, most
+    recently Enrollment #4's 138s gap between a browser-estimated
+    controlled_scan_time and the real attendance_logs row). Instead, this
+    function itself looks up the actual matching attendance_logs row,
+    deterministically, and stores ITS real scan_time — so
+    controlled_scan_time is thereafter always bit-for-bit equal to genuine
+    terminal evidence, never an estimate to later reconcile.
+
+    Window bound is [window_start, controlled_scan_window_until], where
+    window_start is this enrollment row's own updated_at at the exact
+    moment start_controlled_scan_window() committed the CONTROLLED_SCAN_
+    PENDING transition — no new column, no migration; the value already
+    exists and is read here before this call's own UPDATE overwrites it.
+    Device/terminal-user constraint applies structurally via
+    device_user_pk. If multiple scans landed in the window, the EARLIEST
+    one wins deterministically (the first genuine attempt is the evidence,
+    not a later duplicate/retry).
     """
-    scan_time = _normalize_scan_time(scan_time)
     with get_db_connection(cfg) as conn:
         with conn.cursor() as cur:
             enroll = _fetch_enrollment(cur, enrollment_id)
@@ -810,31 +812,65 @@ def confirm_controlled_scan(
             until = enroll["controlled_scan_window_until"]
             if until is None:
                 raise EnrollmentError("no controlled scan window is active")
-            if scan_time > until:
+            window_start = enroll["updated_at"]
+            # No separate real-clock "is the window expired" pre-check —
+            # the bounded [window_start, until] query below is the single
+            # source of truth. An expired window with no candidate scan in
+            # it simply resolves to "no matching attendance scan found
+            # yet," which is both correct and avoids coupling this
+            # function to wall-clock time (only to the window's own
+            # already-recorded boundaries).
+            cur.execute(
+                "SELECT device_user_pk FROM device_users "
+                "WHERE device_id = %s AND device_user_id = %s AND active = true;",
+                (enroll["device_id"], enroll["reserved_device_user_id"]),
+            )
+            du = cur.fetchone()
+            if du is None:
                 raise EnrollmentError(
-                    "scan_time %s is after window deadline %s — not accepted"
-                    % (scan_time.isoformat(), until.isoformat())
+                    "enrollment %s has no active terminal account on record — "
+                    "cannot bind scan evidence" % enrollment_id
                 )
+            device_user_pk = du[0]
+
+            cur.execute(
+                "SELECT id, scan_time FROM attendance_logs "
+                "WHERE device_user_pk = %s AND scan_time BETWEEN %s AND %s "
+                "ORDER BY scan_time ASC LIMIT 1;",
+                (device_user_pk, window_start, until),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise EnrollmentError(
+                    "no matching attendance scan found yet within the controlled "
+                    "scan window for enrollment %s — ask the person to scan again"
+                    % enrollment_id
+                )
+            attendance_id, scan_time = row
+
             cur.execute(
                 "UPDATE device_user_enrollments "
                 "SET status = 'CONTROLLED_SCAN_CONFIRMED', controlled_scan_time = %s, "
                 "updated_at = now() "
-                "WHERE enrollment_id = %s;",
+                "WHERE enrollment_id = %s AND status = 'CONTROLLED_SCAN_PENDING';",
                 (scan_time, enrollment_id),
             )
             if cur.rowcount != 1:
-                raise EnrollmentError("enrollment %s not updated" % enrollment_id)
+                raise EnrollmentError(
+                    "enrollment %s not updated (concurrent state change?)" % enrollment_id
+                )
             conn.commit()
     log_sync_event(
         cfg,
         "ENROLLMENT_SCAN_CONFIRMED",
-        "enrollment_id=%s scan_time=%s confirmed_by=%s"
-        % (enrollment_id, scan_time.isoformat(), operator),
+        "enrollment_id=%s attendance_id=%s scan_time=%s confirmed_by=%s"
+        % (enrollment_id, attendance_id, scan_time.isoformat(), operator),
     )
     return {
         "enrollment_id": enrollment_id,
         "status": "CONTROLLED_SCAN_CONFIRMED",
         "controlled_scan_time": scan_time,
+        "controlled_attendance_id": attendance_id,
     }
 
 

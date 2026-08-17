@@ -168,6 +168,7 @@ export interface Translations {
     selectPersonDeviceOperatorRequired: string;
     terminalDisplayName: string;
     liveScanDetected: string;
+    waitingForScan: string;
     cancelSession: string;
     cancelReasonPlaceholder: string;
     cancelReasonRequired: string;
@@ -192,6 +193,7 @@ export interface Translations {
     terminalCreatedSuccess: string;
     enrollmentConflictBody: string;
     alreadyCancelledBody: string;
+    scanNotFoundYetBody: string;
     cancelSuccessMessage: string;
     reserveSuccessMessage: string;
     fingerprintWindowActiveMessage: string;

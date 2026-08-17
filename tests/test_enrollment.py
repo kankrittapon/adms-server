@@ -111,6 +111,7 @@ def make_enrollment_tuple(**overrides):
         "confirmed_by": None,
         "confirmed_at": None,
         "notes": None,
+        "updated_at": NOW,
     }
     base.update(overrides)
     return tuple(base[c] for c in _ENROLLMENT_COLUMNS)
@@ -702,37 +703,53 @@ class TestEnrollmentFlow(unittest.TestCase):
     @patch("app.enrollment.log_sync_event")
     @patch("app.enrollment.get_db_connection")
     def test_confirm_controlled_scan_inside_window(self, mock_conn_fn, mock_log):
+        # ADMS-ControlledScan-EvidenceBinding-018: no operator-supplied
+        # scan_time — the function resolves and binds the real attendance
+        # row itself: enrollment fetch, device_users lookup, then the
+        # bounded [window_start, until] attendance candidate lookup.
         until = NOW + timedelta(minutes=5)
-        cur = self._flow_cursor("CONTROLLED_SCAN_PENDING", controlled_scan_window_until=until)
+        row = make_enrollment_tuple(status="CONTROLLED_SCAN_PENDING", controlled_scan_window_until=until)
+        real_scan_time = NOW + timedelta(seconds=30, microseconds=417000)  # full precision, never operator-typed
+        cur = FakeCursor(fetchone_queue=[row, (7, True), (12, real_scan_time)])
         make_db(mock_conn_fn, cur)
-        scan_time = NOW + timedelta(seconds=30)
-        result = confirm_controlled_scan(self.cfg, 1, scan_time, "op")
+        result = confirm_controlled_scan(self.cfg, 1, "op")
         self.assertEqual(result["status"], "CONTROLLED_SCAN_CONFIRMED")
-        self.assertEqual(result["controlled_scan_time"], scan_time)
+        # Bound value is bit-for-bit the real attendance row's own scan_time.
+        self.assertEqual(result["controlled_scan_time"], real_scan_time)
+        self.assertEqual(result["controlled_attendance_id"], 12)
         mock_log.assert_called_once()
 
     @patch("app.enrollment.get_db_connection")
-    def test_confirm_controlled_scan_after_deadline_rejected(self, mock_conn_fn):
+    def test_confirm_controlled_scan_no_matching_scan_yet_rejected(self, mock_conn_fn):
         until = NOW + timedelta(minutes=5)
-        cur = self._flow_cursor("CONTROLLED_SCAN_PENDING", controlled_scan_window_until=until)
+        row = make_enrollment_tuple(status="CONTROLLED_SCAN_PENDING", controlled_scan_window_until=until)
+        cur = FakeCursor(fetchone_queue=[row, (7, True), None])  # no attendance candidate found
         make_db(mock_conn_fn, cur)
-        scan_time = until + timedelta(seconds=1)
-        with self.assertRaises(EnrollmentError):
-            confirm_controlled_scan(self.cfg, 1, scan_time, "op")
+        with self.assertRaisesRegex(EnrollmentError, "no matching attendance scan found"):
+            confirm_controlled_scan(self.cfg, 1, "op")
+
+    @patch("app.enrollment.get_db_connection")
+    def test_confirm_scan_no_active_terminal_account_rejected(self, mock_conn_fn):
+        until = NOW + timedelta(minutes=5)
+        row = make_enrollment_tuple(status="CONTROLLED_SCAN_PENDING", controlled_scan_window_until=until)
+        cur = FakeCursor(fetchone_queue=[row, None])  # no device_users row
+        make_db(mock_conn_fn, cur)
+        with self.assertRaisesRegex(EnrollmentError, "no active terminal account"):
+            confirm_controlled_scan(self.cfg, 1, "op")
 
     @patch("app.enrollment.get_db_connection")
     def test_confirm_scan_without_window_rejected(self, mock_conn_fn):
         cur = self._flow_cursor("CONTROLLED_SCAN_PENDING", controlled_scan_window_until=None)
         make_db(mock_conn_fn, cur)
         with self.assertRaises(EnrollmentError):
-            confirm_controlled_scan(self.cfg, 1, NOW, "op")
+            confirm_controlled_scan(self.cfg, 1, "op")
 
     @patch("app.enrollment.get_db_connection")
     def test_confirm_scan_wrong_state_rejected(self, mock_conn_fn):
         cur = self._flow_cursor("FINGERPRINT_ENROLLED")
         make_db(mock_conn_fn, cur)
         with self.assertRaises(EnrollmentError):
-            confirm_controlled_scan(self.cfg, 1, NOW, "op")
+            confirm_controlled_scan(self.cfg, 1, "op")
 
     @patch("app.enrollment.get_db_connection")
     def test_ready_for_mapping_requires_operator(self, mock_conn_fn):
@@ -871,7 +888,7 @@ class TestSafetyInvariants(unittest.TestCase):
             ("FINGERPRINT_ENROLLED", lambda cfg, e, op: start_controlled_scan_window(cfg, e, op), "CONTROLLED_SCAN_PENDING"),
             (
                 "CONTROLLED_SCAN_PENDING",
-                lambda cfg, e, op: confirm_controlled_scan(cfg, e, NOW + timedelta(seconds=10), op),
+                lambda cfg, e, op: confirm_controlled_scan(cfg, e, op),
                 "CONTROLLED_SCAN_CONFIRMED",
             ),
             (
@@ -888,7 +905,15 @@ class TestSafetyInvariants(unittest.TestCase):
                 if cursor_state == "CONTROLLED_SCAN_CONFIRMED":
                     extra = {"controlled_scan_time": NOW + timedelta(seconds=10)}
                 row = make_enrollment_tuple(status=cursor_state, **extra)
-                if cursor_state == "CONTROLLED_SCAN_CONFIRMED":
+                if cursor_state == "CONTROLLED_SCAN_PENDING":
+                    # confirm_controlled_scan now resolves+binds evidence
+                    # itself: enrollment fetch, device_users lookup, then
+                    # the bounded attendance candidate lookup (fetchone,
+                    # ORDER BY ... LIMIT 1) — no operator-supplied scan_time.
+                    cur = FakeCursor(fetchone_queue=[
+                        row, (7, True), (12, NOW + timedelta(seconds=10)),
+                    ])
+                elif cursor_state == "CONTROLLED_SCAN_CONFIRMED":
                     # mark_ready_for_mapping's evidence pre-check (enrollment
                     # fetch, device_users lookup, resolver fetchall) runs
                     # before _transition's own internal enrollment fetch.

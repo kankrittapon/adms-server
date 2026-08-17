@@ -225,13 +225,14 @@ export const api = {
       operator,
       notes
     ),
-  confirmControlledScan: (id: number, operator: string, scanTime: string) =>
+  // ADMS-ControlledScan-EvidenceBinding-018: no scan_time — the server
+  // resolves and binds the real attendance evidence itself.
+  confirmControlledScan: (id: number, operator: string) =>
     request<EnrollmentTransitionResult>(`/api/v1/enrollments/${id}/confirm-controlled-scan`, undefined, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         operator,
-        scan_time: scanTime,
       } satisfies BodyOf<"confirm_scan_api_v1_enrollments__enrollment_id__confirm_controlled_scan_post">),
     }),
   markReadyForMapping: (id: number, operator: string, notes?: string) =>

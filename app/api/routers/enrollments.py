@@ -10,7 +10,6 @@ performed by the API (physical enrollment happens at the terminal by the
 operator; the API only records operator confirmations).
 """
 
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -172,8 +171,12 @@ class TransitionRequest(BaseModel):
 
 
 class ScanConfirmationRequest(BaseModel):
+    """ADMS-ControlledScan-EvidenceBinding-018: no scan_time field — the
+    server resolves and binds the actual attendance evidence itself (see
+    app.enrollment.confirm_controlled_scan). The operator/browser never
+    supplies or estimates a scan time."""
+
     operator: str = Field(description="explicit operator identity")
-    scan_time: datetime = Field(description="controlled attendance scan time")
 
 
 class CreateTerminalAccountRequest(BaseModel):
@@ -378,9 +381,7 @@ def confirm_scan(
     payload: ScanConfirmationRequest,
     cfg: Config = Depends(get_cfg),
 ):
-    return confirm_controlled_scan(
-        cfg, enrollment_id, payload.scan_time, payload.operator, None
-    )
+    return confirm_controlled_scan(cfg, enrollment_id, payload.operator, None)
 
 
 @router.post(

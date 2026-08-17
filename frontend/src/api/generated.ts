@@ -1149,6 +1149,11 @@ export interface components {
          * @description Return of enrollment transition POSTs.
          */
         EnrollmentTransitionResult: {
+            /**
+             * Controlled Scan Time
+             * @description confirm-controlled-scan only: the REAL bound attendance scan_time (ADMS-ControlledScan-EvidenceBinding-018 — server-resolved, never an operator estimate). Null for every other transition.
+             */
+            controlled_scan_time?: string | null;
             /** Enrollment Id */
             enrollment_id: number;
             /**
@@ -1533,19 +1538,19 @@ export interface components {
              */
             roster_user_ids?: unknown[] | null;
         };
-        /** ScanConfirmationRequest */
+        /**
+         * ScanConfirmationRequest
+         * @description ADMS-ControlledScan-EvidenceBinding-018: no scan_time field — the
+         *     server resolves and binds the actual attendance evidence itself (see
+         *     app.enrollment.confirm_controlled_scan). The operator/browser never
+         *     supplies or estimates a scan time.
+         */
         ScanConfirmationRequest: {
             /**
              * Operator
              * @description explicit operator identity
              */
             operator: string;
-            /**
-             * Scan Time
-             * Format: date-time
-             * @description controlled attendance scan time
-             */
-            scan_time: string;
         };
         /** ToggleActiveRequest */
         ToggleActiveRequest: {

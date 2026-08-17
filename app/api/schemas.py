@@ -292,6 +292,12 @@ class EnrollmentTransitionResult(BaseModel):
         "existed and this call reconciled ADMS state without a new set_user() call; "
         "false if this call performed the mutation; null for every other transition.",
     )
+    controlled_scan_time: Optional[datetime] = Field(
+        None,
+        description="confirm-controlled-scan only: the REAL bound attendance scan_time "
+        "(ADMS-ControlledScan-EvidenceBinding-018 — server-resolved, never an "
+        "operator estimate). Null for every other transition.",
+    )
 
 
 class EventTypesResponse(BaseModel):

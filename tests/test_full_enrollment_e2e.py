@@ -168,41 +168,51 @@ class TestCompleteEnrollmentE2E(unittest.TestCase):
         # Fixture step: simulated physical scan arrives from the terminal.
         # This represents EXTERNAL TERMINAL INPUT (what
         # app.db.save_attendance_log() would have already persisted from a
-        # real Collector-forwarded MQTT attendance event) — not a bypass
-        # of enrollment/mapping logic. The operator sees this as an
-        # SSE-detected live event and records its (minute-precision, per
-        # the datetime-local input) approximate time.
+        # real Collector-forwarded MQTT attendance event) — not a bypass of
+        # enrollment/mapping logic.
         # ---------------------------------------------------------------
         real_scan_time = NOW + timedelta(minutes=10, seconds=23, microseconds=810000)
         controlled_attendance_id = 555
-        operator_recorded_scan_time = real_scan_time.replace(second=0, microsecond=0)  # datetime-local precision loss
 
         # ---------------------------------------------------------------
-        # Step 4: confirm controlled scan — records the operator's
-        # (imprecise) estimate as controlled_scan_time.
+        # Step 4: confirm controlled scan — ADMS-ControlledScan-
+        # EvidenceBinding-018: no operator-supplied/estimated scan_time at
+        # all. The server resolves the real attendance row itself
+        # (device_users lookup, then a bounded [window_start, until]
+        # attendance lookup) and binds ITS exact scan_time — never an
+        # estimate to later reconcile.
         # ---------------------------------------------------------------
+        window_start = NOW + timedelta(minutes=9)  # this row's own updated_at when the window opened
+        window_until = NOW + timedelta(minutes=15)
         with patch("app.enrollment.log_sync_event"), patch("app.enrollment.get_db_connection") as m5:
             cur = FakeCursor(fetchone_queue=[
                 make_enrollment_tuple(
                     enrollment_id=enrollment_id, employee_id=TEST_HUMAN_ID,
                     reserved_device_user_id=terminal_id, status="CONTROLLED_SCAN_PENDING",
-                    controlled_scan_window_until=NOW + timedelta(minutes=15),
-                )
+                    controlled_scan_window_until=window_until, updated_at=window_start,
+                ),
+                (7, True),                              # device_users (device_user_pk, active)
+                (controlled_attendance_id, real_scan_time),  # bounded attendance candidate lookup
             ])
             make_db(m5, cur)
-            confirm_controlled_scan(self.cfg, enrollment_id, operator_recorded_scan_time, "op")
+            scan_result = confirm_controlled_scan(self.cfg, enrollment_id, "op")
+        self.assertEqual(scan_result["controlled_scan_time"], real_scan_time)
+        self.assertEqual(scan_result["controlled_attendance_id"], controlled_attendance_id)
+        bound_scan_time = scan_result["controlled_scan_time"]
 
         # ---------------------------------------------------------------
         # Step 5: mark ready for mapping — MUST resolve real evidence via
-        # the canonical resolver (device_users lookup + bounded nearest-
-        # match against the imprecise operator timestamp) before allowing
-        # the transition (ADMS-FullEnrollment-E2E-Closure-017 Phase 7 gate).
+        # the canonical resolver before allowing the transition
+        # (ADMS-FullEnrollment-E2E-Closure-017 Phase 7 gate). Since
+        # controlled_scan_time is now bit-for-bit the real attendance
+        # row's own scan_time, resolution is exact (delta=0), not a
+        # window-proximity guess.
         # ---------------------------------------------------------------
         with patch("app.enrollment.log_sync_event"), patch("app.enrollment.get_db_connection") as m6:
             enroll_row = make_enrollment_tuple(
                 enrollment_id=enrollment_id, employee_id=TEST_HUMAN_ID,
                 reserved_device_user_id=terminal_id, status="CONTROLLED_SCAN_CONFIRMED",
-                controlled_scan_time=operator_recorded_scan_time,
+                controlled_scan_time=bound_scan_time,
             )
             cur = FakeCursor(
                 fetchone_queue=[
@@ -227,11 +237,11 @@ class TestCompleteEnrollmentE2E(unittest.TestCase):
             cur = FakeCursor(
                 fetchone_queue=[
                     (TEST_HUMAN_ID, TEST_DEVICE_ID, terminal_id, "READY_FOR_MAPPING",
-                     operator_recorded_scan_time, "admin"),      # enrollment
+                     bound_scan_time, "admin"),                   # enrollment
                     (device_user_pk, True),                      # device_users
                     (True,),                                     # human active
                     None,                                        # no conflicting VERIFIED mapping
-                    (1, operator_recorded_scan_time, NOW + timedelta(minutes=11)),  # INSERT RETURNING
+                    (1, bound_scan_time, NOW + timedelta(minutes=11)),  # INSERT RETURNING
                 ],
                 fetchall_result=[(controlled_attendance_id, real_scan_time)],
             )

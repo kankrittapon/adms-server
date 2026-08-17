@@ -1119,6 +1119,19 @@
       "EnrollmentTransitionResult": {
         "description": "Return of enrollment transition POSTs.",
         "properties": {
+          "controlled_scan_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "confirm-controlled-scan only: the REAL bound attendance scan_time (ADMS-ControlledScan-EvidenceBinding-018 \u2014 server-resolved, never an operator estimate). Null for every other transition.",
+            "title": "Controlled Scan Time"
+          },
           "enrollment_id": {
             "title": "Enrollment Id",
             "type": "integer"
@@ -2242,22 +2255,16 @@
         "type": "object"
       },
       "ScanConfirmationRequest": {
+        "description": "ADMS-ControlledScan-EvidenceBinding-018: no scan_time field \u2014 the\nserver resolves and binds the actual attendance evidence itself (see\napp.enrollment.confirm_controlled_scan). The operator/browser never\nsupplies or estimates a scan time.",
         "properties": {
           "operator": {
             "description": "explicit operator identity",
             "title": "Operator",
             "type": "string"
-          },
-          "scan_time": {
-            "description": "controlled attendance scan time",
-            "format": "date-time",
-            "title": "Scan Time",
-            "type": "string"
           }
         },
         "required": [
-          "operator",
-          "scan_time"
+          "operator"
         ],
         "title": "ScanConfirmationRequest",
         "type": "object"
