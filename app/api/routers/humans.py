@@ -22,8 +22,15 @@ from app.api.dependencies import (
     require_writes,
 )
 from app.api.errors import ApiError, not_found
-from app.api.schemas import Human, Page, UpdateHumanEnglishNameRequest
+from app.api.schemas import (
+    DeactivateHumanRequest,
+    Human,
+    Page,
+    ReactivateHumanRequest,
+    UpdateHumanEnglishNameRequest,
+)
 from app.config import Config
+from app.personnel import PersonnelError, deactivate_human, reactivate_human
 
 router = APIRouter(tags=["humans"])
 
@@ -43,6 +50,7 @@ def _require_uuid(value: str) -> str:
 )
 def list_humans(
     production_scope: Optional[bool] = Query(None),
+    active: Optional[bool] = Query(None, description="filter to active-only (true) or inactive-only (false); omit for all"),
     search: Optional[str] = Query(None, max_length=100),
     category: Optional[str] = Query(None),
     page: tuple = Depends(pagination),
@@ -54,6 +62,7 @@ def list_humans(
         limit=limit,
         offset=offset,
         production_scope=production_scope,
+        active=active,
         search=search,
         category=category,
     )
@@ -97,3 +106,55 @@ def update_human_english_name(
     if updated is None:
         raise not_found("human", employee_id)
     return updated
+
+
+@router.post(
+    "/api/v1/humans/{employee_id}/deactivate",
+    response_model=Human,
+    dependencies=[
+        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
+)
+def deactivate(
+    employee_id: str,
+    payload: DeactivateHumanRequest,
+    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    cfg: Config = Depends(get_cfg),
+):
+    _require_uuid(employee_id)
+    try:
+        deactivate_human(cfg, employee_id, ctx.username, payload.reason)
+    except PersonnelError as e:
+        raise ApiError(409, "PERSONNEL_CONFLICT", str(e))
+    row = repository.get_human(cfg, employee_id)
+    if row is None:
+        raise not_found("human", employee_id)
+    return row
+
+
+@router.post(
+    "/api/v1/humans/{employee_id}/reactivate",
+    response_model=Human,
+    dependencies=[
+        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
+)
+def reactivate(
+    employee_id: str,
+    payload: ReactivateHumanRequest,
+    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    cfg: Config = Depends(get_cfg),
+):
+    _require_uuid(employee_id)
+    try:
+        reactivate_human(cfg, employee_id, ctx.username, payload.reason)
+    except PersonnelError as e:
+        raise ApiError(409, "PERSONNEL_CONFLICT", str(e))
+    row = repository.get_human(cfg, employee_id)
+    if row is None:
+        raise not_found("human", employee_id)
+    return row

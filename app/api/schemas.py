@@ -99,6 +99,14 @@ class UpdateHumanEnglishNameRequest(BaseModel):
     english_name: Optional[str] = Field(None, max_length=200, description="Full English name with Latin letters, spaces, hyphens, and apostrophes")
 
 
+class DeactivateHumanRequest(BaseModel):
+    reason: str = Field(min_length=1, description="explicit reason this person is being deactivated")
+
+
+class ReactivateHumanRequest(BaseModel):
+    reason: Optional[str] = Field(None, description="optional reason this person is being reactivated")
+
+
 # --- Devices --------------------------------------------------------------
 
 

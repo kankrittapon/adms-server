@@ -259,6 +259,19 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ english_name: englishName } satisfies BodyOf<"update_human_english_name_api_v1_humans__employee_id__patch">),
     }),
+  // ADMS-Personnel-Lifecycle-019
+  deactivateHuman: (employeeId: string, reason: string) =>
+    request<Human>(`/api/v1/humans/${employeeId}/deactivate`, undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason } satisfies BodyOf<"deactivate_api_v1_humans__employee_id__deactivate_post">),
+    }),
+  reactivateHuman: (employeeId: string, reason?: string) =>
+    request<Human>(`/api/v1/humans/${employeeId}/reactivate`, undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: reason ?? null } satisfies BodyOf<"reactivate_api_v1_humans__employee_id__reactivate_post">),
+    }),
 
   // Operator Management (admin)
   listOperators: (signal?: AbortSignal) => request<OperatorOut[]>("/api/v1/operators", signal),

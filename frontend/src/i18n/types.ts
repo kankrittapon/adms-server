@@ -132,6 +132,22 @@ export interface Translations {
     updateFailed: string;
     writesDisabledNotice: string;
     adminOnlyNotice: string;
+    statusLabel: string;
+    statusActive: string;
+    statusInactive: string;
+    deactivateButton: string;
+    reactivateButton: string;
+    deactivateConfirmTitle: string;
+    deactivateConfirmBody: string;
+    deactivateReasonLabel: string;
+    deactivateReasonPlaceholder: string;
+    deactivateReasonRequired: string;
+    deactivateSuccess: string;
+    reactivateSuccess: string;
+    terminalCleanupPendingNotice: string;
+    filterAll: string;
+    filterActiveOnly: string;
+    filterInactiveOnly: string;
   };
   enrollment: {
     title: string;

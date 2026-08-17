@@ -120,6 +120,7 @@ def list_humans(
     limit: int,
     offset: int,
     production_scope: Optional[bool] = None,
+    active: Optional[bool] = None,
     search: Optional[str] = None,
     category: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -128,6 +129,9 @@ def list_humans(
     if production_scope is not None:
         where.append("production_scope = %s")
         params.append(production_scope)
+    if active is not None:
+        where.append("active = %s")
+        params.append(active)
     if search:
         where.append("(display_name ILIKE %s OR english_name ILIKE %s OR personnel_id ILIKE %s OR rank ILIKE %s)")
         like = f"%{search}%"

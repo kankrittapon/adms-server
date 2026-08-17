@@ -540,6 +540,40 @@ export interface paths {
         patch: operations["update_human_english_name_api_v1_humans__employee_id__patch"];
         trace?: never;
     };
+    "/api/v1/humans/{employee_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate */
+        post: operations["deactivate_api_v1_humans__employee_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/humans/{employee_id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivate */
+        post: operations["reactivate_api_v1_humans__employee_id__reactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mappings": {
         parameters: {
             query?: never;
@@ -983,6 +1017,14 @@ export interface components {
             mappings_total: number;
             /** Mappings Verified Active */
             mappings_verified_active: number;
+        };
+        /** DeactivateHumanRequest */
+        DeactivateHumanRequest: {
+            /**
+             * Reason
+             * @description explicit reason this person is being deactivated
+             */
+            reason: string;
         };
         /** Device */
         Device: {
@@ -1531,6 +1573,14 @@ export interface components {
             rank_th_full: string;
             /** Source */
             source: string;
+        };
+        /** ReactivateHumanRequest */
+        ReactivateHumanRequest: {
+            /**
+             * Reason
+             * @description optional reason this person is being reactivated
+             */
+            reason?: string | null;
         };
         /**
          * ReconcileScanEvidenceRequest
@@ -2571,6 +2621,8 @@ export interface operations {
         parameters: {
             query?: {
                 production_scope?: boolean | null;
+                /** @description filter to active-only (true) or inactive-only (false); omit for all */
+                active?: boolean | null;
                 search?: string | null;
                 category?: string | null;
                 limit?: number;
@@ -2645,6 +2697,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateHumanEnglishNameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Human"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_api_v1_humans__employee_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeactivateHumanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Human"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reactivate_api_v1_humans__employee_id__reactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReactivateHumanRequest"];
             };
         };
         responses: {

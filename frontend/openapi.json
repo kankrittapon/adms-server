@@ -660,6 +660,21 @@
         "title": "DashboardSummary",
         "type": "object"
       },
+      "DeactivateHumanRequest": {
+        "properties": {
+          "reason": {
+            "description": "explicit reason this person is being deactivated",
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "DeactivateHumanRequest",
+        "type": "object"
+      },
       "Device": {
         "properties": {
           "active": {
@@ -2213,6 +2228,24 @@
           "source"
         ],
         "title": "RankReference",
+        "type": "object"
+      },
+      "ReactivateHumanRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "optional reason this person is being reactivated",
+            "title": "Reason"
+          }
+        },
+        "title": "ReactivateHumanRequest",
         "type": "object"
       },
       "ReconcileScanEvidenceRequest": {
@@ -4066,6 +4099,24 @@
             }
           },
           {
+            "description": "filter to active-only (true) or inactive-only (false); omit for all",
+            "in": "query",
+            "name": "active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filter to active-only (true) or inactive-only (false); omit for all",
+              "title": "Active"
+            }
+          },
+          {
             "in": "query",
             "name": "search",
             "required": false,
@@ -4237,6 +4288,110 @@
           }
         },
         "summary": "Update Human English Name",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/{employee_id}/deactivate": {
+      "post": {
+        "operationId": "deactivate_api_v1_humans__employee_id__deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "required": true,
+            "schema": {
+              "title": "Employee Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeactivateHumanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Human"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/{employee_id}/reactivate": {
+      "post": {
+        "operationId": "reactivate_api_v1_humans__employee_id__reactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "required": true,
+            "schema": {
+              "title": "Employee Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactivateHumanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Human"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reactivate",
         "tags": [
           "humans"
         ]

@@ -266,7 +266,7 @@ class TestDashboard(ApiTestBase):
 
 class TestHumans(ApiTestBase):
     def test_list_humans_pagination_and_filters(self):
-        def fake_list(cfg, limit, offset, production_scope=None, search=None, category=None):
+        def fake_list(cfg, limit, offset, production_scope=None, active=None, search=None, category=None):
             return page([HUMAN_ROW], limit=limit, offset=offset)
 
         with patch("app.api.repository.list_humans", side_effect=fake_list) as mock_list:

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { ErrorBanner, Loading, ScopeBadge } from "../components/Status";
 import { useApi } from "../hooks/useApi";
 import { useTranslation } from "../i18n";
@@ -10,6 +11,7 @@ export function Personnel() {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<string>("");
+  const [activeFilter, setActiveFilter] = useState<string>("");
   const [page, setPage] = useState(0);
   const limit = 25;
 
@@ -21,10 +23,11 @@ export function Personnel() {
           offset: page * limit,
           search: search || undefined,
           production_scope: scope === "true" ? true : scope === "false" ? false : undefined,
+          active: activeFilter === "true" ? true : activeFilter === "false" ? false : undefined,
         },
         s
       ),
-    [search, scope, page]
+    [search, scope, activeFilter, page]
   );
 
   return (
@@ -67,6 +70,20 @@ export function Personnel() {
             <option value="">{t.personnel.allScopes}</option>
             <option value="true">{t.personnel.productionScope}</option>
             <option value="false">{t.personnel.excludedScope}</option>
+          </select>
+        </div>
+        <div>
+          <select
+            value={activeFilter}
+            onChange={(e) => {
+              setActiveFilter(e.target.value);
+              setPage(0);
+            }}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+          >
+            <option value="">{t.personnel.filterAll}</option>
+            <option value="true">{t.personnel.filterActiveOnly}</option>
+            <option value="false">{t.personnel.filterInactiveOnly}</option>
           </select>
         </div>
       </div>
@@ -179,6 +196,14 @@ export function HumanDetail() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // ADMS-Personnel-Lifecycle-019
+  const [lifecycleConfirmOpen, setLifecycleConfirmOpen] = useState(false);
+  const [lifecycleReason, setLifecycleReason] = useState("");
+  const [lifecycleReasonError, setLifecycleReasonError] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
+  const [lifecycleSuccess, setLifecycleSuccess] = useState<string | null>(null);
+
   if (loading) return <Loading />;
   if (error) return <ErrorBanner message={error} />;
   if (!data) return <ErrorBanner message="Human not found" />;
@@ -210,6 +235,51 @@ export function HumanDetail() {
       }
     } finally {
       setSaveBusy(false);
+    }
+  }
+
+  async function handleDeactivateConfirm() {
+    if (!employeeId) return;
+    if (!lifecycleReason.trim()) {
+      setLifecycleReasonError(true);
+      return;
+    }
+    setLifecycleBusy(true);
+    setLifecycleError(null);
+    try {
+      await api.deactivateHuman(employeeId, lifecycleReason.trim());
+      setLifecycleSuccess(t.personnel.deactivateSuccess);
+      setLifecycleConfirmOpen(false);
+      setLifecycleReason("");
+      reload();
+    } catch (err) {
+      setLifecycleConfirmOpen(false);
+      if (err instanceof ApiClientError && (err.code === "WRITE_DISABLED" || err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_SESSION_EXPIRED")) {
+        setLifecycleError(t.personnel.writesDisabledNotice);
+      } else {
+        setLifecycleError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
+  async function handleReactivate() {
+    if (!employeeId) return;
+    setLifecycleBusy(true);
+    setLifecycleError(null);
+    try {
+      await api.reactivateHuman(employeeId);
+      setLifecycleSuccess(t.personnel.reactivateSuccess);
+      reload();
+    } catch (err) {
+      if (err instanceof ApiClientError && (err.code === "WRITE_DISABLED" || err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_SESSION_EXPIRED")) {
+        setLifecycleError(t.personnel.writesDisabledNotice);
+      } else {
+        setLifecycleError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      setLifecycleBusy(false);
     }
   }
 
@@ -308,10 +378,90 @@ export function HumanDetail() {
             label={t.personnel.scope}
             value={data.production_scope ? t.personnel.productionScope : t.personnel.excludedScope}
           />
-          <Row label={t.common.status} value={data.active ? t.common.active : t.common.inactive} />
+          <Row
+            label={t.personnel.statusLabel}
+            value={data.active ? t.personnel.statusActive : t.personnel.statusInactive}
+          />
           <Row label="UUID" value={data.employee_id} mono />
         </dl>
       </div>
+
+      {lifecycleSuccess && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
+          ✓ {lifecycleSuccess}
+        </div>
+      )}
+      {lifecycleError && (
+        <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">{lifecycleError}</div>
+      )}
+
+      {/* ADMS-Personnel-Lifecycle-019: one obvious primary lifecycle action,
+          no mapping_id/device_user_pk/UUID/incarnation/valid_from exposed. */}
+      {isAdmin && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs">
+          {data.active ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setLifecycleReason("");
+                  setLifecycleReasonError(false);
+                  setLifecycleConfirmOpen(true);
+                }}
+                disabled={!canMutate || lifecycleBusy}
+                className="w-full rounded-md bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {t.personnel.deactivateButton}
+              </button>
+              {!canMutate && (
+                <p className="mt-2 text-[11px] text-amber-800">{t.personnel.writesDisabledNotice}</p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="mb-3 text-xs font-semibold text-slate-700">{t.personnel.terminalCleanupPendingNotice}</p>
+              <button
+                type="button"
+                onClick={handleReactivate}
+                disabled={!canMutate || lifecycleBusy}
+                className="w-full rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {lifecycleBusy ? t.common.saving : t.personnel.reactivateButton}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      <ConfirmModal
+        open={lifecycleConfirmOpen}
+        title={t.personnel.deactivateConfirmTitle}
+        tone="danger"
+        confirmLabel={t.personnel.deactivateButton}
+        busy={lifecycleBusy}
+        onConfirm={handleDeactivateConfirm}
+        onCancel={() => setLifecycleConfirmOpen(false)}
+      >
+        <p className="text-xs text-slate-600 leading-relaxed">{t.personnel.deactivateConfirmBody}</p>
+        <div>
+          <label className="block text-[11px] font-bold text-slate-700">{t.personnel.deactivateReasonLabel}</label>
+          <input
+            type="text"
+            value={lifecycleReason}
+            onChange={(e) => {
+              setLifecycleReason(e.target.value);
+              if (lifecycleReasonError) setLifecycleReasonError(false);
+            }}
+            placeholder={t.personnel.deactivateReasonPlaceholder}
+            className={`mt-1 w-full rounded-md border bg-white px-2.5 py-1.5 text-xs text-slate-900 ${
+              lifecycleReasonError ? "border-rose-500 ring-1 ring-rose-300" : "border-slate-300"
+            }`}
+          />
+          {lifecycleReasonError && (
+            <div className="mt-1 text-[11px] font-semibold text-rose-700">{t.personnel.deactivateReasonRequired}</div>
+          )}
+        </div>
+      </ConfirmModal>
 
       <div>
         <Link to="/personnel" className="text-xs font-semibold text-blue-600 hover:underline">
