@@ -273,6 +273,48 @@ export const api = {
       body: JSON.stringify({ reason: reason ?? null } satisfies BodyOf<"reactivate_api_v1_humans__employee_id__reactivate_post">),
     }),
 
+  // ADMS-TerminalManagement-020
+  terminalInventory: (signal?: AbortSignal) =>
+    request<JsonResponse<"get_terminal_inventory_api_v1_terminal_management_inventory_get">>(
+      "/api/v1/terminal-management/inventory", signal
+    ),
+  removeTerminalFingerprint: (deviceId: number, deviceUserId: string, operator: string, fingerId?: number) =>
+    request<JsonResponse<"remove_fingerprint_api_v1_terminal_management_fingerprint_remove_post">>(
+      "/api/v1/terminal-management/fingerprint/remove", undefined, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device_id: deviceId, device_user_id: deviceUserId, operator, finger_id: fingerId ?? null,
+        } satisfies BodyOf<"remove_fingerprint_api_v1_terminal_management_fingerprint_remove_post">),
+      }
+    ),
+  removeTerminalAccount: (deviceId: number, deviceUserId: string, operator: string, acknowledgeActiveHuman = false) =>
+    request<JsonResponse<"remove_account_api_v1_terminal_management_account_remove_post">>(
+      "/api/v1/terminal-management/account/remove", undefined, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device_id: deviceId, device_user_id: deviceUserId, operator,
+          acknowledge_active_human: acknowledgeActiveHuman,
+        } satisfies BodyOf<"remove_account_api_v1_terminal_management_account_remove_post">),
+      }
+    ),
+  startFingerprintReenroll: (deviceUserId: string, operator: string) =>
+    request<{ device_user_id: string; queued: boolean }>(
+      "/api/v1/terminal-management/fingerprint/reenroll", undefined, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device_user_id: deviceUserId, operator,
+        } satisfies BodyOf<"start_fingerprint_reenroll_api_v1_terminal_management_fingerprint_reenroll_post">),
+      }
+    ),
+  fingerprintReenrollStatus: (deviceUserId: string, signal?: AbortSignal) =>
+    request<JsonResponse<"fingerprint_reenroll_status_api_v1_terminal_management_fingerprint_reenroll_status_get">>(
+      `/api/v1/terminal-management/fingerprint/reenroll-status?device_user_id=${encodeURIComponent(deviceUserId)}`,
+      signal
+    ),
+
   // Operator Management (admin)
   listOperators: (signal?: AbortSignal) => request<OperatorOut[]>("/api/v1/operators", signal),
   createOperator: (payload: CreateOperatorRequest) =>

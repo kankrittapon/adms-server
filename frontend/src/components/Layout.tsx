@@ -63,7 +63,10 @@ export function Layout() {
     { to: "/system", label: t.nav.system },
   ];
 
-  const ADMIN_NAV: NavItem[] = [{ to: "/audit", label: t.nav.audit }];
+  const ADMIN_NAV: NavItem[] = [
+    { to: "/terminal-management", label: t.terminalManagement.title },
+    { to: "/audit", label: t.nav.audit },
+  ];
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900 antialiased font-sans">

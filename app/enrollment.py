@@ -254,13 +254,50 @@ def _fetch_enrollment_locked(cur: Any, enrollment_id: int) -> Dict[str, Any]:
 
 
 def _load_used_terminal_ids(cur: Any, device_id: int) -> Set[str]:
+    """ADMS-TerminalManagement-020 Part C: a CANCELLED reservation whose
+    terminal account was NEVER created (terminal_created_at IS NULL AND
+    device_uid IS NULL) no longer permanently burns its ID — it is
+    excluded from the "used" set here so the allocator may reclaim it.
+
+    Safety is structural, not a separate check: the device_users half of
+    this UNION has no active/inactive filter, so any ID that ever had a
+    device_users row (i.e. a terminal account was genuinely created for
+    it at some point, even if later removed — the historical-1002 case)
+    remains permanently "used" regardless of this relaxation. Since
+    attendance_logs.device_user_pk and employee_device_mappings.
+    device_user_pk both reference device_users.device_user_pk, an ID with
+    no device_users row can never have attendance or a mapping either —
+    "no attendance/mapping exists" is therefore guaranteed by the schema,
+    not re-checked separately. Only a genuinely never-created reservation
+    (the historical-1003 case) is ever excluded here.
+    """
     cur.execute(
         "SELECT device_user_id FROM device_users WHERE device_id = %s "
         "UNION "
-        "SELECT reserved_device_user_id FROM device_user_enrollments WHERE device_id = %s;",
+        "SELECT reserved_device_user_id FROM device_user_enrollments "
+        "WHERE device_id = %s "
+        "AND NOT (status = 'CANCELLED' AND terminal_created_at IS NULL AND device_uid IS NULL);",
         (device_id, device_id),
     )
     return {str(r[0]) for r in cur.fetchall()}
+
+
+def _find_reclaimable_cancelled_enrollment(cur: Any, device_id: int, terminal_id: str) -> Optional[int]:
+    """Returns the enrollment_id of a CANCELLED, never-created reservation
+    that safely qualified `terminal_id` for reuse (per
+    _load_used_terminal_ids' relaxation), or None. Used only to produce a
+    precise audit trail (TERMINAL_ID_RESERVATION_REUSED) — never to decide
+    eligibility itself, which is already fully determined by
+    _load_used_terminal_ids before this is called."""
+    cur.execute(
+        "SELECT enrollment_id FROM device_user_enrollments "
+        "WHERE device_id = %s AND reserved_device_user_id = %s "
+        "AND status = 'CANCELLED' AND terminal_created_at IS NULL AND device_uid IS NULL "
+        "ORDER BY enrollment_id DESC LIMIT 1;",
+        (device_id, terminal_id),
+    )
+    row = cur.fetchone()
+    return row[0] if row else None
 
 
 def _transition(
@@ -380,6 +417,9 @@ def reserve_next_device_user_id(
 
             used_ids = _load_used_terminal_ids(cur, device_id)
             next_id = _find_next_available_id(used_ids, roster_user_ids)
+            # Precise audit trail only — eligibility was already fully
+            # decided by _load_used_terminal_ids above.
+            reclaimed_from_enrollment_id = _find_reclaimable_cancelled_enrollment(cur, device_id, next_id)
 
             cur.execute(
                 "INSERT INTO device_user_enrollments "
@@ -399,6 +439,14 @@ def reserve_next_device_user_id(
         "enrollment_id=%s terminal_id=%s device_id=%s reserved_by=%s"
         % (row[0], row[1], device_id, operator),
     )
+    if reclaimed_from_enrollment_id is not None:
+        log_sync_event(
+            cfg,
+            "TERMINAL_ID_RESERVATION_REUSED",
+            "terminal_id=%s device_id=%s previous_cancelled_enrollment_id=%s "
+            "new_enrollment_id=%s reason=cancelled_reservation_never_created_on_device"
+            % (row[1], device_id, reclaimed_from_enrollment_id, row[0]),
+        )
     return {
         "enrollment_id": row[0],
         "reserved_device_user_id": row[1],

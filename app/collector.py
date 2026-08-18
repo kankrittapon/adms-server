@@ -7,7 +7,7 @@ import tempfile
 import time
 from enum import Enum, auto
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Any, List
+from typing import Optional, Any, Dict, List
 from zk import ZK
 
 from app.config import Config
@@ -62,6 +62,7 @@ SUPPORTED_DEVICE_COMMANDS = frozenset({
     "TERMINAL_INVENTORY",
     "REMOVE_TERMINAL_FINGERPRINT",
     "REMOVE_TERMINAL_ACCOUNT",
+    "START_FINGERPRINT_REENROLL",
 })
 
 class State(Enum):
@@ -70,6 +71,15 @@ class State(Enum):
     BACKFILLING = auto()
     LIVE = auto()
     DEGRADED = auto()
+    # ADMS-TerminalManagement-020 Part B: a dedicated, non-capturing state
+    # for pyzk's interactively-blocking enroll_user() call (confirmed by
+    # reading pyzk source: up to ~60s per attempt, up to 3 attempts). Never
+    # entered from inside live_capture()'s loop — only at the same safe
+    # boundary the command queue is drained at (between one yielded value
+    # and the next), after live_capture() has been asked to end gracefully
+    # (self.connection.end_live_capture = True, the same mechanism stop()
+    # already uses) and has actually returned control to handle_live().
+    FINGERPRINT_ENROLLING = auto()
     BACKOFF = auto()
     STOPPING = auto()
     STOPPED = auto()
@@ -141,6 +151,16 @@ class CollectorStateEngine:
             maxsize=DEVICE_COMMAND_QUEUE_MAXSIZE,
             acquire_timeout_seconds=DEVICE_OWNER_ACQUIRE_TIMEOUT_SECONDS,
         )
+
+        # ADMS-TerminalManagement-020 Part B: a pending fingerprint
+        # re-enrollment request, set (fast, non-blocking) by the
+        # START_FINGERPRINT_REENROLL command's owned execution, and
+        # consumed only at handle_live()'s safe-point check — never
+        # executed from inside drain_pending() itself, since enroll_user()
+        # is interactively blocking and would otherwise freeze the normal
+        # per-command queue drain for up to ~60-180s.
+        self.pending_fingerprint_enroll: Optional[Dict[str, Any]] = None
+        self.last_fingerprint_enroll_result: Optional[Dict[str, Any]] = None
 
     def handle_device_command(self, req: dict):
         """Runs on paho-mqtt's network thread (see MQTTService._on_message).
@@ -298,6 +318,29 @@ class CollectorStateEngine:
             )
             self.perform_roster_lifecycle_check()
             return result
+        if action == "START_FINGERPRINT_REENROLL":
+            # Deliberately does NOT call enroll_user() here — that call
+            # blocks up to ~60-180s and would freeze drain_pending() (and
+            # therefore all attendance capture and other commands) for its
+            # entire duration. This owned execution only fast-validates
+            # the target account exists and records the pending request;
+            # handle_live()'s own safe-point check picks it up on the next
+            # yield and transitions the whole state machine into
+            # FINGERPRINT_ENROLLING to perform the actual blocking call
+            # with nothing else competing for the connection.
+            device_user_id = str(params["device_user_id"])
+            users = self.connection.get_users() or []
+            matches = [u for u in users if str(u.user_id) == device_user_id]
+            if not matches:
+                raise TerminalAccountNotFound(
+                    "terminal account %s not found on device" % device_user_id
+                )
+            self.pending_fingerprint_enroll = {
+                "device_user_id": device_user_id,
+                "uid": matches[0].uid,
+                "operator": str(params["operator"]),
+            }
+            return {"device_user_id": device_user_id, "queued": True}
         raise ValueError("unsupported device action: %s" % action)
 
     def write_health_status(self):
@@ -346,6 +389,16 @@ class CollectorStateEngine:
                 "last_command_queue_wait_seconds": self.last_command_queue_wait_seconds,
                 "last_capture_paused_for_command_at": self.last_capture_paused_for_command_at.isoformat() if self.last_capture_paused_for_command_at else None,
                 "last_capture_resumed_at": self.last_capture_resumed_at.isoformat() if self.last_capture_resumed_at else None,
+                # ADMS-TerminalManagement-020 Part B: fingerprint
+                # re-enrollment's real result (CONFIRMED/FAILED) arrives
+                # asynchronously, after the MQTT command's own quick
+                # "queued" ack — the API polls this via the same existing
+                # Collector-health-bridge pattern used for every other
+                # telemetry field, rather than a new transport.
+                "pending_fingerprint_enroll_device_user_id": (
+                    self.pending_fingerprint_enroll["device_user_id"] if self.pending_fingerprint_enroll else None
+                ),
+                "last_fingerprint_enroll_result": self.last_fingerprint_enroll_result,
             }
 
             dir_path = os.path.dirname(HEALTH_FILE_PATH)
@@ -622,6 +675,22 @@ class CollectorStateEngine:
                     log.info("Live capture resumed after servicing %d device command(s)", drained)
                     self.write_health_status()
 
+                # ADMS-TerminalManagement-020 Part B: a fingerprint
+                # re-enrollment request was queued and fast-validated by
+                # _execute_owned_command above. This is the same safe
+                # point used for normal commands — no pyzk call is in
+                # flight — so it is safe to end live_capture() gracefully
+                # here (the identical mechanism stop() already uses) and
+                # hand the connection to a dedicated, non-capturing state
+                # for the actual interactively-blocking enroll_user() call.
+                if self.pending_fingerprint_enroll is not None:
+                    log.info(
+                        "Fingerprint re-enrollment requested for %s — ending live_capture "
+                        "gracefully to enter FINGERPRINT_ENROLLING",
+                        self.pending_fingerprint_enroll["device_user_id"],
+                    )
+                    self.connection.end_live_capture = True
+
                 # Reset reconnect backoff counter if LIVE state has been stable > threshold
                 if self.live_start_time and (time.time() - self.live_start_time) >= self.cfg.stable_live_window:
                     if self.reconnect_attempt > 0:
@@ -668,12 +737,126 @@ class CollectorStateEngine:
                     if self.state == State.LIVE:
                         self.transition_to(State.DEGRADED)
 
+            # live_capture()'s generator has now ended (its own cleanup —
+            # socket timeout restore, reg_event(0), re-disable if it
+            # wasn't enabled on entry — already ran inside pyzk itself).
+            # This only happens here via our own end_live_capture=True
+            # request (Part B) or shutdown (handled inside the loop via
+            # explicit `return` above) — so reaching this point with a
+            # pending request is the expected, sole reason for a graceful
+            # (non-exception) exit from the for-loop during normal LIVE
+            # operation.
+            if self.pending_fingerprint_enroll is not None:
+                self.transition_to(State.FINGERPRINT_ENROLLING)
+
         except Exception as e:
             if self.stop_event.is_set():
                 self.transition_to(State.STOPPING)
             else:
                 log.error("Live capture loop error: %s", e)
                 self.transition_to(State.BACKOFF)
+
+    def handle_fingerprint_enrolling(self):
+        """ADMS-TerminalManagement-020 Part B. Owner-thread-only, entered
+        exclusively from handle_live() at a safe point (live_capture()
+        already gracefully ended). Exactly one socket owner throughout —
+        this is the main thread, the same one that owns self.connection in
+        every other state. Performs pyzk's enroll_user() (confirmed
+        interactively blocking, up to ~60s per attempt x up to 3 attempts)
+        directly — no queue, no drain, nothing else can touch the
+        connection while this runs. Always returns to LIVE afterward,
+        success or failure, so a single failed attempt never strands the
+        Collector outside normal operation (the operator can simply
+        request a fresh attempt).
+
+        Cancellation limitation (documented, not solved): pyzk's
+        enroll_user() provides no interrupt/cancel hook once its internal
+        recv() loop has started — reliable mid-call cancellation is not
+        possible with the installed library version. The safest operator
+        behavior is therefore to let it run to its own bounded internal
+        timeout rather than attempting an unsafe interrupt (e.g. closing
+        the socket out from under it), which could leave the connection in
+        an inconsistent state requiring a full reconnect anyway. The UI
+        must say plainly that the operation cannot be cancelled mid-way.
+        """
+        if self.stop_event.is_set():
+            self.transition_to(State.STOPPING)
+            return
+        req = self.pending_fingerprint_enroll
+        self.pending_fingerprint_enroll = None
+        if req is None or self.connection is None:
+            # Structurally should never happen (this state is only ever
+            # entered with a pending request and a live connection) — fail
+            # safe back to LIVE rather than getting stuck.
+            log.warning("Entered FINGERPRINT_ENROLLING with no pending request or no connection")
+            self.transition_to(State.LIVE)
+            return
+
+        device_user_id = req["device_user_id"]
+        uid = req["uid"]
+        operator = req["operator"]
+
+        log.info("Fingerprint re-enrollment starting for %s (uid=%s, operator=%s)", device_user_id, uid, operator)
+        log_sync_event(
+            self.cfg, "TERMINAL_FINGERPRINT_REENROLL_STARTED",
+            "device_user_id=%s uid=%s operator=%s" % (device_user_id, uid, operator),
+        )
+
+        try:
+            templates_before = self.connection.get_templates() or []
+        except Exception:
+            templates_before = []
+        count_before = len([f for f in templates_before if f.uid == uid])
+
+        try:
+            done = self.connection.enroll_user(uid=uid, user_id=str(device_user_id))
+        except Exception as e:
+            # A raised exception (vs. enroll_user() internally returning
+            # done=False for a mundane "no finger placed in time") most
+            # likely means a genuine connection-level failure — treat as
+            # reconnect-worthy, same as any other live-state I/O exception.
+            log.error("Fingerprint re-enrollment errored for %s: %s", device_user_id, e)
+            log_sync_event(
+                self.cfg, "TERMINAL_FINGERPRINT_REENROLL_FAILED",
+                "device_user_id=%s uid=%s operator=%s reason=%s" % (device_user_id, uid, operator, e),
+            )
+            self.last_fingerprint_enroll_result = {"device_user_id": device_user_id, "success": False}
+            self.transition_to(State.BACKOFF)
+            return
+
+        # Never trust `done` alone (same principle as set_user() —
+        # PromptID 010) — confirm via an actual template-count read-back.
+        try:
+            templates_after = self.connection.get_templates() or []
+            count_after = len([f for f in templates_after if f.uid == uid])
+        except Exception as e:
+            log.warning("Fingerprint re-enrollment read-back failed for %s: %s", device_user_id, e)
+            count_after = count_before
+
+        confirmed = count_after > count_before
+        if done and confirmed:
+            log.info("Fingerprint re-enrollment confirmed for %s", device_user_id)
+            log_sync_event(
+                self.cfg, "TERMINAL_FINGERPRINT_REENROLL_CONFIRMED",
+                "device_user_id=%s uid=%s operator=%s templates_before=%s templates_after=%s"
+                % (device_user_id, uid, operator, count_before, count_after),
+            )
+            self.last_fingerprint_enroll_result = {"device_user_id": device_user_id, "success": True}
+        else:
+            log.warning("Fingerprint re-enrollment not confirmed for %s (done=%s, %d->%d templates)",
+                        device_user_id, done, count_before, count_after)
+            log_sync_event(
+                self.cfg, "TERMINAL_FINGERPRINT_REENROLL_FAILED",
+                "device_user_id=%s uid=%s operator=%s reason=not_confirmed done=%s "
+                "templates_before=%s templates_after=%s"
+                % (device_user_id, uid, operator, done, count_before, count_after),
+            )
+            self.last_fingerprint_enroll_result = {"device_user_id": device_user_id, "success": False}
+
+        # Human/attendance/enrollment/mapping history is untouched by this
+        # entire method — only pyzk's own template storage was written to.
+        self.live_start_time = time.time()
+        self.transition_to(State.LIVE)
 
     def handle_backoff(self):
         self.cleanup_connection()
@@ -713,6 +896,8 @@ class CollectorStateEngine:
                 self.handle_backfilling()
             elif self.state in (State.LIVE, State.DEGRADED):
                 self.handle_live()
+            elif self.state == State.FINGERPRINT_ENROLLING:
+                self.handle_fingerprint_enrolling()
             elif self.state == State.BACKOFF:
                 self.handle_backoff()
             elif self.state == State.STOPPING:

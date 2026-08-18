@@ -322,7 +322,7 @@ class TestReservation(unittest.TestCase):
     @patch("app.enrollment.get_db_connection")
     def test_valid_reservation_allocates_1001_and_captures_operator(self, mock_conn_fn, mock_log):
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, (1, "1001", "RESERVED", NOW)],
+            fetchone_queue=[[1], [1], [None], None, None, (1, "1001", "RESERVED", NOW)],
             fetchall_result=[],
         )
         make_db(mock_conn_fn, cur)
@@ -385,7 +385,7 @@ class TestReservation(unittest.TestCase):
     def test_reservation_requires_production_scope_sql(self, mock_conn_fn):
         """Human validation must require production_scope = true (พลทหาร exclusion)."""
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, (1, "1001", "RESERVED", NOW)],
+            fetchone_queue=[[1], [1], [None], None, None, (1, "1001", "RESERVED", NOW)],
             fetchall_result=[],
         )
         make_db(mock_conn_fn, cur)
@@ -429,7 +429,7 @@ class TestReservation(unittest.TestCase):
     def test_cancelled_reservation_allows_new_reservation_with_next_id(self, mock_conn_fn, mock_log):
         # Cancelled row for 1001 exists; new reservation must skip it → 1002.
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, (2, "1002", "RESERVED", NOW)],
+            fetchone_queue=[[1], [1], [None], None, None, (2, "1002", "RESERVED", NOW)],
             fetchall_result=[("1001",)],
         )
         make_db(mock_conn_fn, cur)
@@ -445,7 +445,7 @@ class TestReservation(unittest.TestCase):
     @patch("app.enrollment.get_db_connection")
     def test_retired_reservation_allows_new_reservation_with_next_id(self, mock_conn_fn, mock_log):
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, (2, "1002", "RESERVED", NOW)],
+            fetchone_queue=[[1], [1], [None], None, None, (2, "1002", "RESERVED", NOW)],
             fetchall_result=[("1001",)],
         )
         make_db(mock_conn_fn, cur)
@@ -462,7 +462,7 @@ class TestReservation(unittest.TestCase):
     def test_ids_scoped_per_device(self, mock_conn_fn, mock_log):
         # Device 2 has its own history: 1001 used there → next is 1002.
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, (3, "1002", "RESERVED", NOW)],
+            fetchone_queue=[[1], [1], [None], None, None, (3, "1002", "RESERVED", NOW)],
             fetchall_result=[("1001",)],
         )
         make_db(mock_conn_fn, cur)
@@ -479,7 +479,7 @@ class TestReservation(unittest.TestCase):
     def test_terminal_roster_ids_considered(self, mock_conn_fn, mock_log):
         # Roster says 1001 is physically present → reserve 1002 instead.
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, (4, "1002", "RESERVED", NOW)],
+            fetchone_queue=[[1], [1], [None], None, None, (4, "1002", "RESERVED", NOW)],
             fetchall_result=[],
         )
         make_db(mock_conn_fn, cur)
@@ -855,7 +855,7 @@ class TestSafetyInvariants(unittest.TestCase):
         # 1. Reserve
         with patch("app.enrollment.log_sync_event"), patch("app.enrollment.get_db_connection") as m1:
             cur = FakeCursor(
-                fetchone_queue=[[1], [1], [None], None, (1, "1001", "RESERVED", NOW)],
+                fetchone_queue=[[1], [1], [None], None, None, (1, "1001", "RESERVED", NOW)],
                 fetchall_result=[],
             )
             make_db(m1, cur)
@@ -958,7 +958,7 @@ class TestSafetyInvariants(unittest.TestCase):
         device = FakeDevice(users=[])
         with patch("app.enrollment.log_sync_event"), patch("app.enrollment.get_db_connection") as m:
             cur = FakeCursor(
-                fetchone_queue=[[1], [1], [None], None, (1, "1001", "RESERVED", NOW)],
+                fetchone_queue=[[1], [1], [None], None, None, (1, "1001", "RESERVED", NOW)],
                 fetchall_result=[],
             )
             make_db(m, cur)

@@ -723,6 +723,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terminal-management/fingerprint/reenroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Fingerprint Reenroll
+         * @description Only queues the request — the Collector transitions into a
+         *     dedicated FINGERPRINT_ENROLLING state to perform pyzk's interactively-
+         *     blocking enroll_user() call (confirmed up to ~60-180s), which cannot
+         *     happen inside the normal fast command-drain path without freezing
+         *     attendance capture for its entire duration. Poll
+         *     GET .../fingerprint/reenroll-status for the real result.
+         *
+         *     This call cannot be cancelled once the Collector has entered
+         *     FINGERPRINT_ENROLLING — pyzk provides no reliable mid-call interrupt.
+         */
+        post: operations["start_fingerprint_reenroll_api_v1_terminal_management_fingerprint_reenroll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terminal-management/fingerprint/reenroll-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fingerprint Reenroll Status
+         * @description Read-only. Polls the same Collector-health-bridge file every other
+         *     telemetry field already uses — no new transport.
+         */
+        get: operations["fingerprint_reenroll_status_api_v1_terminal_management_fingerprint_reenroll_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terminal-management/fingerprint/remove": {
         parameters: {
             query?: never;
@@ -752,6 +801,11 @@ export interface paths {
          * @description Read-only — no write session required. If the device cannot be
          *     read, device_reachable=false and items is empty; callers must never
          *     interpret that as 'no accounts exist'.
+         *
+         *     Enriches the pure device-read items with Human-first identity (name,
+         *     active state, mapping state) via a single DB round-trip — kept in the
+         *     router, not in app.terminal_management, which stays a pure device-I/O
+         *     module with no DB coupling.
          */
         get: operations["get_terminal_inventory_api_v1_terminal_management_inventory_get"];
         put?: never;
@@ -1287,6 +1341,16 @@ export interface components {
             /** Event Types */
             event_types: string[];
         };
+        /** FingerprintReenrollStatusResponse */
+        FingerprintReenrollStatusResponse: {
+            /** Device User Id */
+            device_user_id: string;
+            /**
+             * State
+             * @description 'pending' (still in progress), 'confirmed', 'failed', or 'unknown'
+             */
+            state: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1731,6 +1795,16 @@ export interface components {
              */
             operator: string;
         };
+        /** StartFingerprintReenrollRequest */
+        StartFingerprintReenrollRequest: {
+            /** Device User Id */
+            device_user_id: string;
+            /**
+             * Operator
+             * @description explicit ADMIN identity performing the re-enrollment
+             */
+            operator: string;
+        };
         /** TerminalInventoryItem */
         TerminalInventoryItem: {
             /** Device User Id */
@@ -1740,6 +1814,16 @@ export interface components {
              * @description Number of fingerprint templates on the device for this account. null means the device could not be read (unknown, never assumed zero).
              */
             fingerprint_count?: number | null;
+            /** Human Active */
+            human_active?: boolean | null;
+            /** Human Name */
+            human_name?: string | null;
+            /**
+             * Mapping State
+             * @description 'open' (currently-VERIFIED), 'closed' (historical), or 'none'
+             * @default none
+             */
+            mapping_state: string;
             /** Name */
             name?: string | null;
             /** Privilege */
@@ -3178,6 +3262,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TerminalMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_fingerprint_reenroll_api_v1_terminal_management_fingerprint_reenroll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartFingerprintReenrollRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fingerprint_reenroll_status_api_v1_terminal_management_fingerprint_reenroll_status_get: {
+        parameters: {
+            query: {
+                device_user_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FingerprintReenrollStatusResponse"];
                 };
             };
             /** @description Validation Error */

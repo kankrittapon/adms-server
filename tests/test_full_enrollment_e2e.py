@@ -95,6 +95,7 @@ class TestCompleteEnrollmentE2E(unittest.TestCase):
                     (1,),                                    # device exists/active
                     (None,),                                 # advisory lock
                     None,                                     # no duplicate active enrollment
+                    None,                                     # reclaimed-cancelled-enrollment audit lookup
                     (1, "1005", "RESERVED", NOW),             # INSERT RETURNING
                 ],
                 fetchall_result=[],  # _load_used_terminal_ids: nothing used yet

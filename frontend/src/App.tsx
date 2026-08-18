@@ -12,6 +12,7 @@ import { Mappings } from "./pages/Mappings";
 import { Audit } from "./pages/Audit";
 import { HumanDetail, Personnel } from "./pages/Personnel";
 import { System } from "./pages/System";
+import { TerminalManagement } from "./pages/TerminalManagement";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   if (!getToken()) {
@@ -61,6 +62,7 @@ export function App() {
         <Route path="/attendance/:id" element={<AttendanceDetail />} />
         <Route path="/enrollments" element={<Enrollments />} />
         <Route path="/mappings" element={<Mappings />} />
+        <Route path="/terminal-management" element={<TerminalManagement />} />
         <Route
           path="/audit"
           element={

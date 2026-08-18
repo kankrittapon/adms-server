@@ -1192,6 +1192,25 @@
         "title": "EventTypesResponse",
         "type": "object"
       },
+      "FingerprintReenrollStatusResponse": {
+        "properties": {
+          "device_user_id": {
+            "title": "Device User Id",
+            "type": "string"
+          },
+          "state": {
+            "description": "'pending' (still in progress), 'confirmed', 'failed', or 'unknown'",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_user_id",
+          "state"
+        ],
+        "title": "FingerprintReenrollStatusResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2389,6 +2408,25 @@
         "title": "ScanConfirmationRequest",
         "type": "object"
       },
+      "StartFingerprintReenrollRequest": {
+        "properties": {
+          "device_user_id": {
+            "title": "Device User Id",
+            "type": "string"
+          },
+          "operator": {
+            "description": "explicit ADMIN identity performing the re-enrollment",
+            "title": "Operator",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_user_id",
+          "operator"
+        ],
+        "title": "StartFingerprintReenrollRequest",
+        "type": "object"
+      },
       "TerminalInventoryItem": {
         "properties": {
           "device_user_id": {
@@ -2406,6 +2444,34 @@
             ],
             "description": "Number of fingerprint templates on the device for this account. null means the device could not be read (unknown, never assumed zero).",
             "title": "Fingerprint Count"
+          },
+          "human_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Human Active"
+          },
+          "human_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Human Name"
+          },
+          "mapping_state": {
+            "default": "none",
+            "description": "'open' (currently-VERIFIED), 'closed' (historical), or 'none'",
+            "title": "Mapping State",
+            "type": "string"
           },
           "name": {
             "anyOf": [
@@ -4969,6 +5035,89 @@
         ]
       }
     },
+    "/api/v1/terminal-management/fingerprint/reenroll": {
+      "post": {
+        "description": "Only queues the request \u2014 the Collector transitions into a\ndedicated FINGERPRINT_ENROLLING state to perform pyzk's interactively-\nblocking enroll_user() call (confirmed up to ~60-180s), which cannot\nhappen inside the normal fast command-drain path without freezing\nattendance capture for its entire duration. Poll\nGET .../fingerprint/reenroll-status for the real result.\n\nThis call cannot be cancelled once the Collector has entered\nFINGERPRINT_ENROLLING \u2014 pyzk provides no reliable mid-call interrupt.",
+        "operationId": "start_fingerprint_reenroll_api_v1_terminal_management_fingerprint_reenroll_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartFingerprintReenrollRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Fingerprint Reenroll",
+        "tags": [
+          "terminal-management"
+        ]
+      }
+    },
+    "/api/v1/terminal-management/fingerprint/reenroll-status": {
+      "get": {
+        "description": "Read-only. Polls the same Collector-health-bridge file every other\ntelemetry field already uses \u2014 no new transport.",
+        "operationId": "fingerprint_reenroll_status_api_v1_terminal_management_fingerprint_reenroll_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "device_user_id",
+            "required": true,
+            "schema": {
+              "title": "Device User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FingerprintReenrollStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fingerprint Reenroll Status",
+        "tags": [
+          "terminal-management"
+        ]
+      }
+    },
     "/api/v1/terminal-management/fingerprint/remove": {
       "post": {
         "operationId": "remove_fingerprint_api_v1_terminal_management_fingerprint_remove_post",
@@ -5012,7 +5161,7 @@
     },
     "/api/v1/terminal-management/inventory": {
       "get": {
-        "description": "Read-only \u2014 no write session required. If the device cannot be\nread, device_reachable=false and items is empty; callers must never\ninterpret that as 'no accounts exist'.",
+        "description": "Read-only \u2014 no write session required. If the device cannot be\nread, device_reachable=false and items is empty; callers must never\ninterpret that as 'no accounts exist'.\n\nEnriches the pure device-read items with Human-first identity (name,\nactive state, mapping state) via a single DB round-trip \u2014 kept in the\nrouter, not in app.terminal_management, which stays a pure device-I/O\nmodule with no DB coupling.",
         "operationId": "get_terminal_inventory_api_v1_terminal_management_inventory_get",
         "responses": {
           "200": {

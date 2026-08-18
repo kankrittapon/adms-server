@@ -94,4 +94,5 @@ export type CreateOperatorRequest = Schemas["CreateOperatorRequest"];
 export type ToggleActiveRequest = Schemas["ToggleActiveRequest"];
 export type ToggleActiveResponse = Schemas["ToggleActiveResponse"];
 export type UpdateHumanEnglishNameRequest = Schemas["UpdateHumanEnglishNameRequest"];
+export type TerminalInventoryItem = Schemas["TerminalInventoryItem"];
 export type WriteSessionStatus = Schemas["WriteSessionStatus"];

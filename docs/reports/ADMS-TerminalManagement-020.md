@@ -1,6 +1,22 @@
 # ADMS-TerminalManagement-020
 
-**Scope**: Terminal Management — physical ZEM560 account/fingerprint lifecycle, strictly separate from Personnel Lifecycle (019) and Enrollment. **Backend architecture, structured errors, audit events, and tests are implemented and committed. Frontend UI is deferred** (see §14) given the scope of this PromptID relative to remaining session budget — flagged explicitly, not hidden.
+**Scope**: Terminal Management — physical ZEM560 account/fingerprint lifecycle, strictly separate from Personnel Lifecycle (019) and Enrollment.
+
+## REVISION — Complete Implementation (owner decision C)
+
+The three gaps flagged in the original report are now closed:
+
+**A. Frontend UI — COMPLETE.** `frontend/src/pages/TerminalManagement.tsx`, routed at `/terminal-management`, ADMIN-only nav entry. Human-first table (name, terminal ID, person status, fingerprint status, mapping state — no `device_user_pk`/`account_incarnation`/`pyzk`/internal enums anywhere in the UI or its Thai/English copy, verified by test). `GET /api/v1/terminal-management/inventory` now enriches the pure device read with a DB join (Human name/active state/mapping state) inside the router, keeping `app/terminal_management.py` itself DB-free. Confirm modals for fingerprint removal, account removal (with the explicit active-Human warning + acknowledgement checkbox, exactly as specified), and re-enrollment (with the "cannot cancel mid-way" notice).
+
+**B. Fingerprint re-enrollment — COMPLETE**, via a new dedicated Collector state. See §B below for the full design; summary: `State.FINGERPRINT_ENROLLING`, entered only after `live_capture()` has gracefully ended at a safe point (same mechanism `stop()` already uses), `enroll_user()` runs there exclusively (single owner, no concurrent queue drain), Collector always returns to `LIVE` afterward. The real result arrives asynchronously (the call can take up to ~60-180s); the API exposes a polling status endpoint reusing the existing Collector-health-bridge file, not a new transport.
+
+**C. Cancelled-ID reclamation — COMPLETE**, no migration. `_load_used_terminal_ids()`'s SQL now excludes a `CANCELLED` reservation only when `terminal_created_at IS NULL AND device_uid IS NULL` (the 1003 case) — the `device_users` half of the same query has no active/inactive filter, so any ID that ever had a real account (the 1002 case) remains permanently excluded from reuse, structurally, with no separate check needed. `TERMINAL_ID_RESERVATION_REUSED` audited exactly once when a reclaimed ID is actually allocated.
+
+**Updated totals**: 631 tests passing (597 in the prior revision + 34 new: 8 ID-reclamation, 14 re-enrollment state-machine, 12 frontend UI structural). OpenAPI drift guard, `tsc --noEmit`, `vite build` all green post-revision. `git diff --check` clean. No secrets in the diff.
+
+**No real terminal mutation occurred** while completing this revision — all device I/O in new/changed code is exercised only via fakes in tests; the read-only production ground-truth re-check (§F) used only existing, already-verified SQL queries, not the new `TERMINAL_INVENTORY` command (which is not yet deployed).
+
+---
 
 ## 1. Existing pyzk capabilities discovered
 
@@ -137,3 +153,63 @@ No mutation performed during this audit — pure read-only SQL, identical in met
 - ID reclamation: designed and proven safe for the "never-created" case (1003), not implemented (allocator query change only, no migration — deferred for time, not architecture).
 - `TERMINAL_INVENTORY` request currently hardcodes `device_id=1` (this production system's only device) — should take a `device_id` parameter if a second device is ever added; not a correctness bug today, flagged for generality.
 - No live physical fingerprint-presence check was performed for 1001/1002/1004 in Phase 19, since `TERMINAL_INVENTORY` is new code not yet deployed — only DB-level ground truth was gathered. A post-deployment read-only inventory call would add the physical fingerprint-count dimension.
+
+---
+
+## REVISION ADDENDUM — Sections above marked "not implemented"/"deferred" are now superseded
+
+Everything in §14 (frontend), §5 (re-enrollment), §10 (reclamation), and the corresponding items in "Remaining known defects" above this addendum is now implemented — see the REVISION section at the top of this document. This addendum adds the design detail and final ground-truth re-check the revision required.
+
+### Part B — Fingerprint re-enrollment: final architecture
+
+```
+State.LIVE (normal capture)
+    ↓ ADMIN calls POST .../fingerprint/reenroll
+    ↓ MQTT thread: handle_device_command() enqueues START_FINGERPRINT_REENROLL
+      (fast: only validates the account exists via get_users(), no enroll_user() call)
+    ↓ owner thread, next live_capture() safe point: sees pending_fingerprint_enroll set,
+      calls self.connection.end_live_capture = True (same mechanism stop() uses)
+    ↓ live_capture()'s generator finishes its own internal cleanup and returns
+      (bounded by its own ~10s idle-recv cycle, same bound as every other
+      graceful-stop path in this codebase)
+    ↓ handle_live() sees the for-loop ended normally + a pending request →
+      transition_to(State.FINGERPRINT_ENROLLING)
+    ↓ handle_fingerprint_enrolling() (owner thread, exclusive): reads template
+      count before, calls self.connection.enroll_user(uid, user_id) — the ONLY
+      call site for enroll_user() in the entire codebase (verified by test) —
+      reads template count after, confirms success by count increase (never
+      trusts done alone, same principle as set_user())
+    ↓ audits TERMINAL_FINGERPRINT_REENROLL_STARTED before, then CONFIRMED or
+      FAILED after
+    ↓ ALWAYS transition_to(State.LIVE) — success or failure — a fresh
+      live_capture() generator begins on the next handle_live() call
+```
+
+**Timing budget**: pyzk's `enroll_user()` internally bounds itself to up to 3 attempts × a 60s per-`recv()` socket timeout — worst case ~180s, typically much faster (the loop advances as soon as the terminal reports an event). No new outer DeviceCommandBus timeout constant was introduced for the *initial* `POST .../reenroll` call (it only queues, fast) — the real result is polled via `GET .../reenroll-status`, which reads the same Collector-health-bridge JSON file every other telemetry field already uses (`_read_collector_health()`), not a new transport or a long-held HTTP connection.
+
+**Cancellation**: confirmed impossible mid-call with the installed pyzk — `enroll_user()` has no interrupt hook once its `recv()` loop starts. Documented, not worked around unsafely. The UI states this plainly before the operator confirms ("เมื่อเริ่มแล้วไม่สามารถยกเลิกกลางคันได้").
+
+**Reconnect**: an exception from `enroll_user()` (vs. its own internal `done=False` for a mundane timeout/no-finger-placed case) is treated as connection-level failure → `transition_to(State.BACKOFF)`, same reconnect path as every other LIVE-state I/O exception.
+
+**Invariants preserved**: same Human/terminal account throughout (never creates or reassigns an account); attendance history untouched (module never references `attendance_logs`); existing VERIFIED mapping untouched (never references `employee_device_mappings`) — verified by a structural test asserting `handle_fingerprint_enrolling`'s source contains none of `human_employees`/`attendance_logs`/`device_user_enrollments`/`employee_device_mappings`.
+
+### Part C — 1002 vs 1003, final policy result
+
+| | 1002 | 1003 |
+|---|---|---|
+| `terminal_created_at` | **set** (2026-08-17, later manually deleted) | NULL |
+| `device_users` row | **exists** (pk=24, inactive) | **none** |
+| Reclaimable under final policy | **NO** — excluded via the unmodified `device_users` half of the UNION, permanently, regardless of enrollment status | **YES** — excluded from the enrollment half only when `status='CANCELLED' AND terminal_created_at IS NULL AND device_uid IS NULL`, which 1003 satisfies |
+
+No migration, no deleted rows, no rewritten history — confirmed by test (`test_item30_query_never_deletes_or_updates_anything`).
+
+### Part F — Final read-only production ground truth (re-checked, unchanged from the prior report)
+
+| Terminal ID | Physical account (DB) | Templates | Human | Human active | Open mapping | Reclaimable (final policy) |
+|---|---|---|---|---|---|---|
+| 1001 | present, active, incarnation 1 | not re-checked live (new inventory code not yet deployed) | กฤตพล หมาดเส็น | true | Mapping #1 | No — real, active, mapped |
+| 1002 | absent (owner-deleted) | — | none | — | none | **No** — real account existed |
+| 1003 | never created | — | none | — | none | **Yes** |
+| 1004 | present, active, incarnation 1 | not re-checked live | พิมาย ขาวสอาด | true | Mapping #2 | No — real, active, mapped |
+
+All facts byte-identical to the original report's table — no drift, confirming no production mutation occurred anywhere in this session. Physical fingerprint counts were not re-checked live because the new `TERMINAL_INVENTORY` Collector command is not yet deployed to production; this remains the one honestly-flagged gap in the ground-truth table, resolvable with a single read-only inventory call immediately after deployment.
