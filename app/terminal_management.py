@@ -174,7 +174,13 @@ def remove_terminal_fingerprint(
         }
 
     for fid in target_fids:
-        device.delete_user_template(uid=uid, temp_id=fid, user_id=str(device_user_id))
+        # uid-only call (no user_id kwarg): the installed pyzk's TCP branch
+        # (`if self.tcp and user_id:`) does `pack('<24sB', str(user_id), ...)`,
+        # which raises TypeError on Python 3 (struct 's' requires bytes, not
+        # str) — a bug in the vendored library itself, fires regardless of
+        # whether uid is also given. Omitting user_id routes through the
+        # uid-only branch (`pack('hb', uid, temp_id)`), which is unaffected.
+        device.delete_user_template(uid=uid, temp_id=fid)
 
     try:
         templates_after = device.get_templates() or []

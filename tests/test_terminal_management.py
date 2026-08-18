@@ -66,6 +66,13 @@ class FakeDevice:
         return list(self._templates)
 
     def delete_user_template(self, uid, temp_id, user_id=""):
+        # Mirrors the installed pyzk's real bug: on a TCP connection,
+        # passing a truthy user_id hits `pack('<24sB', str(user_id), ...)`,
+        # which raises TypeError on Python 3 (struct 's' needs bytes, not
+        # str). Our wrapper must never pass user_id here — this fake exists
+        # to make that regression impossible to reintroduce silently.
+        if user_id:
+            raise TypeError("argument for 's' must be a bytes object")
         self.calls.append("delete_user_template")
         self.deleted_templates.append((uid, temp_id))
         self._templates = [f for f in self._templates if not (f.uid == uid and f.fid == temp_id)]
@@ -156,6 +163,23 @@ class TestFingerprintRemoval(unittest.TestCase):
         # item 39: no raw template bytes in audit message
         message = mock_log.call_args[0][2]
         self.assertNotIn("SECRET", message)
+
+    @patch("app.terminal_management.log_sync_event")
+    def test_item6b_delete_user_template_never_passes_user_id(self, mock_log):
+        """Regression: the installed pyzk's TCP branch (`if self.tcp and
+        user_id:`) does `pack('<24sB', str(user_id), temp_id)`, which raises
+        TypeError on Python 3 (struct 's' requires bytes, not str) — a real
+        bug hit in production. Our wrapper must call delete_user_template
+        with uid only, never user_id, to avoid that branch entirely.
+        FakeDevice.delete_user_template raises TypeError itself if user_id
+        is truthy, so this test would fail loudly if the old buggy call
+        were reintroduced."""
+        device = FakeDevice(
+            users=[FakeUser("1004", 29)],
+            templates=[FakeFinger(29, 0)],
+        )
+        result = remove_terminal_fingerprint(self.cfg, device, device_id=1, device_user_id="1004", operator="admin")
+        self.assertEqual(result["removed_fids"], [0])
 
     @patch("app.terminal_management.log_sync_event")
     def test_item7_remove_fingerprint_already_absent_idempotent(self, mock_log):
