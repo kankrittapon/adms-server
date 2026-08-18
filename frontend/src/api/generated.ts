@@ -515,6 +515,90 @@ export interface paths {
         /** List Humans */
         get: operations["list_humans_api_v1_humans_get"];
         put?: never;
+        /** Create Human Endpoint */
+        post: operations["create_human_endpoint_api_v1_humans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/humans/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Humans
+         * @description Read-only — never gated by Write Session. Registered BEFORE
+         *     /humans/{employee_id} — both are 2-segment GET routes, and FastAPI/
+         *     Starlette matches route patterns in registration order, so this must
+         *     come first or "/export.csv" would be swallowed as an employee_id path
+         *     parameter (and rejected as an invalid UUID).
+         */
+        get: operations["export_humans_api_v1_humans_export_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/humans/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Import
+         * @description Re-validates the uploaded file itself (never trusts a client-held
+         *     preview result) and writes NEW/UPDATE rows in one transaction.
+         */
+        post: operations["commit_import_api_v1_humans_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/humans/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Import
+         * @description Read-only — parses and validates only, never writes. Not gated by
+         *     Write Session (Phase 12).
+         */
+        post: operations["preview_import_api_v1_humans_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/humans/import/template.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Import Template */
+        get: operations["download_import_template_api_v1_humans_import_template_csv_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -536,8 +620,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Human English Name */
-        patch: operations["update_human_english_name_api_v1_humans__employee_id__patch"];
+        /** Update Human Endpoint */
+        patch: operations["update_human_endpoint_api_v1_humans__employee_id__patch"];
         trace?: never;
     };
     "/api/v1/humans/{employee_id}/deactivate": {
@@ -990,6 +1074,16 @@ export interface components {
             /** Message */
             message?: string | null;
         };
+        /** Body_commit_import_api_v1_humans_import_commit_post */
+        Body_commit_import_api_v1_humans_import_commit_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_preview_import_api_v1_humans_import_preview_post */
+        Body_preview_import_api_v1_humans_import_preview_post: {
+            /** File */
+            file: string;
+        };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
             /** Current Password */
@@ -1018,6 +1112,38 @@ export interface components {
             state?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /**
+         * CreateHumanRequest
+         * @description ADMS-Personnel-MasterData-024: creates a new, ADMS-managed Human
+         *     (source='ADMS_MANUAL', distinct from EXCEL_IMPORT). Starts active,
+         *     production_scope=true. Never creates a terminal account, Enrollment,
+         *     or Mapping — those are separate, explicit next actions.
+         */
+        CreateHumanRequest: {
+            /** Branch */
+            branch?: string | null;
+            /** Category */
+            category?: string | null;
+            /**
+             * Display Name
+             * @description Thai full name
+             */
+            display_name: string;
+            /** English Name */
+            english_name?: string | null;
+            /**
+             * Personnel Id
+             * @description Stable service/personnel number — the sole duplicate-detection key
+             */
+            personnel_id?: string | null;
+            /** Position */
+            position?: string | null;
+            /**
+             * Rank
+             * @description Canonical RTN rank abbreviation from GET /api/v1/reference/ranks, e.g. 'พ.จ.อ.'
+             */
+            rank?: string | null;
         };
         /**
          * CreateMappingRequest
@@ -1099,6 +1225,53 @@ export interface components {
              * @description explicit operator identity
              */
             operator: string;
+        };
+        /** CsvImportCommitResponse */
+        CsvImportCommitResponse: {
+            /** Created */
+            created: number;
+            /** Errors */
+            errors: number;
+            /** Unchanged */
+            unchanged: number;
+            /** Updated */
+            updated: number;
+        };
+        /** CsvImportPreviewResponse */
+        CsvImportPreviewResponse: {
+            /** Rows */
+            rows: components["schemas"]["CsvImportRowResult"][];
+            summary: components["schemas"]["CsvImportSummary"];
+        };
+        /** CsvImportRowResult */
+        CsvImportRowResult: {
+            /** Changed Fields */
+            changed_fields?: string[] | null;
+            /** Classification */
+            classification: string;
+            /** Data */
+            data?: {
+                [key: string]: unknown;
+            } | null;
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Reason Key */
+            reason_key?: string | null;
+            /** Reason Th */
+            reason_th?: string | null;
+            /** Row Number */
+            row_number: number;
+        };
+        /** CsvImportSummary */
+        CsvImportSummary: {
+            /** Error */
+            error: number;
+            /** New */
+            new: number;
+            /** Unchanged */
+            unchanged: number;
+            /** Update */
+            update: number;
         };
         /** DashboardSummary */
         DashboardSummary: {
@@ -1933,13 +2106,27 @@ export interface components {
             /** User Id */
             user_id: string;
         };
-        /** UpdateHumanEnglishNameRequest */
-        UpdateHumanEnglishNameRequest: {
-            /**
-             * English Name
-             * @description Full English name with Latin letters, spaces, hyphens, and apostrophes
-             */
+        /**
+         * UpdateHumanRequest
+         * @description PATCH semantics: only fields explicitly present in the request body
+         *     are changed (server reads via `.dict(exclude_unset=True)`) — omitting
+         *     a field leaves it untouched; explicitly sending null clears it.
+         */
+        UpdateHumanRequest: {
+            /** Branch */
+            branch?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** English Name */
             english_name?: string | null;
+            /** Personnel Id */
+            personnel_id?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Rank */
+            rank?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -2893,6 +3080,156 @@ export interface operations {
             };
         };
     };
+    create_human_endpoint_api_v1_humans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateHumanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Human"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_humans_api_v1_humans_export_csv_get: {
+        parameters: {
+            query?: {
+                active?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_humans_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_commit_import_api_v1_humans_import_commit_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsvImportCommitResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_import_api_v1_humans_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_import_api_v1_humans_import_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsvImportPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_import_template_api_v1_humans_import_template_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     get_human_api_v1_humans__employee_id__get: {
         parameters: {
             query?: never;
@@ -2924,7 +3261,7 @@ export interface operations {
             };
         };
     };
-    update_human_english_name_api_v1_humans__employee_id__patch: {
+    update_human_endpoint_api_v1_humans__employee_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -2935,7 +3272,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateHumanEnglishNameRequest"];
+                "application/json": components["schemas"]["UpdateHumanRequest"];
             };
         };
         responses: {

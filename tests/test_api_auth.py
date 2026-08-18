@@ -541,6 +541,9 @@ class TestPersonnelEnglishName(unittest.TestCase):
         return client, p
 
     def test_admin_patch_english_name_success(self):
+        """ADMS-Personnel-MasterData-024: the PATCH endpoint now goes
+        through app.personnel.update_human() (broader field support) and
+        re-fetches via repository.get_human() for the response body."""
         client, p = self._client(role="ADMIN", write_enabled=True)
         updated_row = {
             "employee_id": "039c4486-b30f-4ce1-b780-783cd268858d",
@@ -559,7 +562,9 @@ class TestPersonnelEnglishName(unittest.TestCase):
             "created_at": NOW,
             "updated_at": NOW,
         }
-        with p, patch("app.api.repository.update_human_english_name", return_value=updated_row):
+        with p, patch("app.api.routers.humans.update_human", return_value=updated_row), patch(
+            "app.api.repository.get_human", return_value=updated_row
+        ):
             resp = client.patch(
                 "/api/v1/humans/039c4486-b30f-4ce1-b780-783cd268858d",
                 json={"english_name": "Krittapon Madsen"},

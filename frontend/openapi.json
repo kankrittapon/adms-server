@@ -320,6 +320,34 @@
         "title": "AuditEvent",
         "type": "object"
       },
+      "Body_commit_import_api_v1_humans_import_commit_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_commit_import_api_v1_humans_import_commit_post",
+        "type": "object"
+      },
+      "Body_preview_import_api_v1_humans_import_preview_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_preview_import_api_v1_humans_import_preview_post",
+        "type": "object"
+      },
       "ChangePasswordRequest": {
         "properties": {
           "current_password": {
@@ -431,6 +459,96 @@
           }
         },
         "title": "CollectorSummary",
+        "type": "object"
+      },
+      "CreateHumanRequest": {
+        "description": "ADMS-Personnel-MasterData-024: creates a new, ADMS-managed Human\n(source='ADMS_MANUAL', distinct from EXCEL_IMPORT). Starts active,\nproduction_scope=true. Never creates a terminal account, Enrollment,\nor Mapping \u2014 those are separate, explicit next actions.",
+        "properties": {
+          "branch": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "display_name": {
+            "description": "Thai full name",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "english_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "English Name"
+          },
+          "personnel_id": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable service/personnel number \u2014 the sole duplicate-detection key",
+            "title": "Personnel Id"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical RTN rank abbreviation from GET /api/v1/reference/ranks, e.g. '\u0e1e.\u0e08.\u0e2d.'",
+            "title": "Rank"
+          }
+        },
+        "required": [
+          "display_name"
+        ],
+        "title": "CreateHumanRequest",
         "type": "object"
       },
       "CreateMappingRequest": {
@@ -573,6 +691,159 @@
           "operator"
         ],
         "title": "CreateTerminalAccountRequest",
+        "type": "object"
+      },
+      "CsvImportCommitResponse": {
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "updated",
+          "unchanged",
+          "errors"
+        ],
+        "title": "CsvImportCommitResponse",
+        "type": "object"
+      },
+      "CsvImportPreviewResponse": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/CsvImportRowResult"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CsvImportSummary"
+          }
+        },
+        "required": [
+          "summary",
+          "rows"
+        ],
+        "title": "CsvImportPreviewResponse",
+        "type": "object"
+      },
+      "CsvImportRowResult": {
+        "properties": {
+          "changed_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed Fields"
+          },
+          "classification": {
+            "title": "Classification",
+            "type": "string"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "reason_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Key"
+          },
+          "reason_th": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Th"
+          },
+          "row_number": {
+            "title": "Row Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row_number",
+          "classification"
+        ],
+        "title": "CsvImportRowResult",
+        "type": "object"
+      },
+      "CsvImportSummary": {
+        "properties": {
+          "error": {
+            "title": "Error",
+            "type": "integer"
+          },
+          "new": {
+            "title": "New",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "update": {
+            "title": "Update",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "new",
+          "update",
+          "unchanged",
+          "error"
+        ],
+        "title": "CsvImportSummary",
         "type": "object"
       },
       "DashboardSummary": {
@@ -2744,8 +3015,46 @@
         "title": "UnattributedAttendance",
         "type": "object"
       },
-      "UpdateHumanEnglishNameRequest": {
+      "UpdateHumanRequest": {
+        "description": "PATCH semantics: only fields explicitly present in the request body\nare changed (server reads via `.dict(exclude_unset=True)`) \u2014 omitting\na field leaves it untouched; explicitly sending null clears it.",
         "properties": {
+          "branch": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
           "english_name": {
             "anyOf": [
               {
@@ -2756,11 +3065,45 @@
                 "type": "null"
               }
             ],
-            "description": "Full English name with Latin letters, spaces, hyphens, and apostrophes",
             "title": "English Name"
+          },
+          "personnel_id": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Personnel Id"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
           }
         },
-        "title": "UpdateHumanEnglishNameRequest",
+        "title": "UpdateHumanRequest",
         "type": "object"
       },
       "ValidationError": {
@@ -4471,6 +4814,196 @@
         "tags": [
           "humans"
         ]
+      },
+      "post": {
+        "operationId": "create_human_endpoint_api_v1_humans_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHumanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Human"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Human Endpoint",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/export.csv": {
+      "get": {
+        "description": "Read-only \u2014 never gated by Write Session. Registered BEFORE\n/humans/{employee_id} \u2014 both are 2-segment GET routes, and FastAPI/\nStarlette matches route patterns in registration order, so this must\ncome first or \"/export.csv\" would be swallowed as an employee_id path\nparameter (and rejected as an invalid UUID).",
+        "operationId": "export_humans_api_v1_humans_export_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Humans",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/import/commit": {
+      "post": {
+        "description": "Re-validates the uploaded file itself (never trusts a client-held\npreview result) and writes NEW/UPDATE rows in one transaction.",
+        "operationId": "commit_import_api_v1_humans_import_commit_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_commit_import_api_v1_humans_import_commit_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsvImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Commit Import",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/import/preview": {
+      "post": {
+        "description": "Read-only \u2014 parses and validates only, never writes. Not gated by\nWrite Session (Phase 12).",
+        "operationId": "preview_import_api_v1_humans_import_preview_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preview_import_api_v1_humans_import_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsvImportPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Import",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/import/template.csv": {
+      "get": {
+        "operationId": "download_import_template_api_v1_humans_import_template_csv_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Download Import Template",
+        "tags": [
+          "humans"
+        ]
       }
     },
     "/api/v1/humans/{employee_id}": {
@@ -4515,7 +5048,7 @@
         ]
       },
       "patch": {
-        "operationId": "update_human_english_name_api_v1_humans__employee_id__patch",
+        "operationId": "update_human_endpoint_api_v1_humans__employee_id__patch",
         "parameters": [
           {
             "in": "path",
@@ -4531,7 +5064,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateHumanEnglishNameRequest"
+                "$ref": "#/components/schemas/UpdateHumanRequest"
               }
             }
           },
@@ -4559,7 +5092,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Update Human English Name",
+        "summary": "Update Human Endpoint",
         "tags": [
           "humans"
         ]

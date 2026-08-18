@@ -3,19 +3,26 @@ import { Link, useParams } from "react-router-dom";
 import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { CsvImportModal } from "../components/CsvImportModal";
+import { PersonnelFormModal } from "../components/PersonnelFormModal";
 import { ErrorBanner, Loading, ScopeBadge } from "../components/Status";
 import { useApi } from "../hooks/useApi";
 import { useTranslation } from "../i18n";
 
 export function Personnel() {
   const { t } = useTranslation();
+  const { canManagePersonnel } = useAuth();
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("");
   const [page, setPage] = useState(0);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const limit = 25;
 
-  const { data, loading, error } = useApi(
+  const { data, loading, error, reload } = useApi(
     (s) =>
       api.humans(
         {
@@ -30,6 +37,25 @@ export function Personnel() {
     [search, scope, activeFilter, page]
   );
 
+  async function handleExport() {
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      const active = activeFilter === "true" ? true : activeFilter === "false" ? false : undefined;
+      const blob = await api.exportHumansCsv(active);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "personnel_export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* Header & Filter Controls */}
@@ -42,6 +68,29 @@ export function Personnel() {
           <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-2xs">
             {data ? `${data.total} ${t.common.results}` : t.common.loading}
           </span>
+          <button
+            onClick={handleExport}
+            disabled={exportBusy}
+            className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50"
+          >
+            {t.personnel.exportCsvButton}
+          </button>
+          {canManagePersonnel && (
+            <>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
+              >
+                {t.personnel.importCsvButton}
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700"
+              >
+                {t.personnel.addPersonnelButton}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -180,16 +229,36 @@ export function Personnel() {
           </div>
         </div>
       )}
+
+      {exportError && <ErrorBanner message={exportError} />}
+
+      {showAddModal && (
+        <PersonnelFormModal
+          mode="create"
+          onClose={() => setShowAddModal(false)}
+          // Do NOT close on save — PersonnelFormModal shows its own
+          // "เพิ่มกำลังพลเรียบร้อยแล้ว" + Enrollment-handoff screen first;
+          // it closes itself. Just refresh the list underneath.
+          onSaved={() => reload()}
+        />
+      )}
+      {showImportModal && (
+        <CsvImportModal
+          onClose={() => setShowImportModal(false)}
+          onCommitted={() => reload()}
+        />
+      )}
     </div>
   );
 }
 
 export function HumanDetail() {
   const { employeeId } = useParams<{ employeeId: string }>();
-  const { me, canMutate } = useAuth();
+  const { me, canMutate, canManagePersonnel } = useAuth();
   const { t } = useTranslation();
   const { data, loading, error, reload } = useApi((s) => api.human(employeeId as string, s), [employeeId]);
 
+  const [showEditModal, setShowEditModal] = useState(false);
   const [editingEnglish, setEditingEnglish] = useState(false);
   const [englishInput, setEnglishInput] = useState("");
   const [saveBusy, setSaveBusy] = useState(false);
@@ -290,8 +359,27 @@ export function HumanDetail() {
           <h1 className="text-xl font-bold tracking-tight text-slate-900">{data.display_name}</h1>
           <p className="text-xs text-slate-500">{t.personnel.subtitle}</p>
         </div>
-        <ScopeBadge scope={data.production_scope} />
+        <div className="flex items-center gap-2">
+          {canManagePersonnel && (
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
+            >
+              {t.personnel.editPersonnelButton}
+            </button>
+          )}
+          <ScopeBadge scope={data.production_scope} />
+        </div>
       </div>
+
+      {showEditModal && (
+        <PersonnelFormModal
+          mode="edit"
+          human={data}
+          onClose={() => setShowEditModal(false)}
+          onSaved={() => reload()}
+        />
+      )}
 
       {saveSuccess && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">

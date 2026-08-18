@@ -28,7 +28,10 @@
 | All read endpoints (health, dashboard, humans, devices, device-users, attendance, mappings, enrollments, ranks) | VIEWER |
 | Enrollment workflow writes (reserve, terminal account, fingerprint, scan, ready, cancel) | ENROLLMENT_OPERATOR (also OPERATOR, ADMIN) |
 | VERIFIED mapping creation | ADMIN |
-| Personnel English name edit (`PATCH /humans/{id}`) | ADMIN |
+| Personnel create/edit (`POST /humans`, `PATCH /humans/{id}`) | ADMIN |
+| Personnel CSV export, import template (`GET /humans/export.csv`, `GET /humans/import/template.csv`) | VIEWER |
+| Personnel CSV import preview (`POST /humans/import/preview`) | ADMIN (read-only, **not** write-session gated) |
+| Personnel CSV import commit (`POST /humans/import/commit`) | ADMIN (write-session gated) |
 | Operator management (`/api/v1/operators*`) | ADMIN |
 | Write-session status (`GET /write-session`) | any authenticated |
 | Write-session open/close (`POST /write-session/open`, `/close`) | OPERATOR, ADMIN |
@@ -89,6 +92,7 @@ Every error uses the envelope:
 | 404 | `NOT_FOUND` | missing resource |
 | 409 | `MAPPING_CONFLICT` / `ENROLLMENT_CONFLICT` | state conflict, duplicate reservation, mapping conflict |
 | 409 | `WRITE_SESSION_ALREADY_ACTIVE` | a write session is already open |
+| 409 | `PERSONNEL_DUPLICATE` | `personnel_id` collision on Personnel create/edit/import |
 | 422 | `VALIDATION_ERROR` | request validation |
 | 500 | `INTERNAL_ERROR` | unexpected internal error (no secrets/stack/SQL leaked) |
 
@@ -101,11 +105,19 @@ Every error uses the envelope:
 | GET | `/api/v1/health` | DB (required), MQTT (optional), collector state summary |
 | GET | `/api/v1/dashboard/summary` | single aggregation query for F2/F3 dashboard |
 
-### Human Master
+### Human Master (Personnel — `ADMS-Personnel-MasterData-024`)
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/v1/humans` | pagination, `production_scope`, `search`, `category` filters |
 | GET | `/api/v1/humans/{employee_id}` | UUID validated; 404 when missing; rank metadata included |
+| GET | `/api/v1/humans/export.csv` | **VIEWER+** — read-only CSV export (BOM-prefixed, Excel-safe), optional `active` filter; never exports employee_id/tokens/device identifiers. Registered *before* `/humans/{employee_id}` to avoid Starlette route-shadowing (a static 2-segment path would otherwise be swallowed by the parameterized route and fail UUID validation). |
+| GET | `/api/v1/humans/import/template.csv` | **ADMIN** — downloadable blank CSV template with header + one example row |
+| POST | `/api/v1/humans` | **gated + ADMIN** — create a Human; `source=ADMS_MANUAL` (distinct from `EXCEL_IMPORT`); rank validated against `app.rtn_ranks.RTN_RANK_CATALOG`; 409 `PERSONNEL_DUPLICATE` on `personnel_id` collision |
+| PATCH | `/api/v1/humans/{employee_id}` | **gated + ADMIN** — partial update (PATCH semantics, only fields present in the body change); whitelisted editable fields only (`display_name`, `english_name`, `rank`, `position`, `branch`, `category`, `personnel_id`) — `employee_id`/`active`/lifecycle fields are not editable through this route |
+| POST | `/api/v1/humans/import/preview` | **ADMIN, read-only, NOT write-session gated** — classifies each CSV row as NEW/UPDATE/UNCHANGED/ERROR against current data; never writes |
+| POST | `/api/v1/humans/import/commit` | **gated + ADMIN** — re-validates and re-uploads the same file (never trusts a stale client-held preview); writes only NEW/UPDATE rows; matches existing rows solely by `personnel_id` (never by name) |
+
+Personnel CSV import matches existing rows only by the `personnel_id` column (a pre-existing `UNIQUE` constraint on `human_employees.personnel_id`) — name-based matching is explicitly disallowed. As of this PromptID, 0 of 120 production Humans have `personnel_id` populated (100% legacy `EXCEL_IMPORT` rows), so CSV import can create new rows immediately but cannot update any pre-existing legacy row until an ADMIN backfills its `personnel_id` via Edit first — a disclosed limitation, not a defect.
 
 ### Devices
 | Method | Path |

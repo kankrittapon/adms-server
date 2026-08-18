@@ -113,8 +113,66 @@ class Human(BaseModel):
     )
 
 
-class UpdateHumanEnglishNameRequest(BaseModel):
-    english_name: Optional[str] = Field(None, max_length=200, description="Full English name with Latin letters, spaces, hyphens, and apostrophes")
+class CreateHumanRequest(BaseModel):
+    """ADMS-Personnel-MasterData-024: creates a new, ADMS-managed Human
+    (source='ADMS_MANUAL', distinct from EXCEL_IMPORT). Starts active,
+    production_scope=true. Never creates a terminal account, Enrollment,
+    or Mapping — those are separate, explicit next actions."""
+
+    display_name: str = Field(min_length=1, max_length=200, description="Thai full name")
+    rank: Optional[str] = Field(
+        None, description="Canonical RTN rank abbreviation from GET /api/v1/reference/ranks, e.g. 'พ.จ.อ.'"
+    )
+    english_name: Optional[str] = Field(None, max_length=200)
+    personnel_id: Optional[str] = Field(
+        None, max_length=50, description="Stable service/personnel number — the sole duplicate-detection key"
+    )
+    position: Optional[str] = Field(None, max_length=200)
+    branch: Optional[str] = Field(None, max_length=200)
+    category: Optional[str] = Field(None, max_length=100)
+
+
+class UpdateHumanRequest(BaseModel):
+    """PATCH semantics: only fields explicitly present in the request body
+    are changed (server reads via `.dict(exclude_unset=True)`) — omitting
+    a field leaves it untouched; explicitly sending null clears it."""
+
+    display_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    rank: Optional[str] = None
+    english_name: Optional[str] = Field(None, max_length=200)
+    personnel_id: Optional[str] = Field(None, max_length=50)
+    position: Optional[str] = Field(None, max_length=200)
+    branch: Optional[str] = Field(None, max_length=200)
+    category: Optional[str] = Field(None, max_length=100)
+
+
+class CsvImportRowResult(BaseModel):
+    row_number: int
+    classification: str
+    employee_id: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    changed_fields: Optional[List[str]] = None
+    reason_key: Optional[str] = None
+    reason_th: Optional[str] = None
+
+
+class CsvImportSummary(BaseModel):
+    new: int
+    update: int
+    unchanged: int
+    error: int
+
+
+class CsvImportPreviewResponse(BaseModel):
+    summary: CsvImportSummary
+    rows: List[CsvImportRowResult]
+
+
+class CsvImportCommitResponse(BaseModel):
+    created: int
+    updated: int
+    unchanged: int
+    errors: int
 
 
 class DeactivateHumanRequest(BaseModel):

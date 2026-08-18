@@ -149,6 +149,63 @@ export const api = {
   humans: (params: QueryOf<"list_humans_api_v1_humans_get">, signal?: AbortSignal) =>
     request<Page<Human>>(`/api/v1/humans${qs(params)}`, signal),
   human: (employeeId: string, signal?: AbortSignal) => request<Human>(`/api/v1/humans/${employeeId}`, signal),
+  createHuman: (payload: BodyOf<"create_human_endpoint_api_v1_humans_post">) =>
+    request<Human>("/api/v1/humans", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  updateHuman: (employeeId: string, payload: BodyOf<"update_human_endpoint_api_v1_humans__employee_id__patch">) =>
+    request<Human>(`/api/v1/humans/${employeeId}`, undefined, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  // Auth-token downloads use fetch + blob (a plain <a href> link can't
+  // carry the Bearer token these ADMIN-gated endpoints require).
+  exportHumansCsv: async (active?: boolean): Promise<Blob> => {
+    const q = active === undefined ? "" : `?active=${active}`;
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/api/v1/humans/export.csv${q}`, { headers });
+    if (!res.ok) throw new ApiClientError(res.status, "HTTP_" + res.status, res.statusText);
+    return res.blob();
+  },
+  importTemplateCsv: async (): Promise<Blob> => {
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/api/v1/humans/import/template.csv`, { headers });
+    if (!res.ok) throw new ApiClientError(res.status, "HTTP_" + res.status, res.statusText);
+    return res.blob();
+  },
+  previewHumansImport: async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const headers: Record<string, string> = { Accept: "application/json" };
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/api/v1/humans/import/preview`, { method: "POST", headers, body: form });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new ApiClientError(res.status, body?.error?.code ?? "HTTP_" + res.status, body?.error?.message ?? res.statusText);
+    }
+    return res.json() as Promise<JsonResponse<"preview_import_api_v1_humans_import_preview_post">>;
+  },
+  commitHumansImport: async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const headers: Record<string, string> = { Accept: "application/json" };
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/api/v1/humans/import/commit`, { method: "POST", headers, body: form });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new ApiClientError(res.status, body?.error?.code ?? "HTTP_" + res.status, body?.error?.message ?? res.statusText);
+    }
+    return res.json() as Promise<JsonResponse<"commit_import_api_v1_humans_import_commit_post">>;
+  },
 
   // Devices
   devices: (signal?: AbortSignal) => request<Page<Device>>("/api/v1/devices", signal),
@@ -252,12 +309,14 @@ export const api = {
   // Reference
   ranks: (signal?: AbortSignal) => request<RankReference[]>("/api/v1/reference/ranks", signal),
 
-  // Humans update
+  // Humans update — superseded by the broader `updateHuman` above
+  // (ADMS-Personnel-MasterData-024); kept as a thin convenience wrapper
+  // since Personnel.tsx's existing inline english_name editor calls it.
   updateHumanEnglishName: (employeeId: string, englishName: string | null) =>
     request<Human>(`/api/v1/humans/${employeeId}`, undefined, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ english_name: englishName } satisfies BodyOf<"update_human_english_name_api_v1_humans__employee_id__patch">),
+      body: JSON.stringify({ english_name: englishName } satisfies BodyOf<"update_human_endpoint_api_v1_humans__employee_id__patch">),
     }),
   // ADMS-Personnel-Lifecycle-019
   deactivateHuman: (employeeId: string, reason: string) =>
@@ -359,9 +418,13 @@ function enrollmentTransition<OpId extends OperationsKey>(
   return request<EnrollmentTransitionResult>(`/api/v1/enrollments/${id}/${action}`, undefined, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    // `satisfies` can't resolve a conditional type against an unresolved
+    // generic OpId inside this function body (TypeScript limitation, not
+    // a contract change) — the concrete OpId is still checked at every
+    // call site above, so this cast is safe.
     body: JSON.stringify({
       operator,
       notes,
-    } satisfies BodyOf<OpId>),
+    } as BodyOf<OpId>),
   });
 }

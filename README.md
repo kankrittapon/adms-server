@@ -58,7 +58,7 @@ ZKTeco Terminal
 ## Main Features
 
 - **Dashboard** — operational overview: personnel, device, attendance, and mapping summaries; collector telemetry.
-- **Personnel** — Human Master roster (Thai + English names, rank, branch, production scope).
+- **Personnel** — Human Master roster (Thai + English names, rank, branch, production scope); ADMIN-managed add/edit and CSV export/import.
 - **Attendance** — historical scan log plus a realtime feed (SSE); Thailand local time is the primary display, UTC is preserved as the canonical stored value and available on hover.
 - **Devices** — registered terminal fleet and discovered terminal accounts.
 - **Enrollment** — guided, step-by-step workflow: reserve a terminal ID, create a terminal account, physical fingerprint enrollment, controlled verification scan, mark ready for mapping.

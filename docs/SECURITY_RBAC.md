@@ -40,7 +40,11 @@ allow_write =
 | **Attendance Events**: `GET /api/v1/attendance` | Allowed | **403 Forbidden** | Allowed | Allowed |
 | **Realtime SSE Stream**: `GET /api/v1/stream/attendance` | Allowed | Allowed | Allowed | Allowed |
 | **Personnel Lookup**: `GET /api/v1/humans` | Allowed | Allowed | Allowed | Allowed |
-| **Personnel English Name Edit**: `PATCH /api/v1/humans/{id}` | 403 | 403 | 403 | **Allowed (Write Gated)** |
+| **Personnel Create/Edit**: `POST /api/v1/humans`, `PATCH /api/v1/humans/{id}` | 403 | 403 | 403 | **Allowed (Write Gated)** |
+| **Personnel CSV Export**: `GET /humans/export.csv` | Allowed | Allowed | Allowed | Allowed |
+| **Personnel CSV Import Template**: `GET /humans/import/template.csv` | 403 | 403 | 403 | **Allowed (Admin Only)** |
+| **Personnel CSV Import Preview**: `POST /humans/import/preview` | 403 | 403 | 403 | **Allowed (Admin Only, NOT Write Gated — read-only)** |
+| **Personnel CSV Import Commit**: `POST /humans/import/commit` | 403 | 403 | 403 | **Allowed (Admin Only, Write Gated)** |
 | **Hardware Registry**: `GET /api/v1/devices` | Allowed | Allowed | Allowed | Allowed |
 | **Discovered Terminal Users**: `GET /api/v1/device-users` | Allowed | **403 Forbidden** | Allowed | Allowed |
 | **Enrollment Query**: `GET /api/v1/enrollments` | Allowed | Allowed | Allowed | Allowed |
@@ -77,7 +81,7 @@ allow_write =
 
 ### `ADMIN`
 - **Purpose**: System administrator and identity authority.
-- **Access Scope**: Full system access including creating `VERIFIED` temporal mappings, modifying personnel English names, creating/deactivating operator accounts, viewing unattributed attendance diagnostics, and inspecting the append-only `sync_events` audit trail.
+- **Access Scope**: Full system access including creating `VERIFIED` temporal mappings, creating/editing Personnel records and importing them via CSV (`ADMS-Personnel-MasterData-024`), creating/deactivating operator accounts, viewing unattributed attendance diagnostics, and inspecting the append-only `sync_events` audit trail.
 
 ---
 

@@ -36,17 +36,22 @@ class TestRankSourceOfTruth(unittest.TestCase):
         ref_src = _read(REPO_ROOT / "app" / "api" / "routers" / "reference.py")
         self.assertIn("from app.rtn_ranks import all_canonical_ranks", ref_src)
 
-    def test_item5b_no_rank_write_endpoint_exists(self):
-        """Confirms the audit finding stays true: PATCH /humans accepts
-        english_name only. If this test starts failing because someone adds
-        a rank field, it must be validated against rtn_ranks.py — see
-        docs/reports/ADMS-UX-FinalPolish-021.md for the required design."""
+    def test_item5b_rank_write_now_exists_and_is_validated_against_canonical_catalog(self):
+        """SUPERSEDED by ADMS-Personnel-MasterData-024: the owner
+        explicitly approved a Personnel master-data write surface
+        (create/edit, ADMIN-only), including rank. The one invariant that
+        must still hold, forever, is that any rank write is validated
+        against the canonical rtn_ranks.py catalog — never an arbitrary
+        string — so this test now asserts THAT, not the absence of a rank
+        field."""
         schemas_src = _read(REPO_ROOT / "app" / "api" / "schemas.py")
-        match = re.search(
-            r"class UpdateHumanEnglishNameRequest.*?(?=\nclass |\Z)", schemas_src, re.S
-        )
-        self.assertIsNotNone(match)
-        self.assertNotIn("rank", match.group(0).lower())
+        for cls_name in ("CreateHumanRequest", "UpdateHumanRequest"):
+            match = re.search(r"class %s.*?(?=\nclass |\Z)" % cls_name, schemas_src, re.S)
+            self.assertIsNotNone(match, "%s not found" % cls_name)
+            self.assertIn("rank", match.group(0).lower())
+        personnel_src = _read(REPO_ROOT / "app" / "personnel.py")
+        self.assertIn("RTN_RANK_CATALOG", personnel_src)
+        self.assertIn("_validate_rank", personnel_src)
 
     def test_item4_no_duplicate_rank_dictionary_in_frontend(self):
         """The frontend must never hardcode its own rank_th -> rank_en

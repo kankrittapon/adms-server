@@ -29,10 +29,13 @@ export type QueryOf<OpId extends keyof Operations> = NonNullable<
   Operations[OpId]["parameters"]["query"]
 >;
 
-/** Request body JSON of an operation. */
+/** Request body JSON of an operation. `never` for multipart/form-data
+ * endpoints (e.g. CSV upload) — those build FormData directly instead. */
 export type BodyOf<OpId extends keyof Operations> = NonNullable<
   Operations[OpId]["requestBody"]
->["content"]["application/json"];
+> extends { content: { "application/json": infer T } }
+  ? T
+  : never;
 
 /** Successful response JSON of an operation (default status 200). */
 export type JsonResponse<
@@ -93,6 +96,8 @@ export type OperatorOut = Schemas["OperatorOut"];
 export type CreateOperatorRequest = Schemas["CreateOperatorRequest"];
 export type ToggleActiveRequest = Schemas["ToggleActiveRequest"];
 export type ToggleActiveResponse = Schemas["ToggleActiveResponse"];
-export type UpdateHumanEnglishNameRequest = Schemas["UpdateHumanEnglishNameRequest"];
 export type TerminalInventoryItem = Schemas["TerminalInventoryItem"];
+export type CsvImportPreview = Schemas["CsvImportPreviewResponse"];
+export type CsvImportRowResult = Schemas["CsvImportRowResult"];
+export type CsvImportCommitResult = Schemas["CsvImportCommitResponse"];
 export type WriteSessionStatus = Schemas["WriteSessionStatus"];

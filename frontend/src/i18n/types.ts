@@ -163,6 +163,30 @@ export interface Translations {
     filterAll: string;
     filterActiveOnly: string;
     filterInactiveOnly: string;
+    // ADMS-Personnel-MasterData-024
+    addPersonnelButton: string;
+    addPersonnelTitle: string;
+    editPersonnelButton: string;
+    editPersonnelTitle: string;
+    thaiFullNameLabel: string;
+    personnelIdLabel: string;
+    displayNameRequired: string;
+    duplicatePersonnelIdBody: string;
+    createSuccessTitle: string;
+    goToEnrollmentButton: string;
+    englishNameRequiredForTerminalHint: string;
+    selectRankPlaceholder: string;
+    exportCsvButton: string;
+    importCsvButton: string;
+    importCsvTitle: string;
+    downloadTemplateButton: string;
+    confirmImportButton: string;
+    csvMalformedBody: string;
+    csvNewLabel: string;
+    csvUpdateLabel: string;
+    csvUnchangedLabel: string;
+    csvErrorLabel: string;
+    importCommittedMessage: string;
   };
   enrollment: {
     title: string;
