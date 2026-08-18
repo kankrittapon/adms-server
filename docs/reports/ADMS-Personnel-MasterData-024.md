@@ -1,6 +1,6 @@
 # ADMS-Personnel-MasterData-024 — IMPLEMENTATION REPORT
 
-**Status:** Implementation complete, tested, committed and pushed. **NOT deployed** — pending owner deployment gate (see §25).
+**Status:** Implementation complete, tested, committed, pushed, and **DEPLOYED** (owner-approved, gate A). `adms_api`/`adms_web` rebuilt and recreated at commit `df6f347`; all 5 containers healthy post-deploy. See §25a for the deployment record.
 
 ---
 
@@ -128,11 +128,16 @@ No UUID, `device_user_pk`, `account_incarnation`, or raw lifecycle enum is expos
 
 ## 25. Owner deployment gate
 
-Implementation, tests, documentation, and commit/push are complete. **Deployment (container rebuild) has NOT been performed** and requires an explicit, separate owner decision:
+Owner selected **A. APPROVE PRODUCTION DEPLOYMENT**.
 
-- **A. APPROVE PRODUCTION DEPLOYMENT** — rebuild/redeploy `adms_api` and `adms_web` with this change.
-- **B. REQUEST MORE TESTING** — specify additional scenarios before deployment.
-- **C. REVISE** — specify changes needed to the current implementation.
-- **D. CANCEL** — do not deploy this PromptID's changes.
+## 25a. Deployment record
+
+- `docker compose build api web` — both images built successfully from commit `df6f347` (includes `python-multipart==0.0.20`, all new backend modules, and the frontend bundle with the verified `tsc`/`vite build` output).
+- `docker compose up -d --no-deps api web` — `adms_api` and `adms_web` recreated; `adms_zkteco_listener`, `adms_postgres`, `adms_mqtt` were **not** touched (`--no-deps`, confirmed unchanged container start times/restart counts).
+- Post-deploy: all 5 containers report `Up ... (healthy)`.
+- `GET /healthz` → `{"status":"ok"}`.
+- Live `GET /openapi.json` confirms the new routes are present: `/api/v1/humans/export.csv`, `/api/v1/humans/import/preview`, `/api/v1/humans/import/commit`, `/api/v1/humans/import/template.csv`.
+- Served frontend bundle hash (`assets/index-CSXO_O6g.js`) matches the locally-built and verified bundle exactly — confirms the deployed console is running the exact code that passed `tsc --noEmit` and `vite build`.
+- No real Personnel record was created/edited and no real CSV was imported during deployment verification — all checks were read-only (`/healthz`, `/openapi.json`, served-asset comparison).
 
 STOP.
