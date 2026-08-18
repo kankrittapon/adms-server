@@ -50,12 +50,13 @@ export function WriteSessionBadge() {
   );
 }
 
-/** Full ADMIN-facing control panel (System page). ADMIN can open/close;
- * every other role sees the same status read-only with no controls, since
- * only ADMIN is authorized to change the write session (enforced server
- * side — this component never grants access on its own). */
+/** Work Session control panel (System page). ADMS-RBAC-OperationalRoles-023:
+ * OPERATOR and ADMIN can open/close; VIEWER and ENROLLMENT_OPERATOR see the
+ * same status read-only with no controls, since only OPERATOR/ADMIN are
+ * authorized to change the write session (enforced server side — this
+ * component never grants access on its own). */
 export function WriteSessionControl() {
-  const { isAdmin, writeSession, writeSessionActive, reload } = useAuth();
+  const { canOpenWorkSession, writeSession, writeSessionActive, reload } = useAuth();
   const { t } = useTranslation();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -127,7 +128,7 @@ export function WriteSessionControl() {
               <span className="font-semibold text-slate-500">{t.writeSession.reasonLabel}:</span> {writeSession.reason}
             </div>
           </div>
-          {isAdmin && (
+          {canOpenWorkSession && (
             <button
               onClick={handleClose}
               disabled={busy}
@@ -144,7 +145,7 @@ export function WriteSessionControl() {
             <span className="text-sm font-bold text-slate-700">{t.writeSession.lockedTitle}</span>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed">{t.writeSession.lockedBody}</p>
-          {isAdmin ? (
+          {canOpenWorkSession ? (
             <div className="flex items-center gap-2 pt-1">
               <input
                 type="text"

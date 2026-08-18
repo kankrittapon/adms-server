@@ -31,7 +31,7 @@
 | Personnel English name edit (`PATCH /humans/{id}`) | ADMIN |
 | Operator management (`/api/v1/operators*`) | ADMIN |
 | Write-session status (`GET /write-session`) | any authenticated |
-| Write-session open/close (`POST /write-session/open`, `/close`) | ADMIN |
+| Write-session open/close (`POST /write-session/open`, `/close`) | OPERATOR, ADMIN |
 | `/healthz`, `/api/v1/auth/login` | public |
 | `/api/v1/auth/logout`, `/api/v1/auth/me`, `/api/v1/auth/change-password` | any authenticated |
 
@@ -44,8 +44,8 @@ Implemented in `app/api/routers/write_session.py`, backed by migration `012_writ
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | GET | `/api/v1/write-session` | any authenticated | Read-only status: `{active, session_id?, opened_by?, opened_by_name?, opened_at?, expires_at?, reason?, closed_at?}`. Also lazily reaps (and audits, at most once) an expired-but-unclosed session as a side effect. |
-| POST | `/api/v1/write-session/open` | ADMIN | Body `{reason}`. Fixed 30-minute duration (not client-configurable). Requires Layer 1 (`API_WRITE_ENABLED=true`) to succeed — Layer 1 unconditionally gates Layer 2. Rejected with `WRITE_SESSION_ALREADY_ACTIVE` (409) if one is already open. |
-| POST | `/api/v1/write-session/close` | ADMIN | No body. Idempotent — closing when nothing is active returns `{active: false, closed_at: null}`, not an error. **Not** gated by Layer 1 — closing (a de-escalation) must always be available to an ADMIN even if the infrastructure gate is already off. |
+| POST | `/api/v1/write-session/open` | OPERATOR, ADMIN | Body `{reason}`. Fixed 30-minute duration (not client-configurable). Requires Layer 1 (`API_WRITE_ENABLED=true`) to succeed — Layer 1 unconditionally gates Layer 2. Rejected with `WRITE_SESSION_ALREADY_ACTIVE` (409) if one is already open. |
+| POST | `/api/v1/write-session/close` | OPERATOR, ADMIN | No body. Idempotent — closing when nothing is active returns `{active: false, closed_at: null}`, not an error. **Not** gated by Layer 1 — closing (a de-escalation) must always be available to an ADMIN even if the infrastructure gate is already off. |
 
 No write session is open by default — production remains write-locked for domain mutations until an ADMIN explicitly opens one.
 
@@ -177,8 +177,8 @@ Every error uses the envelope:
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/v1/write-session` | any authenticated — status |
-| POST | `/api/v1/write-session/open` | ADMIN, **gated by Layer 1 only** |
-| POST | `/api/v1/write-session/close` | ADMIN, **not gated** (always available) |
+| POST | `/api/v1/write-session/open` | OPERATOR, ADMIN, **gated by Layer 1 only** |
+| POST | `/api/v1/write-session/close` | OPERATOR, ADMIN, **not gated** (always available) |
 
 ## 4. Pagination
 

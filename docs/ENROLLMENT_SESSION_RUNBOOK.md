@@ -46,11 +46,11 @@ This step is required regardless of which write-gate procedure below applies.
 
 Opening write access for a session is a browser action, not an SSH action:
 
-1. An **ADMIN** signs in to the console and opens **System** (`/system`).
+1. An **OPERATOR or ADMIN** signs in to the console and opens **System** (`/system`) — as of `ADMS-RBAC-OperationalRoles-023`, opening/closing the work session is an OPERATOR-or-ADMIN capability, not ADMIN-only. `ENROLLMENT_OPERATOR` cannot open or close a session, only work within one already opened.
 2. In the **Production Changes** panel, enter a reason (e.g. "Enrollment session — Bldg 3") and click **Open work session**.
 3. The session is active for **30 minutes**, auto-expiring with no automatic renewal. The header badge shows the remaining time to every signed-in role.
-4. If more time is needed, the ADMIN opens a fresh session — there is no "leave it on" option by design.
-5. The ADMIN (or any ADMIN) can close the session early from the same panel once the session's work is done.
+4. If more time is needed, an OPERATOR or ADMIN opens a fresh session — there is no "leave it on" option by design.
+5. Any OPERATOR or ADMIN can close the session early from the same panel once the session's work is done.
 
 This requires the server-owner-controlled infrastructure master gate (`API_WRITE_ENABLED`) to already be `true` — which it is, as the standing production baseline (see §3b). If it has been turned off for an emergency lockdown, opening a session will fail until a server owner restores it.
 
@@ -66,7 +66,7 @@ docker compose up -d api
 docker compose up -d api
 ```
 
-This overrides the runtime write session unconditionally — while it is `false`, no ADMIN can open a session and no domain write can succeed, regardless of write-session state.
+This overrides the runtime write session unconditionally — while it is `false`, no OPERATOR or ADMIN can open a session and no domain write can succeed, regardless of write-session state.
 
 ---
 
@@ -132,7 +132,7 @@ docker compose start listener
 
 ## 6. Post-Session Lock Down & Verification
 
-1. If not already closed, an ADMIN closes the runtime write session from the System page (or lets it auto-expire — no action is required, it cannot be left open indefinitely).
+1. If not already closed, an OPERATOR or ADMIN closes the runtime write session from the System page (or lets it auto-expire — no action is required, it cannot be left open indefinitely).
 2. **Verify Telemetry**: Collector is `LIVE` and `device_connected=true`; the new scan on the Attendance page is attributed to the correct person; the header badge shows the locked state.
 3. **Post-Session Backup**:
    ```bash

@@ -182,11 +182,51 @@ class WriteSessionRouterTests(unittest.TestCase):
     def _ctx(self, role="ADMIN"):
         return OperatorContext(operator_id=5, username="admin_alice", display_name="Admin Alice", role=role)
 
-    def test_non_admin_cannot_open(self):
+    def test_non_admin_non_operator_cannot_open(self):
+        """ADMS-RBAC-OperationalRoles-023: OPERATOR was promoted to able-to-
+        open; VIEWER and ENROLLMENT_OPERATOR remain forbidden."""
+        for role in ("VIEWER", "ENROLLMENT_OPERATOR"):
+            with self.subTest(role=role):
+                app = self._app()
+                client = TestClient(app)
+                with patch("app.api.dependencies._load_token_context", return_value=self._ctx(role=role)):
+                    resp = client.post("/api/v1/write-session/open", json={"reason": "test"})
+                self.assertEqual(resp.status_code, 403)
+
+    def test_operator_can_open(self):
+        """ADMS-RBAC-OperationalRoles-023 Phase 3: OPERATOR is the
+        operational supervisor and now controls WHEN writes may happen."""
         app = self._app()
         client = TestClient(app)
+        cur = FakeCursor(fetchone_queue=[None, None, INSERTED_ROW])
         with patch("app.api.dependencies._load_token_context", return_value=self._ctx(role="OPERATOR")):
-            resp = client.post("/api/v1/write-session/open", json={"reason": "test"})
+            with patch("app.write_session.get_db_connection", return_value=fake_ctx_conn(cur)):
+                with patch("app.write_session.log_sync_event"):
+                    resp = client.post("/api/v1/write-session/open", json={"reason": "Enrollment session"})
+        self.assertEqual(resp.status_code, 201)
+
+    def test_operator_can_close(self):
+        app = self._app()
+        client = TestClient(app)
+        cur = FakeCursor(fetchone_queue=[ACTIVE_ROW, None])
+        with patch("app.api.dependencies._load_token_context", return_value=self._ctx(role="OPERATOR")):
+            with patch("app.write_session.get_db_connection", return_value=fake_ctx_conn(cur)):
+                with patch("app.write_session.log_sync_event"):
+                    resp = client.post("/api/v1/write-session/close")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_enrollment_operator_cannot_close(self):
+        app = self._app()
+        client = TestClient(app)
+        with patch("app.api.dependencies._load_token_context", return_value=self._ctx(role="ENROLLMENT_OPERATOR")):
+            resp = client.post("/api/v1/write-session/close")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_viewer_cannot_close(self):
+        app = self._app()
+        client = TestClient(app)
+        with patch("app.api.dependencies._load_token_context", return_value=self._ctx(role="VIEWER")):
+            resp = client.post("/api/v1/write-session/close")
         self.assertEqual(resp.status_code, 403)
 
     def test_admin_can_open(self):

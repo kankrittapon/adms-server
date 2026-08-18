@@ -13,6 +13,18 @@ interface AuthState {
   writeSessionActive: boolean;
   canMutate: boolean;
   isAdmin: boolean;
+  // ADMS-RBAC-OperationalRoles-023: canonical frontend capability helpers —
+  // never scatter raw `role === "..."` comparisons across pages. These are
+  // UX-only (hide irrelevant controls for elderly/non-technical operators);
+  // the backend's require_roles() dependencies on each endpoint remain the
+  // sole source of truth. Keep this list in sync with app/api/auth.py's
+  // ROLES_* sets — it deliberately mirrors them, not reinvents them.
+  canOpenWorkSession: boolean;
+  canEnroll: boolean;
+  canVerifyIdentity: boolean;
+  canManagePersonnel: boolean;
+  canManageTerminal: boolean;
+  canManageOperators: boolean;
   reload: () => void;
 }
 
@@ -26,6 +38,12 @@ const AuthContext = createContext<AuthState>({
   writeSessionActive: false,
   canMutate: false,
   isAdmin: false,
+  canOpenWorkSession: false,
+  canEnroll: false,
+  canVerifyIdentity: false,
+  canManagePersonnel: false,
+  canManageTerminal: false,
+  canManageOperators: false,
   reload: () => {},
 });
 
@@ -87,6 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canWrite = WRITE_CAPABLE_ROLES.has(role);
   const serverWriteEnabled = me?.write_enabled ?? false;
   const canMutate = canWrite && serverWriteEnabled && writeSessionActive;
+  const isAdmin = role === "ADMIN";
+  const isOperatorOrAdmin = role === "OPERATOR" || role === "ADMIN";
 
   return (
     <AuthContext.Provider
@@ -99,7 +119,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         writeSession,
         writeSessionActive,
         canMutate,
-        isAdmin: role === "ADMIN",
+        isAdmin,
+        // Mirrors app/api/auth.py's ROLES_OPERATOR_PLUS — matches the
+        // write-session router's actual gate (Phase 3).
+        canOpenWorkSession: isOperatorOrAdmin,
+        // Mirrors ROLES_ENROLLMENT_MUTATE.
+        canEnroll: canWrite,
+        // Separation of duties (Phase 9): final identity/mapping
+        // verification, Personnel admin lifecycle, destructive Terminal
+        // Management, and operator/role management all remain ADMIN-only
+        // — confirmed by source audit of every corresponding router
+        // (mappings.py, humans.py, terminal_management.py, operators.py),
+        // not assumed.
+        canVerifyIdentity: isAdmin,
+        canManagePersonnel: isAdmin,
+        canManageTerminal: isAdmin,
+        canManageOperators: isAdmin,
         reload: () => setTick((t) => t + 1),
       }}
     >

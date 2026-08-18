@@ -20,7 +20,7 @@ allow_write =
 
 **Layer 1 — Infrastructure master gate** (`API_WRITE_ENABLED`, unchanged from prior design): env-controlled, server-owner-only, fail-closed. Production value: `true` (the steady-state deploy-time baseline as of Phase F — a rarely-touched emergency lock, not a daily toggle). Overrides Layer 2 unconditionally — if Layer 1 is closed, Layer 2 is never even evaluated, and no runtime session can be opened. This override behavior was explicitly verified live during Phase F deployment.
 
-**Layer 2 — Runtime write session** (new in Hardening-007, **live in production as of Phase F**): a short-lived, ADMIN-opened, auditable permission window (`app/write_session.py`, table `write_sessions`, migration 012 — applied). ADMIN-only open/close; fixed 30-minute duration with no automatic renewal; at most one session active at a time, enforced by a Postgres transaction-scoped advisory lock so concurrent open attempts cannot both succeed and an expired-but-unclosed session is reaped (and audited exactly once) before it can block a new open. Closed by default — no session is open unless an ADMIN explicitly opens one.
+**Layer 2 — Runtime write session** (new in Hardening-007, **live in production as of Phase F**; open/close authorization widened to OPERATOR-or-ADMIN in `ADMS-RBAC-OperationalRoles-023`): a short-lived, auditable permission window (`app/write_session.py`, table `write_sessions`, migration 012 — applied), opened/closed by an OPERATOR or ADMIN; fixed 30-minute duration with no automatic renewal; at most one session active at a time, enforced by a Postgres transaction-scoped advisory lock so concurrent open attempts cannot both succeed and an expired-but-unclosed session is reaped (and audited exactly once) before it can block a new open. Closed by default — no session is open unless an OPERATOR or ADMIN explicitly opens one. **Opening/closing the session is only Layer 2 — it never widens Layer 3 (role-permits-action).** A single global session opened by an OPERATOR does not grant OPERATOR access to any ADMIN-only endpoint (mapping verification, Personnel lifecycle, destructive Terminal Management, operator/role management all remain independently `ROLES_ADMIN_ONLY`-gated); it only lets ENROLLMENT_OPERATOR/OPERATOR/ADMIN perform the writes each was already independently permitted to make.
 
 **Auth/session-maintenance exemption**: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/change-password` are exempt from **both** write layers — they establish or terminate the caller's own authentication session, not domain state (Human/Device/Enrollment/Mapping/Operator records). An operator must always be able to log in or change a compromised password even while all domain writes are locked. The invariant: *any endpoint that creates, modifies, or invalidates domain state requires both write layers; endpoints that only establish/terminate the caller's own session do not.*
 
@@ -53,7 +53,9 @@ allow_write =
 | **Operator Management**: `POST /api/v1/operators`, `POST .../toggle-active` (write) | 403 | 403 | 403 | **Allowed (Admin Only, Write Gated)** — was previously ungated; fixed in Hardening-007 Phase A |
 | **Audit Log Trail**: `GET /api/v1/audit/events` | 403 | 403 | 403 | **Allowed (Admin Only)** |
 | **Write Session Status**: `GET /api/v1/write-session` | Allowed | Allowed | Allowed | Allowed |
-| **Write Session Open/Close**: `POST /api/v1/write-session/*` | 403 | 403 | 403 | **Allowed (Admin Only)** — live in production as of Phase F |
+| **Write Session Open/Close**: `POST /api/v1/write-session/*` | 403 | 403 | **Allowed** | **Allowed** |
+
+> Widened from Admin-only to OPERATOR-or-ADMIN in `ADMS-RBAC-OperationalRoles-023`. ENROLLMENT_OPERATOR remains 403 for open/close — it may use a session already opened by OPERATOR/ADMIN but may never open or close one itself.
 
 ---
 
@@ -69,8 +71,9 @@ allow_write =
 - **Access Scope**: Can inspect attendance, personnel, devices, device users, mappings, and dashboard telemetry. Cannot execute any state mutations.
 
 ### `OPERATOR`
-- **Purpose**: Standard operational role for personnel enrollment and workflow management.
-- **Access Scope**: Inherits `VIEWER` visibility and can execute enrollment reservations, terminal account creations, and controlled scan confirmations when writes are open — both `API_WRITE_ENABLED=true` and an active runtime write session are required.
+- **Purpose**: Operational supervisor. Controls **when** operational writes may happen, not **what** privileged ADMIN actions become allowed.
+- **Access Scope**: Inherits `VIEWER` visibility, can execute the same enrollment reservations/terminal account creation/controlled scan confirmations as `ENROLLMENT_OPERATOR` when writes are open, and — as of `ADMS-RBAC-OperationalRoles-023` — can open and close the runtime write session (`POST /api/v1/write-session/open`, `/close`) itself. Both `API_WRITE_ENABLED=true` and an active runtime write session are still required for any domain write.
+- **Explicitly forbidden**: operator/role management, Personnel admin lifecycle (deactivate/reactivate), mapping verification, and destructive Terminal Management (fingerprint delete, terminal account delete) — all remain `ADMIN`-only regardless of who opened the write session.
 
 ### `ADMIN`
 - **Purpose**: System administrator and identity authority.
