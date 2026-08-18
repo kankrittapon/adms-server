@@ -122,6 +122,9 @@ export interface Translations {
     personnelId: string;
     rank: string;
     rankSourceManagedHint: string;
+    noTerminalAccountTitle: string;
+    noTerminalAccountBody: string;
+    startNewEnrollmentButton: string;
     position: string;
     branch: string;
     category: string;
@@ -184,6 +187,11 @@ export interface Translations {
     completedTitle: string;
     completedDesc: string;
     cancelledTitle: string;
+    historyTitle: string;
+    historyEmpty: string;
+    removedFromTerminalLabel: string;
+    removedFromTerminalBody: string;
+    historyPreservedNote: string;
     selectPerson: string;
     selectDevice: string;
     selectPersonDeviceOperatorRequired: string;

@@ -138,6 +138,7 @@ ENROLLMENT_ROW = {
     "updated_at": NOW,
     "employee_name": "กฤตพล หมาดเส็น",
     "device_name": "SONIC ZEM560 #1",
+    "lifecycle_state": "IN_PROGRESS",
 }
 
 

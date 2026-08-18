@@ -114,6 +114,22 @@ HUMAN_COLUMNS = (
     "notes, active, production_scope, source, created_at, updated_at"
 )
 
+# ADMS-UX-CrossLifecycleClosure-021B: whether this Human currently has an
+# active terminal account — server-derived so Personnel/Terminal Management
+# never disagree about "does this person have a working account right now."
+# A Human can have historical device_users rows (removed accounts) without
+# this being true; only a currently-active account backed by an open
+# VERIFIED mapping counts.
+_HAS_ACTIVE_TERMINAL_ACCOUNT_SQL = (
+    "EXISTS ("
+    "  SELECT 1 FROM employee_device_mappings m "
+    "  JOIN device_users du ON du.device_user_pk = m.device_user_pk "
+    "  WHERE m.employee_id = human_employees.employee_id "
+    "  AND m.mapping_status = 'VERIFIED' AND m.valid_to IS NULL "
+    "  AND du.active = true"
+    ") AS has_active_terminal_account"
+)
+
 
 def list_humans(
     cfg: Config,
@@ -145,7 +161,7 @@ def list_humans(
 
     rows = _fetch_all(
         cfg,
-        f"SELECT {HUMAN_COLUMNS} FROM human_employees{where_sql} "
+        f"SELECT {HUMAN_COLUMNS}, {_HAS_ACTIVE_TERMINAL_ACCOUNT_SQL} FROM human_employees{where_sql} "
         "ORDER BY display_name LIMIT %s OFFSET %s",
         tuple(params) + (limit, offset),
     )
@@ -158,7 +174,7 @@ def list_humans(
 def get_human(cfg: Config, employee_id: str) -> Optional[Dict[str, Any]]:
     row = _fetch_one(
         cfg,
-        f"SELECT {HUMAN_COLUMNS} FROM human_employees WHERE employee_id = %s",
+        f"SELECT {HUMAN_COLUMNS}, {_HAS_ACTIVE_TERMINAL_ACCOUNT_SQL} FROM human_employees WHERE employee_id = %s",
         (employee_id,),
     )
     if row:
@@ -606,6 +622,68 @@ def unattributed_attendance(cfg: Config, limit: int, offset: int) -> Dict[str, A
 # --- Enrollments ----------------------------------------------------------
 
 
+_ENROLLMENT_LIFECYCLE_JOIN_SQL = (
+    "LEFT JOIN device_users du ON du.device_id = e.device_id "
+    "AND du.device_user_id = e.reserved_device_user_id "
+    "LEFT JOIN LATERAL ("
+    "  SELECT m.valid_to, m.mapping_status "
+    "  FROM employee_device_mappings m "
+    "  WHERE m.device_user_pk = du.device_user_pk "
+    "  AND m.employee_id = e.employee_id "
+    "  AND m.mapping_status = 'VERIFIED' "
+    "  ORDER BY (m.valid_to IS NULL) DESC, m.verified_at DESC "
+    "  LIMIT 1"
+    ") vm ON true"
+)
+_ENROLLMENT_LIFECYCLE_SELECT_SQL = (
+    "du.active AS device_user_active, vm.mapping_status AS verified_mapping_status, "
+    "vm.valid_to AS mapping_valid_to"
+)
+
+
+def _derive_enrollment_lifecycle_state(
+    status: str,
+    device_user_active: Optional[bool],
+    verified_mapping_status: Optional[str],
+    mapping_valid_to: Any,
+) -> str:
+    """Canonical, server-owned cross-lifecycle state for an enrollment.
+
+    ADMS-UX-CrossLifecycleClosure-021B: the frontend must never independently
+    infer "is this enrollment actually finished/historical" by stitching
+    together enrollment.status + device_users.active + mapping.valid_to on
+    its own, in multiple pages, potentially inconsistently. This is the one
+    place that interpretation happens.
+
+    Deliberately derived at READ time from current joined facts rather than
+    solely trusting the stored `status` column — this self-heals enrollment
+    rows written before this PromptID (e.g. a real production row that is
+    still literally 'READY_FOR_MAPPING' in the DB despite its VERIFIED
+    mapping existing and later being closed by terminal removal) without
+    requiring any backfill/migration.
+    """
+    if status == "CANCELLED":
+        return "CANCELLED"
+
+    has_verified_mapping = verified_mapping_status is not None
+    if status == "RETIRED" or (status == "READY_FOR_MAPPING" and has_verified_mapping):
+        mapping_open = has_verified_mapping and mapping_valid_to is None
+        if bool(device_user_active) and mapping_open:
+            return "COMPLETED"
+        return "REMOVED_FROM_TERMINAL"
+
+    return "IN_PROGRESS"
+
+
+def _attach_lifecycle_state(row: Dict[str, Any]) -> None:
+    row["lifecycle_state"] = _derive_enrollment_lifecycle_state(
+        row["status"],
+        row.pop("device_user_active", None),
+        row.pop("verified_mapping_status", None),
+        row.pop("mapping_valid_to", None),
+    )
+
+
 def list_enrollments(
     cfg: Config,
     limit: int,
@@ -638,15 +716,18 @@ def list_enrollments(
         "e.fingerprint_confirmed_at, e.controlled_scan_window_until, "
         "e.controlled_scan_time, e.confirmed_by, e.confirmed_at, e.notes, "
         "e.created_at, e.updated_at, "
-        "h.display_name AS employee_name, h.english_name, h.rank, d.device_name "
+        "h.display_name AS employee_name, h.english_name, h.rank, d.device_name, "
+        f"{_ENROLLMENT_LIFECYCLE_SELECT_SQL} "
         "FROM device_user_enrollments e "
         "LEFT JOIN human_employees h ON h.employee_id = e.employee_id "
         "LEFT JOIN devices d ON d.device_id = e.device_id "
+        f"{_ENROLLMENT_LIFECYCLE_JOIN_SQL} "
         f"{where_sql} ORDER BY e.enrollment_id LIMIT %s OFFSET %s",
         tuple(params) + (limit, offset),
     )
     for r in rows:
         r["rank_metadata"] = normalize_rtn_rank(r.get("rank") or "")
+        _attach_lifecycle_state(r)
     return {"items": rows, "total": total, "limit": limit, "offset": offset}
 
 
@@ -658,13 +739,16 @@ def get_enrollment_row(cfg: Config, enrollment_id: int) -> Optional[Dict[str, An
         "e.fingerprint_confirmed_at, e.controlled_scan_window_until, "
         "e.controlled_scan_time, e.confirmed_by, e.confirmed_at, e.notes, "
         "e.created_at, e.updated_at, "
-        "h.display_name AS employee_name, h.english_name, h.rank, d.device_name "
+        "h.display_name AS employee_name, h.english_name, h.rank, d.device_name, "
+        f"{_ENROLLMENT_LIFECYCLE_SELECT_SQL} "
         "FROM device_user_enrollments e "
         "LEFT JOIN human_employees h ON h.employee_id = e.employee_id "
         "LEFT JOIN devices d ON d.device_id = e.device_id "
+        f"{_ENROLLMENT_LIFECYCLE_JOIN_SQL} "
         "WHERE e.enrollment_id = %s",
         (enrollment_id,),
     )
     if row:
         row["rank_metadata"] = normalize_rtn_rank(row.get("rank") or "")
+        _attach_lifecycle_state(row)
     return row

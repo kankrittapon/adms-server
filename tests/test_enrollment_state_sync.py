@@ -251,7 +251,16 @@ class TestActiveQueueFiltering(unittest.TestCase):
         self.src = _read("pages/Enrollments.tsx")
 
     def test_item10_terminal_statuses_excluded_from_active_queue(self):
-        self.assertIn('TERMINAL_STATUSES = new Set(["CANCELLED", "RETIRED"])', self.src)
+        # ADMS-UX-CrossLifecycleClosure-021B superseded the raw-status
+        # TERMINAL_STATUSES set with the server-derived lifecycle_state
+        # field — a raw `status !== 'RETIRED'` filter missed real
+        # production enrollments whose mapping was closed by terminal
+        # removal while `status` itself stayed at an earlier value. See
+        # tests/test_cross_lifecycle_ui.py for full coverage of the new
+        # behavior; this test just confirms the old, weaker mechanism is
+        # gone rather than silently coexisting.
+        self.assertNotIn('TERMINAL_STATUSES = new Set(["CANCELLED", "RETIRED"])', self.src)
+        self.assertIn('e.lifecycle_state === "IN_PROGRESS"', self.src)
         self.assertIn("activeItems", self.src)
         # The rendered queue list and its count must both derive from the
         # filtered set, not the raw unfiltered list.data.items.

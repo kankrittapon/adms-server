@@ -37,12 +37,15 @@ export function Enrollments() {
   const { me, serverWriteEnabled, writeSessionActive, canMutate } = useAuth();
   const { t } = useTranslation();
   const list = useApi((s) => api.enrollments({ limit: 100 }, s), []);
-  // Active Enrollment Queue policy: terminal states never appear in the
-  // active queue. CANCELLED and RETIRED are both terminal (ALLOWED_
-  // TRANSITIONS in app/enrollment.py maps both to an empty transition
-  // set) — filter every terminal state here, not just CANCELLED.
-  const TERMINAL_STATUSES = new Set(["CANCELLED", "RETIRED"]);
-  const activeItems = (list.data?.items ?? []).filter((e) => !TERMINAL_STATUSES.has(e.status));
+  // Active Enrollment Queue policy: ADMS-UX-CrossLifecycleClosure-021B —
+  // filter on the server-derived `lifecycle_state`, never on raw `status`
+  // alone. A raw-status filter (e.g. status !== 'RETIRED') misses the real
+  // production case where an enrollment's mapping was later closed by
+  // terminal removal but its own `status` column is still whatever it was
+  // at mapping-creation time — lifecycle_state is derived fresh from
+  // current facts every read, so this can never drift out of sync.
+  const historyItems = (list.data?.items ?? []).filter((e) => e.lifecycle_state !== "IN_PROGRESS");
+  const activeItems = (list.data?.items ?? []).filter((e) => e.lifecycle_state === "IN_PROGRESS");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -192,6 +195,46 @@ export function Enrollments() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* ADMS-UX-CrossLifecycleClosure-021B: completed/cancelled/removed
+              enrollments are visually separated and non-actionable — never
+              clickable into the mutable inspector, so a historical record
+              can never accidentally become "the selected active workflow"
+              merely because it's the newest row. */}
+          {historyItems.length > 0 && (
+            <div className="pt-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                {t.enrollment.historyTitle} ({historyItems.length})
+              </h3>
+              <div className="mt-2 space-y-1.5">
+                {historyItems.map((e) => (
+                  <div
+                    key={e.enrollment_id}
+                    className="rounded-lg border border-slate-150 bg-slate-50/60 p-3 text-xs opacity-80"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-semibold text-slate-700">
+                          {e.employee_name ?? e.employee_id.slice(0, 8)}
+                        </div>
+                        <div className="mt-0.5 font-mono text-[11px] text-slate-400">
+                          Terminal User <span className="font-bold text-slate-600">{e.reserved_device_user_id}</span>
+                        </div>
+                      </div>
+                      <span className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-500 bg-slate-200">
+                        {e.lifecycle_state === "COMPLETED"
+                          ? t.enrollment.completedTitle
+                          : e.lifecycle_state === "REMOVED_FROM_TERMINAL"
+                          ? t.enrollment.removedFromTerminalLabel
+                          : t.enrollment.cancelledTitle}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 text-[10px] text-slate-400">{t.enrollment.historyPreservedNote}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

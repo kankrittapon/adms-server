@@ -387,6 +387,29 @@ export function HumanDetail() {
         </dl>
       </div>
 
+      {/* ADMS-UX-CrossLifecycleClosure-021B: an ACTIVE Human with no
+          current working terminal account (e.g. the account was removed
+          as part of a cleanup) must read as "needs re-enrollment," never
+          as "inactive" — removing a terminal account is not the same fact
+          as a person leaving. has_active_terminal_account is server-
+          derived (app/api/repository.py) from the same underlying facts
+          Terminal Management and Enrollment use, so this page can never
+          disagree with them about whether the account currently works. */}
+      {data.active && data.has_active_terminal_account === false && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="text-sm font-bold text-amber-900">{t.personnel.noTerminalAccountTitle}</div>
+          <p className="mt-1 text-xs text-amber-800">{t.personnel.noTerminalAccountBody}</p>
+          {isAdmin && (
+            <Link
+              to="/enrollments"
+              className="mt-3 inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700"
+            >
+              {t.personnel.startNewEnrollmentButton}
+            </Link>
+          )}
+        </div>
+      )}
+
       {lifecycleSuccess && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
           ✓ {lifecycleSuccess}

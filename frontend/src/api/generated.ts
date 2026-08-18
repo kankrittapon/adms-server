@@ -1259,6 +1259,11 @@ export interface components {
             enrollment_id: number;
             /** Fingerprint Confirmed At */
             fingerprint_confirmed_at?: string | null;
+            /**
+             * Lifecycle State
+             * @description Canonical, server-derived cross-lifecycle state (ADMS-UX-CrossLifecycleClosure-021B): IN_PROGRESS, COMPLETED, REMOVED_FROM_TERMINAL, or CANCELLED. Computed from enrollment.status joined with the current device_users/employee_device_mappings facts — the frontend must use this instead of independently combining those fields itself.
+             */
+            lifecycle_state: string;
             /** Notes */
             notes?: string | null;
             /** Rank */
@@ -1404,6 +1409,11 @@ export interface components {
             employee_id: string;
             /** English Name */
             english_name?: string | null;
+            /**
+             * Has Active Terminal Account
+             * @description Server-derived (ADMS-UX-CrossLifecycleClosure-021B): whether this Human currently has an active terminal account backed by an open VERIFIED mapping. False (not just absent) means 'no account right now' — distinct from having historical/removed terminal accounts. None only on the rare write-response path that doesn't recompute it (english_name update); callers needing this reliably should use GET.
+             */
+            has_active_terminal_account?: boolean | null;
             /** Notes */
             notes?: string | null;
             /** Personnel Id */
