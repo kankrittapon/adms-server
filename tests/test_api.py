@@ -253,7 +253,8 @@ class TestDashboard(ApiTestBase):
             "attendance_unattributed": 7,
             "mappings_total": 1,
             "mappings_verified_active": 1,
-            "enrollments_by_status": {"RESERVED": 1},
+            "enrollments_by_lifecycle_state": {"IN_PROGRESS": 1},
+            "enrollments_active_count": 1,
         },
     )
     def test_dashboard_summary(self, mock_dash):
@@ -262,7 +263,8 @@ class TestDashboard(ApiTestBase):
         body = resp.json()
         self.assertEqual(body["humans_total"], 120)
         self.assertEqual(body["mappings_verified_active"], 1)
-        self.assertIn("enrollments_by_status", body)
+        self.assertIn("enrollments_by_lifecycle_state", body)
+        self.assertIn("enrollments_active_count", body)
 
 
 class TestHumans(ApiTestBase):

@@ -112,6 +112,12 @@ export interface Translations {
     kpiMappingsTotal: string;
     kpiUnmappedUsers: string;
     enrollmentStatusTitle: string;
+    enrollmentActiveCountLabel: string;
+    enrollmentActiveCountHint: string;
+    lifecycleInProgress: string;
+    lifecycleCompleted: string;
+    lifecycleRemoved: string;
+    lifecycleCancelled: string;
   };
   personnel: {
     title: string;

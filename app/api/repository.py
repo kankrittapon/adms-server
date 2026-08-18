@@ -97,12 +97,29 @@ def dashboard_summary(cfg: Config) -> Dict[str, Any]:
     if row is None:
         return {}
 
+    # ADMS-Dashboard-LifecycleSummary-021C: the Dashboard must use the SAME
+    # canonical lifecycle_state derivation as Enrollment Workspace/Personnel/
+    # Terminal Management/Mapping — never a second, independent grouping by
+    # raw `status`. A raw `GROUP BY status` here previously counted
+    # already-COMPLETED and REMOVED_FROM_TERMINAL enrollments (whose stored
+    # `status` is still READY_FOR_MAPPING) as "Ready to Confirm Identity",
+    # contradicting every other page. Reuses
+    # _derive_enrollment_lifecycle_state() — no duplicated CASE logic.
     enroll_rows = _fetch_all(
         cfg,
-        "SELECT status, COUNT(*) AS cnt FROM device_user_enrollments GROUP BY status",
+        "SELECT e.status, "
+        f"{_ENROLLMENT_LIFECYCLE_SELECT_SQL} "
+        "FROM device_user_enrollments e "
+        f"{_ENROLLMENT_LIFECYCLE_JOIN_SQL}",
     )
-    enrollments_by_status = {r["status"]: r["cnt"] for r in enroll_rows}
-    row["enrollments_by_status"] = enrollments_by_status
+    enrollments_by_lifecycle_state: Dict[str, int] = {}
+    for r in enroll_rows:
+        state = _derive_enrollment_lifecycle_state(
+            r["status"], r["device_user_active"], r["verified_mapping_status"], r["mapping_valid_to"]
+        )
+        enrollments_by_lifecycle_state[state] = enrollments_by_lifecycle_state.get(state, 0) + 1
+    row["enrollments_by_lifecycle_state"] = enrollments_by_lifecycle_state
+    row["enrollments_active_count"] = enrollments_by_lifecycle_state.get("IN_PROGRESS", 0)
     return row
 
 

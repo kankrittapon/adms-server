@@ -619,11 +619,17 @@
             "title": "Devices Total",
             "type": "integer"
           },
-          "enrollments_by_status": {
+          "enrollments_active_count": {
+            "description": "Count of lifecycle_state == IN_PROGRESS only \u2014 the number genuinely needing operator action right now.",
+            "title": "Enrollments Active Count",
+            "type": "integer"
+          },
+          "enrollments_by_lifecycle_state": {
             "additionalProperties": {
               "type": "integer"
             },
-            "title": "Enrollments By Status",
+            "description": "Canonical, server-derived lifecycle buckets (ADMS-Dashboard-LifecycleSummary-021C): IN_PROGRESS, COMPLETED, REMOVED_FROM_TERMINAL, CANCELLED \u2014 the SAME derivation Enrollment Workspace/Personnel/Terminal Management/Mapping use, never a separate raw-status grouping.",
+            "title": "Enrollments By Lifecycle State",
             "type": "object"
           },
           "humans_excluded": {
@@ -661,7 +667,8 @@
           "attendance_unattributed",
           "mappings_total",
           "mappings_verified_active",
-          "enrollments_by_status"
+          "enrollments_by_lifecycle_state",
+          "enrollments_active_count"
         ],
         "title": "DashboardSummary",
         "type": "object"

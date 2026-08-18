@@ -60,7 +60,16 @@ class DashboardSummary(BaseModel):
     attendance_unattributed: int
     mappings_total: int
     mappings_verified_active: int
-    enrollments_by_status: Dict[str, int]
+    enrollments_by_lifecycle_state: Dict[str, int] = Field(
+        description="Canonical, server-derived lifecycle buckets (ADMS-Dashboard-"
+        "LifecycleSummary-021C): IN_PROGRESS, COMPLETED, REMOVED_FROM_TERMINAL, "
+        "CANCELLED — the SAME derivation Enrollment Workspace/Personnel/Terminal "
+        "Management/Mapping use, never a separate raw-status grouping.",
+    )
+    enrollments_active_count: int = Field(
+        description="Count of lifecycle_state == IN_PROGRESS only — the number "
+        "genuinely needing operator action right now.",
+    )
     collector: Optional[CollectorSummary] = None
 
 

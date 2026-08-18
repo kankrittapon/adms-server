@@ -1,6 +1,6 @@
 import { api } from "../api/client";
 import { useApi } from "../hooks/useApi";
-import { ErrorBanner, Loading, StatCard, StatusBadge } from "../components/Status";
+import { ErrorBanner, Loading, StatCard } from "../components/Status";
 import { WriteSessionBadge } from "../components/WriteSessionControl";
 import { useTranslation } from "../i18n";
 
@@ -12,7 +12,22 @@ export function Dashboard() {
   if (error) return <ErrorBanner message={error} />;
   if (!data) return <ErrorBanner message="No dashboard data" />;
 
-  const enrollStatus = Object.entries(data.enrollments_by_status ?? {});
+  // ADMS-Dashboard-LifecycleSummary-021C: renders the SAME canonical
+  // lifecycle_state buckets Enrollment Workspace/Personnel/Terminal
+  // Management/Mapping use — never a raw-status grouping that could
+  // disagree with them (e.g. a COMPLETED/REMOVED_FROM_TERMINAL enrollment
+  // whose stored `status` column is still READY_FOR_MAPPING).
+  const LIFECYCLE_ORDER = ["IN_PROGRESS", "COMPLETED", "REMOVED_FROM_TERMINAL", "CANCELLED"] as const;
+  const LIFECYCLE_LABELS: Record<string, string> = {
+    IN_PROGRESS: t.dashboard.lifecycleInProgress,
+    COMPLETED: t.dashboard.lifecycleCompleted,
+    REMOVED_FROM_TERMINAL: t.dashboard.lifecycleRemoved,
+    CANCELLED: t.dashboard.lifecycleCancelled,
+  };
+  const lifecycleBuckets = data.enrollments_by_lifecycle_state ?? {};
+  const enrollLifecycle = LIFECYCLE_ORDER.filter((k) => lifecycleBuckets[k]).map(
+    (k) => [k, lifecycleBuckets[k]] as const
+  );
   const isCollectorLive = data.collector?.state === "LIVE" && data.collector?.device_connected;
 
   return (
@@ -71,6 +86,12 @@ export function Dashboard() {
           hint={`${data.mappings_verified_active} ${t.mappings.activeMapping}`}
         />
         <StatCard
+          label={t.dashboard.enrollmentActiveCountLabel}
+          value={data.enrollments_active_count}
+          hint={t.dashboard.enrollmentActiveCountHint}
+          tone={data.enrollments_active_count > 0 ? "highlight" : "normal"}
+        />
+        <StatCard
           label={t.system.collectorService}
           value={data.collector?.state === "LIVE" ? t.status.collectorLive : (data.collector?.state ?? "—")}
           hint={data.collector?.device_connected ? t.status.deviceConnected : t.status.deviceDisconnected}
@@ -78,22 +99,27 @@ export function Dashboard() {
         />
       </div>
 
-      {/* Active Enrollments Breakdown */}
-      {enrollStatus.length > 0 && (
+      {/* Enrollment Lifecycle Breakdown — operator-facing derived
+          categories only, never raw DB status enums (item 5, 021C). */}
+      {enrollLifecycle.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-2xs space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
               {t.dashboard.enrollmentStatusTitle}
             </h2>
-            <span className="text-xs text-slate-400">Live workflow breakdown</span>
+            <span className="text-xs text-slate-400">{t.dashboard.enrollmentActiveCountHint}</span>
           </div>
           <div className="flex flex-wrap gap-2.5 pt-1">
-            {enrollStatus.map(([k, v]) => (
+            {enrollLifecycle.map(([k, v]) => (
               <div
                 key={k}
-                className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs shadow-2xs"
+                className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs shadow-2xs ${
+                  k === "IN_PROGRESS"
+                    ? "border-blue-200 bg-blue-50"
+                    : "border-slate-200 bg-slate-50"
+                }`}
               >
-                <StatusBadge status={k} />
+                <span className="font-semibold text-slate-700">{LIFECYCLE_LABELS[k] ?? k}</span>
                 <span className="font-mono font-bold text-slate-800">{v}</span>
               </div>
             ))}
