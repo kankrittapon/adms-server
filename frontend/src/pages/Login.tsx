@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, getToken, setToken } from "../api/client";
+import { useAuth } from "../auth";
 import { useTranslation } from "../i18n";
 
 export function Login() {
@@ -9,6 +10,7 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
+  const { reload } = useAuth();
   const { locale, setLocale, t } = useTranslation();
 
   // Already authenticated -> straight in.
@@ -24,6 +26,11 @@ export function Login() {
     try {
       const res = await api.login(username.trim(), password);
       setToken(res.token);
+      // Client-side navigation never remounts AuthProvider, so without this
+      // the identity from the PREVIOUS session (or null, on a first login)
+      // stays stuck in memory until a hard page refresh forces a remount —
+      // the exact "shows the wrong role until Ctrl+Shift+R" bug.
+      reload();
       navigate("/", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

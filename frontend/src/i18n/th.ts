@@ -78,6 +78,10 @@ export const th: Translations = {
     enrollmentOperatorDesc: "ลงทะเบียนบุคลากรกับเครื่องสแกน",
     operatorDesc: "ดูข้อมูลงานปฏิบัติการและจัดการการลงทะเบียน",
     adminDesc: "จัดการระบบ ผู้ใช้งาน และยืนยันการเชื่อมบุคคลกับเครื่อง",
+    loadingAccount: "กำลังโหลดสิทธิ์ผู้ใช้งาน...",
+    sessionErrorTitle: "ตรวจสอบสิทธิ์ผู้ใช้งานไม่สำเร็จ",
+    sessionErrorBody: "ระบบไม่สามารถยืนยันสิทธิ์ของคุณได้ กรุณาเข้าสู่ระบบใหม่อีกครั้ง",
+    reloginButton: "เข้าสู่ระบบใหม่",
   },
   login: {
     title: "ระบบจัดการเครื่องสแกนเวลา (ADMS)",
@@ -116,6 +120,7 @@ export const th: Translations = {
     englishName: "ชื่อ-นามสกุล (ภาษาอังกฤษ)",
     notSet: "— (ยังไม่ได้ระบุ)",
     personnelId: "รหัสบุคคล / เครื่องหมาย",
+    rankSourceManagedHint: "นำเข้าจากไฟล์บัญชีกำลังพล แก้ไขที่นี่ไม่ได้",
     rank: "ยศ",
     position: "ตำแหน่ง",
     branch: "เหล่า / สังกัด",

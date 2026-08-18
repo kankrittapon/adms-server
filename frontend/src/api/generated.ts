@@ -1050,6 +1050,12 @@ export interface components {
         };
         /** CreateMappingResponse */
         CreateMappingResponse: {
+            /**
+             * Already Completed
+             * @description True when this call found the enrollment already RETIRED with an existing VERIFIED mapping and returned it idempotently, rather than creating a new one.
+             * @default false
+             */
+            already_completed: boolean;
             /** Device User Pk */
             device_user_pk: number;
             /** Employee Id */

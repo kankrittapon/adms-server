@@ -78,6 +78,10 @@ export interface Translations {
     enrollmentOperatorDesc: string;
     operatorDesc: string;
     adminDesc: string;
+    loadingAccount: string;
+    sessionErrorTitle: string;
+    sessionErrorBody: string;
+    reloginButton: string;
   };
   login: {
     title: string;
@@ -117,6 +121,7 @@ export interface Translations {
     notSet: string;
     personnelId: string;
     rank: string;
+    rankSourceManagedHint: string;
     position: string;
     branch: string;
     category: string;

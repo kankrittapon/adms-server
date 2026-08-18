@@ -105,7 +105,7 @@ def create_verified_mapping(
                 enroll_scan_time,
                 enroll_confirmed_by,
             ) = enroll
-            if enroll_status != "READY_FOR_MAPPING":
+            if enroll_status not in ("READY_FOR_MAPPING", "RETIRED"):
                 raise MappingError(
                     "enrollment %s is in state %s, expected READY_FOR_MAPPING"
                     % (enrollment_id, enroll_status)
@@ -142,6 +142,38 @@ def create_verified_mapping(
                 raise MappingError(
                     "device_user_pk %s is inactive — mapping not allowed" % device_user_pk
                 )
+
+            # 2b. Idempotency: this enrollment already completed (RETIRED by
+            # a prior successful call to this same function). Duplicate
+            # Step 6 confirmation must not error or create a second
+            # mapping — return the existing VERIFIED mapping unchanged.
+            if enroll_status == "RETIRED":
+                existing = _fetch_row(
+                    cur,
+                    "SELECT mapping_id, valid_from, valid_to, verified_at "
+                    "FROM employee_device_mappings "
+                    "WHERE employee_id = %s AND device_user_pk = %s "
+                    "AND mapping_status = 'VERIFIED' "
+                    "ORDER BY verified_at DESC LIMIT 1;",
+                    (employee_id, device_user_pk),
+                )
+                if existing is None:
+                    raise MappingError(
+                        "enrollment %s is RETIRED but no VERIFIED mapping exists for "
+                        "device_user_pk %s — inconsistent state, cannot confirm idempotently"
+                        % (enrollment_id, device_user_pk)
+                    )
+                return {
+                    "mapping_id": existing[0],
+                    "valid_from": existing[1],
+                    "verified_at": existing[3],
+                    "employee_id": employee_id,
+                    "device_user_pk": device_user_pk,
+                    "mapping_status": VERIFIED,
+                    "verification_method": VERIFICATION_METHOD_CONTROLLED_SCAN,
+                    "valid_to": existing[2],
+                    "already_completed": True,
+                }
 
             # 3. Human must exist and be active.
             hm = _fetch_row(
@@ -202,6 +234,26 @@ def create_verified_mapping(
             row = cur.fetchone()
             if row is None:
                 raise MappingError("mapping insert failed")
+
+            # 7. Atomically retire the enrollment in the SAME transaction —
+            # a VERIFIED mapping must never exist while its source
+            # enrollment still looks like open work (READY_FOR_MAPPING).
+            # RETIRED already exists as a valid terminal state in the
+            # enrollment state machine (app/enrollment.py) and its DB CHECK
+            # constraint; it was simply never driven anywhere. Guarded on
+            # the exact status we read at step 1, so a concurrent duplicate
+            # confirmation attempt fails closed here rather than silently
+            # retiring twice or racing the idempotent-return path above.
+            cur.execute(
+                "UPDATE device_user_enrollments SET status = 'RETIRED', updated_at = now() "
+                "WHERE enrollment_id = %s AND status = 'READY_FOR_MAPPING';",
+                (enrollment_id,),
+            )
+            if cur.rowcount != 1:
+                raise MappingError(
+                    "enrollment %s could not be retired (concurrent state change?) "
+                    "— mapping not created" % enrollment_id
+                )
             conn.commit()
 
     log_sync_event(
@@ -219,4 +271,5 @@ def create_verified_mapping(
         "mapping_status": VERIFIED,
         "verification_method": VERIFICATION_METHOD_CONTROLLED_SCAN,
         "valid_to": None,
+        "already_completed": False,
     }

@@ -190,6 +190,124 @@ class TestMappingHappyPath(unittest.TestCase):
         self.assertEqual(result["mapping_id"], 1)
 
 
+class TestEnrollmentCompletionSemantics(unittest.TestCase):
+    """ADMS-UX-FinalPolish-021 Part B: an Enrollment must never keep showing
+    as READY_FOR_MAPPING (open work) once its VERIFIED mapping actually
+    exists. RETIRED already existed as a valid terminal state in the
+    enrollment state machine and its DB CHECK constraint — it was simply
+    never driven. No migration; the fix is entirely query/transaction-level."""
+
+    def setUp(self):
+        self.cfg = Config.from_env()
+        self.note = "Pilot evidence note"
+
+    @patch("app.mapping.log_sync_event")
+    @patch("app.mapping.get_db_connection")
+    def test_successful_mapping_atomically_retires_enrollment(self, mock_conn_fn, mock_log):
+        cur = FakeCursor(
+            fetchone_queue=happy_path_queue(),
+            fetchall_result=happy_path_attendance_candidates(),
+        )
+        conn = make_db(mock_conn_fn, cur)
+
+        create_verified_mapping(
+            self.cfg, enrollment_id=ENROLLMENT_ID, verified_by="owner", verification_note=self.note,
+        )
+
+        retire_calls = [
+            (s, p) for s, p in cur.executed
+            if "device_user_enrollments" in s and "RETIRED" in s
+        ]
+        self.assertEqual(len(retire_calls), 1)
+        self.assertIn("READY_FOR_MAPPING", retire_calls[0][0])
+        self.assertEqual(retire_calls[0][1], (ENROLLMENT_ID,))
+        # Same transaction/commit as the mapping insert — genuinely atomic,
+        # not a second best-effort write.
+        conn.commit.assert_called_once()
+
+    @patch("app.mapping.log_sync_event")
+    @patch("app.mapping.get_db_connection")
+    def test_retire_race_fails_closed_no_mapping_left_dangling(self, mock_conn_fn, mock_log):
+        """If the UPDATE affects 0 rows (concurrent state change between the
+        initial read and the retire step), the whole call must fail — never
+        leave a VERIFIED mapping whose enrollment silently stayed open."""
+        cur = FakeCursor(
+            fetchone_queue=happy_path_queue(),
+            fetchall_result=happy_path_attendance_candidates(),
+            rowcount=1,
+        )
+        conn = make_db(mock_conn_fn, cur)
+
+        orig_execute = cur.execute
+
+        def flaky_execute(sql, params=None):
+            orig_execute(sql, params)
+            if "RETIRED" in sql:
+                cur.rowcount = 0
+
+        cur.execute = flaky_execute
+
+        with self.assertRaises(MappingError):
+            create_verified_mapping(
+                self.cfg, enrollment_id=ENROLLMENT_ID, verified_by="owner", verification_note=self.note,
+            )
+        conn.commit.assert_not_called()
+
+    @patch("app.mapping.get_db_connection")
+    def test_duplicate_step6_is_idempotent_not_a_second_mapping(self, mock_conn_fn):
+        """A second confirmation attempt on an already-RETIRED enrollment
+        must return the existing VERIFIED mapping, not error and not create
+        a second row."""
+        cur = FakeCursor(
+            fetchone_queue=[
+                (PILOT_EMPLOYEE_ID, DEVICE_ID, RESERVED_DEVICE_USER_ID, "RETIRED", SCAN_TIME, "owner"),
+                (DEVICE_USER_PK, True),  # device_users
+                (5, SCAN_TIME, None, NOW),  # existing VERIFIED mapping lookup
+            ],
+        )
+        make_db(mock_conn_fn, cur)
+
+        result = create_verified_mapping(
+            self.cfg, enrollment_id=ENROLLMENT_ID, verified_by="owner", verification_note="note",
+        )
+
+        self.assertTrue(result["already_completed"])
+        self.assertEqual(result["mapping_id"], 5)
+        self.assertEqual(result["device_user_pk"], DEVICE_USER_PK)
+        inserts = [s for s in cur.sql() if "INSERT INTO employee_device_mappings" in s]
+        self.assertEqual(len(inserts), 0)
+
+    @patch("app.mapping.get_db_connection")
+    def test_retired_with_no_existing_mapping_is_an_inconsistency_error(self, mock_conn_fn):
+        """RETIRED with zero VERIFIED mappings means something else is
+        wrong (e.g. manual DB tampering) — must not fabricate a result."""
+        cur = FakeCursor(
+            fetchone_queue=[
+                (PILOT_EMPLOYEE_ID, DEVICE_ID, RESERVED_DEVICE_USER_ID, "RETIRED", SCAN_TIME, "owner"),
+                (DEVICE_USER_PK, True),
+                None,  # no VERIFIED mapping found
+            ],
+        )
+        make_db(mock_conn_fn, cur)
+        with self.assertRaises(MappingError):
+            create_verified_mapping(
+                self.cfg, enrollment_id=ENROLLMENT_ID, verified_by="owner", verification_note="note",
+            )
+
+    @patch("app.mapping.log_sync_event")
+    @patch("app.mapping.get_db_connection")
+    def test_fresh_completion_marks_already_completed_false(self, mock_conn_fn, mock_log):
+        cur = FakeCursor(
+            fetchone_queue=happy_path_queue(),
+            fetchall_result=happy_path_attendance_candidates(),
+        )
+        make_db(mock_conn_fn, cur)
+        result = create_verified_mapping(
+            self.cfg, enrollment_id=ENROLLMENT_ID, verified_by="owner", verification_note=self.note,
+        )
+        self.assertFalse(result["already_completed"])
+
+
 class TestMappingPreconditions(unittest.TestCase):
     def setUp(self):
         self.cfg = Config.from_env()

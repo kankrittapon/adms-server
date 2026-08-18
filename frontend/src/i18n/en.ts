@@ -78,6 +78,10 @@ export const en: Translations = {
     enrollmentOperatorDesc: "Enroll personnel on the fingerprint terminal.",
     operatorDesc: "View operational data and manage enrollments.",
     adminDesc: "Manage the system, accounts, and confirm identity mappings.",
+    loadingAccount: "Loading account permissions...",
+    sessionErrorTitle: "Couldn't verify your session",
+    sessionErrorBody: "We couldn't confirm your account permissions. Please sign in again.",
+    reloginButton: "Sign in again",
   },
   login: {
     title: "ADMS Production Console",
@@ -116,6 +120,7 @@ export const en: Translations = {
     englishName: "English Full Name",
     notSet: "— (Not Set)",
     personnelId: "Personnel / Roster ID",
+    rankSourceManagedHint: "from personnel roster file — not editable here",
     rank: "Rank",
     position: "Position",
     branch: "Branch / Unit",

@@ -462,6 +462,12 @@
       },
       "CreateMappingResponse": {
         "properties": {
+          "already_completed": {
+            "default": false,
+            "description": "True when this call found the enrollment already RETIRED with an existing VERIFIED mapping and returned it idempotently, rather than creating a new one.",
+            "title": "Already Completed",
+            "type": "boolean"
+          },
           "device_user_pk": {
             "title": "Device User Pk",
             "type": "integer"

@@ -108,6 +108,12 @@ class CreateMappingResponse(BaseModel):
     valid_from: str
     valid_to: Optional[str] = None
     verified_at: str
+    already_completed: bool = Field(
+        default=False,
+        description="True when this call found the enrollment already RETIRED "
+        "with an existing VERIFIED mapping and returned it idempotently, "
+        "rather than creating a new one.",
+    )
 
 
 @router.post(
@@ -136,4 +142,5 @@ def create_mapping(payload: CreateMappingRequest, cfg: Config = Depends(get_cfg)
         "valid_from": result["valid_from"].isoformat(),
         "valid_to": result.get("valid_to").isoformat() if result.get("valid_to") else None,
         "verified_at": result["verified_at"].isoformat(),
+        "already_completed": result.get("already_completed", False),
     }

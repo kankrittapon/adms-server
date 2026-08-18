@@ -13,7 +13,7 @@ interface NavItem {
 
 export function Layout() {
   const navigate = useNavigate();
-  const { me } = useAuth();
+  const { me, loading, authError, reload } = useAuth();
   const { locale, setLocale, t } = useTranslation();
 
   async function logout() {
@@ -23,6 +23,10 @@ export function Layout() {
       // token cleared regardless
     }
     clearToken();
+    // Without this, `me` from the just-ended session stays stuck in memory
+    // (client-side navigate() never remounts AuthProvider) until something
+    // else forces a refetch — the same class of bug as the login-side fix.
+    reload();
     navigate("/login", { replace: true });
   }
 
@@ -142,10 +146,20 @@ export function Layout() {
         <div className="border-t border-slate-200 p-3 bg-slate-50/50">
           <div className="flex items-center justify-between px-2 py-1.5">
             <div className="min-w-0 pr-2">
-              <div className="truncate text-xs font-bold text-slate-900">{me?.display_name || "Operator"}</div>
+              <div className="truncate text-xs font-bold text-slate-900">
+                {loading ? t.roles.loadingAccount : me?.display_name || "Operator"}
+              </div>
               <div className="flex items-center gap-1.5 mt-0.5">
+                {/* Identity is unknown (still loading, or auth/me failed) ≠ VIEWER.
+                    Never collapse "unknown" into the lowest-privilege role label —
+                    show an explicit loading/error state until the real role is
+                    proven by the backend. */}
                 <span className="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-slate-200 text-slate-700">
-                  {me?.role === "ADMIN"
+                  {loading
+                    ? t.roles.loadingAccount
+                    : authError
+                    ? t.roles.sessionErrorTitle
+                    : me?.role === "ADMIN"
                     ? t.roles.admin
                     : me?.role === "ENROLLMENT_OPERATOR"
                     ? t.roles.enrollmentOperator
@@ -215,6 +229,20 @@ export function Layout() {
 
         {/* Dynamic Page View Container */}
         <main className="flex-1 overflow-y-auto p-6 bg-slate-50">
+          {authError && (
+            <div className="mb-4 flex items-center justify-between rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
+              <div>
+                <div className="text-sm font-bold text-rose-800">{t.roles.sessionErrorTitle}</div>
+                <div className="text-xs text-rose-700 mt-0.5">{t.roles.sessionErrorBody}</div>
+              </div>
+              <button
+                onClick={logout}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-colors"
+              >
+                {t.roles.reloginButton}
+              </button>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

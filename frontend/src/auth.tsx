@@ -6,6 +6,7 @@ import type { MeResponse, WriteSessionStatus } from "./api/types";
 interface AuthState {
   me: MeResponse | null;
   loading: boolean;
+  authError: boolean;
   canWrite: boolean;
   serverWriteEnabled: boolean;
   writeSession: WriteSessionStatus | null;
@@ -18,6 +19,7 @@ interface AuthState {
 const AuthContext = createContext<AuthState>({
   me: null,
   loading: true,
+  authError: false,
   canWrite: false,
   serverWriteEnabled: false,
   writeSession: null,
@@ -42,19 +44,31 @@ const WRITE_SESSION_POLL_MS = 30_000;
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(false);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     if (!getToken()) {
       setMe(null);
+      setAuthError(false);
       setLoading(false);
       return;
     }
     setLoading(true);
     api
       .me()
-      .then(setMe)
-      .catch(() => setMe(null))
+      .then((res) => {
+        setMe(res);
+        setAuthError(false);
+      })
+      .catch(() => {
+        // Never silently downgrade an auth failure into "VIEWER" — me stays
+        // null (unknown identity) and authError tells the UI to show an
+        // explicit session-error state with a re-login action, distinct
+        // from the brief "still loading" window.
+        setMe(null);
+        setAuthError(true);
+      })
       .finally(() => setLoading(false));
   }, [tick]);
 
@@ -79,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         me,
         loading,
+        authError,
         canWrite,
         serverWriteEnabled,
         writeSession,

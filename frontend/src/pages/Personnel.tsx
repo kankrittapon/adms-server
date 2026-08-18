@@ -370,6 +370,7 @@ export function HumanDetail() {
           <Row
             label={t.personnel.rank}
             value={`${data.rank ?? "—"} ${data.rank_metadata?.rank_en ? `(${data.rank_metadata.rank_en})` : ""}`}
+            hint={t.personnel.rankSourceManagedHint}
           />
           <Row label={t.personnel.position} value={data.position ?? "—"} />
           <Row label={t.personnel.branch} value={data.branch ?? "—"} />
@@ -472,11 +473,14 @@ export function HumanDetail() {
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Row({ label, value, mono, hint }: { label: string; value: string; mono?: boolean; hint?: string }) {
   return (
     <div className="flex items-center px-4 py-2.5">
       <dt className="w-44 shrink-0 font-bold uppercase text-[10px] text-slate-400">{label}</dt>
-      <dd className={`text-slate-900 ${mono ? "font-mono text-[11px]" : ""}`}>{value}</dd>
+      <dd className={`text-slate-900 ${mono ? "font-mono text-[11px]" : ""}`}>
+        {value}
+        {hint && <span className="ml-2 text-[10px] font-normal text-slate-400">({hint})</span>}
+      </dd>
     </div>
   );
 }
