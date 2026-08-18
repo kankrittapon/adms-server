@@ -1,6 +1,6 @@
 # ADMS-PersonnelIdentity-AttendanceClosure-025 — PRODUCTION COMPLETE
 
-**Status:** Implementation complete, tested, committed, pushed, and **DEPLOYED**. `adms_api`/`adms_web` rebuilt and recreated; all containers healthy post-deploy.
+**Status:** Implementation complete, tested, committed (`820cd2a`), pushed, and **DEPLOYED**. `adms_api`/`adms_web` rebuilt and recreated; all 5 containers healthy post-deploy (`adms_zkteco_listener`/`adms_postgres`/`adms_mqtt` untouched — confirmed unchanged start times). Live verification: `/healthz` → `{"status":"ok"}`; `GET /attendance/unattributed` no longer 500s (401 for an unauthenticated/bogus token, with the `Access-Control-Allow-Origin` header present — proving the CORS fix is live); the live `/openapi.json`'s `CsvImportRowResult` schema now includes `warning_th`; served frontend bundle hash (`assets/index-DOCcRG0C.js`) matches the verified local build exactly.
 
 ---
 
