@@ -22,6 +22,7 @@ The ADMS PostgreSQL database (`adms`) is designed with strict additive schema pr
 | `010_enrollment_operator_role.sql` | Adds `ENROLLMENT_OPERATOR` role constraint. | Updates check constraints on `operators` and `api_tokens` to allow `'ENROLLMENT_OPERATOR'`. |
 | `011_human_english_name.sql` | Adds optional English full name for personnel. | Adds `english_name TEXT` column to `human_employees`. |
 | `012_write_session_schema.sql` | Runtime write-session (Layer 2 write control). **APPLIED TO PRODUCTION** — see note below. | Creates `write_sessions` table. |
+| `013_enrollment_terminal_id_reclamation_constraint.sql` | Fixes `uq_enrollment_terminal_id` to agree with PromptID-020's read-side terminal-ID reclamation policy. **NOT YET APPLIED TO PRODUCTION** — pending owner deployment approval, see ADMS-CurrentState-History-UXClosure-022. | `device_user_enrollments`: replaces the full `UNIQUE CONSTRAINT uq_enrollment_terminal_id` with a partial `UNIQUE INDEX` of the same name, excluding CANCELLED reservations that never had a terminal account created (`terminal_created_at IS NULL AND device_uid IS NULL`) — the exact predicate `_load_used_terminal_ids()` already uses. No row deleted or rewritten. |
 
 ---
 

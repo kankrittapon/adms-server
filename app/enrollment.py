@@ -30,6 +30,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
+import psycopg2.errors
+
 from app.config import Config
 from app.db import get_db_connection, ensure_device_user, log_sync_event
 from app.mapping_evidence import resolve_controlled_attendance_id
@@ -531,13 +533,27 @@ def reserve_next_device_user_id(
             # decided by _load_used_terminal_ids above.
             reclaimed_from_enrollment_id = _find_reclaimable_cancelled_enrollment(cur, device_id, next_id)
 
-            cur.execute(
-                "INSERT INTO device_user_enrollments "
-                "(employee_id, device_id, reserved_device_user_id, status, reserved_by) "
-                "VALUES (%s, %s, %s, 'RESERVED', %s) "
-                "RETURNING enrollment_id, reserved_device_user_id, status, reserved_at;",
-                (employee_id, device_id, next_id, operator),
-            )
+            # ADMS-CurrentState-History-UXClosure-022: _load_used_terminal_ids
+            # and the DB's partial unique index (sql/013) now share the exact
+            # same reclamation predicate, so this should never race in
+            # practice — but a raw psycopg2 uniqueness violation must never
+            # be allowed to escape as an unhandled 500 (which the browser
+            # then misleadingly reports as a CORS failure, since the
+            # response never gets a CORS header on an unhandled exception
+            # path). Converted to a controlled, retryable domain error.
+            try:
+                cur.execute(
+                    "INSERT INTO device_user_enrollments "
+                    "(employee_id, device_id, reserved_device_user_id, status, reserved_by) "
+                    "VALUES (%s, %s, %s, 'RESERVED', %s) "
+                    "RETURNING enrollment_id, reserved_device_user_id, status, reserved_at;",
+                    (employee_id, device_id, next_id, operator),
+                )
+            except psycopg2.errors.UniqueViolation as e:
+                raise EnrollmentError(
+                    "terminal id %s on device %s was reserved concurrently — retry the reservation"
+                    % (next_id, device_id)
+                ) from e
             row = cur.fetchone()
             if row is None:
                 raise EnrollmentError("reservation insert failed")
