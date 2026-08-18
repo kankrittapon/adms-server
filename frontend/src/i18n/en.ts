@@ -231,6 +231,7 @@ export const en: Translations = {
     enrollmentConflictBody: "This enrollment has already changed state. Refresh the latest status before trying again.",
     alreadyCancelledBody: "This enrollment was already cancelled.",
     scanNotFoundYetBody: "No scan detected yet. Please ask the person to scan again.",
+    activeEnrollmentExistsBody: "This person already has an enrollment in progress. Please finish the existing enrollment first.",
     cancelSuccessMessage: "Enrollment cancelled.",
     reserveSuccessMessage: "Started successfully.",
     fingerprintWindowActiveMessage: "Ready — go to the scanner now.",

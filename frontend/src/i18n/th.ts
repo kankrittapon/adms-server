@@ -231,6 +231,7 @@ export const th: Translations = {
     enrollmentConflictBody: "รายการลงทะเบียนมีการเปลี่ยนสถานะแล้ว กรุณาโหลดข้อมูลล่าสุดแล้วลองอีกครั้ง",
     alreadyCancelledBody: "รายการนี้ถูกยกเลิกแล้ว",
     scanNotFoundYetBody: "ยังไม่พบการสแกน กรุณาให้บุคคลลองสแกนอีกครั้ง",
+    activeEnrollmentExistsBody: "บุคคลนี้มีรายการลงทะเบียนที่กำลังดำเนินการอยู่แล้ว กรุณาดำเนินการรายการเดิมให้เสร็จก่อน",
     cancelSuccessMessage: "ยกเลิกรายการลงทะเบียนเรียบร้อยแล้ว",
     reserveSuccessMessage: "เริ่มลงทะเบียนเรียบร้อยแล้ว",
     fingerprintWindowActiveMessage: "พร้อมแล้ว — ไปที่เครื่องสแกนได้เลย",

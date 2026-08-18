@@ -431,6 +431,15 @@ function ReserveCard({
           setError(t.enrollment.writeSessionLockedBody);
         } else if (e instanceof ApiClientError && e.code === "WRITE_SESSION_EXPIRED") {
           setError(t.enrollment.writeSessionExpiredMidWorkflow);
+        } else if (
+          e instanceof ApiClientError &&
+          e.code === "ENROLLMENT_CONFLICT" &&
+          e.message.toLowerCase().includes("already has an active enrollment")
+        ) {
+          // ADMS-CurrentState-History-UXClosure-022 Phase F: never show the
+          // raw "ENROLLMENT_CONFLICT: Human <UUID> already has an active
+          // enrollment on device <N>" text to an operator.
+          setError(t.enrollment.activeEnrollmentExistsBody);
         } else if (e instanceof ApiClientError) {
           setError(`${e.code}: ${e.message}`);
         } else {

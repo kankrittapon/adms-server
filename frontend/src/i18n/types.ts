@@ -230,6 +230,7 @@ export interface Translations {
     enrollmentConflictBody: string;
     alreadyCancelledBody: string;
     scanNotFoundYetBody: string;
+    activeEnrollmentExistsBody: string;
     cancelSuccessMessage: string;
     reserveSuccessMessage: string;
     fingerprintWindowActiveMessage: string;

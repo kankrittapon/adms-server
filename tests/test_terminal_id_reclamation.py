@@ -110,11 +110,13 @@ class TestReserveEmitsReuseAuditEvent(unittest.TestCase):
                 (1,),        # human exists
                 (1,),        # device exists
                 (None,),     # advisory lock
-                None,        # no duplicate active enrollment
                 (3,),        # _find_reclaimable_cancelled_enrollment: enrollment_id 3 qualified 1003
                 (4, "1003", "RESERVED", None),  # INSERT RETURNING
             ],
-            fetchall_result=[],  # _load_used_terminal_ids: 1003 excluded, nothing else used
+            fetchall_queue=[
+                [],  # 022 lifecycle candidate-row check: no blocking rows
+                [],  # _load_used_terminal_ids: 1003 excluded, nothing else used
+            ],
         )
         make_db(mock_conn_fn, cur)
         result = reserve_next_device_user_id(
@@ -135,11 +137,11 @@ class TestReserveEmitsReuseAuditEvent(unittest.TestCase):
     def test_item29_no_reclaim_no_reuse_event(self, mock_conn_fn, mock_log):
         cur = FakeCursor(
             fetchone_queue=[
-                (1,), (1,), (None,), None,
+                (1,), (1,), (None,),
                 None,  # no reclaimable cancelled enrollment for the chosen id
                 (5, "1001", "RESERVED", None),
             ],
-            fetchall_result=[],
+            fetchall_queue=[[], []],
         )
         make_db(mock_conn_fn, cur)
         reserve_next_device_user_id(

@@ -15,6 +15,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import Config
 from app.db import get_db_connection
+from app.enrollment import (
+    ENROLLMENT_LIFECYCLE_JOIN_SQL as _ENROLLMENT_LIFECYCLE_JOIN_SQL,
+    ENROLLMENT_LIFECYCLE_SELECT_SQL as _ENROLLMENT_LIFECYCLE_SELECT_SQL,
+    derive_enrollment_lifecycle_state as _derive_enrollment_lifecycle_state,
+)
 from app.rtn_ranks import normalize_rtn_rank
 
 
@@ -674,59 +679,6 @@ def unattributed_attendance(cfg: Config, limit: int, offset: int) -> Dict[str, A
 
 
 # --- Enrollments ----------------------------------------------------------
-
-
-_ENROLLMENT_LIFECYCLE_JOIN_SQL = (
-    "LEFT JOIN device_users du ON du.device_id = e.device_id "
-    "AND du.device_user_id = e.reserved_device_user_id "
-    "LEFT JOIN LATERAL ("
-    "  SELECT m.valid_to, m.mapping_status "
-    "  FROM employee_device_mappings m "
-    "  WHERE m.device_user_pk = du.device_user_pk "
-    "  AND m.employee_id = e.employee_id "
-    "  AND m.mapping_status = 'VERIFIED' "
-    "  ORDER BY (m.valid_to IS NULL) DESC, m.verified_at DESC "
-    "  LIMIT 1"
-    ") vm ON true"
-)
-_ENROLLMENT_LIFECYCLE_SELECT_SQL = (
-    "du.active AS device_user_active, vm.mapping_status AS verified_mapping_status, "
-    "vm.valid_to AS mapping_valid_to"
-)
-
-
-def _derive_enrollment_lifecycle_state(
-    status: str,
-    device_user_active: Optional[bool],
-    verified_mapping_status: Optional[str],
-    mapping_valid_to: Any,
-) -> str:
-    """Canonical, server-owned cross-lifecycle state for an enrollment.
-
-    ADMS-UX-CrossLifecycleClosure-021B: the frontend must never independently
-    infer "is this enrollment actually finished/historical" by stitching
-    together enrollment.status + device_users.active + mapping.valid_to on
-    its own, in multiple pages, potentially inconsistently. This is the one
-    place that interpretation happens.
-
-    Deliberately derived at READ time from current joined facts rather than
-    solely trusting the stored `status` column — this self-heals enrollment
-    rows written before this PromptID (e.g. a real production row that is
-    still literally 'READY_FOR_MAPPING' in the DB despite its VERIFIED
-    mapping existing and later being closed by terminal removal) without
-    requiring any backfill/migration.
-    """
-    if status == "CANCELLED":
-        return "CANCELLED"
-
-    has_verified_mapping = verified_mapping_status is not None
-    if status == "RETIRED" or (status == "READY_FOR_MAPPING" and has_verified_mapping):
-        mapping_open = has_verified_mapping and mapping_valid_to is None
-        if bool(device_user_active) and mapping_open:
-            return "COMPLETED"
-        return "REMOVED_FROM_TERMINAL"
-
-    return "IN_PROGRESS"
 
 
 def _attach_lifecycle_state(row: Dict[str, Any]) -> None:

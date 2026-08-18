@@ -56,12 +56,21 @@ NOW = datetime(2026, 8, 12, 12, 0, 0, tzinfo=timezone.utc)
 
 
 class FakeCursor:
-    """Records executed SQL and serves canned fetchone/fetchall results."""
+    """Records executed SQL and serves canned fetchone/fetchall results.
 
-    def __init__(self, fetchone_queue=None, fetchall_result=None, rowcount=1):
+    fetchall_queue (list of lists, popped in call order) is preferred when a
+    single reserve_next_device_user_id() call issues multiple fetchall()
+    calls (022's lifecycle candidate-row check, then _load_used_terminal_ids)
+    — each needs its own distinctly-shaped result. fetchall_result remains
+    as a back-compat static single-value fallback for callers issuing only
+    one fetchall() (or where every fetchall() call legitimately wants the
+    same result, e.g. all-empty)."""
+
+    def __init__(self, fetchone_queue=None, fetchall_result=None, fetchall_queue=None, rowcount=1):
         self.executed = []
         self._fetchone_queue = list(fetchone_queue or [])
         self._fetchall_result = fetchall_result if fetchall_result is not None else []
+        self._fetchall_queue = list(fetchall_queue) if fetchall_queue is not None else None
         self.rowcount = rowcount
 
     def execute(self, sql, params=None):
@@ -73,6 +82,10 @@ class FakeCursor:
         return None
 
     def fetchall(self):
+        if self._fetchall_queue is not None:
+            if self._fetchall_queue:
+                return self._fetchall_queue.pop(0)
+            return []
         return self._fetchall_result
 
     def sql(self):
@@ -322,7 +335,8 @@ class TestReservation(unittest.TestCase):
     @patch("app.enrollment.get_db_connection")
     def test_valid_reservation_allocates_1001_and_captures_operator(self, mock_conn_fn, mock_log):
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, None, (1, "1001", "RESERVED", NOW)],
+            fetchone_queue=[[1], [1], [None], None, (1, "1001", "RESERVED", NOW)],
+            fetchall_queue=[[], []],
             fetchall_result=[],
         )
         make_db(mock_conn_fn, cur)
@@ -385,7 +399,8 @@ class TestReservation(unittest.TestCase):
     def test_reservation_requires_production_scope_sql(self, mock_conn_fn):
         """Human validation must require production_scope = true (พลทหาร exclusion)."""
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, None, (1, "1001", "RESERVED", NOW)],
+            fetchone_queue=[[1], [1], [None], None, (1, "1001", "RESERVED", NOW)],
+            fetchall_queue=[[], []],
             fetchall_result=[],
         )
         make_db(mock_conn_fn, cur)
@@ -417,7 +432,12 @@ class TestReservation(unittest.TestCase):
 
     @patch("app.enrollment.get_db_connection")
     def test_duplicate_active_reservation_rejected(self, mock_conn_fn):
-        cur = FakeCursor(fetchone_queue=[[1], [1], [None], (55,)])  # dup found
+        # candidate row: enrollment_id=55, status=RESERVED (genuinely
+        # in-progress: no device_user row, no VERIFIED mapping) → IN_PROGRESS.
+        cur = FakeCursor(
+            fetchone_queue=[[1], [1], [None]],
+            fetchall_queue=[[(55, "RESERVED", None, None, None)]],
+        )  # dup found
         make_db(mock_conn_fn, cur)
         with self.assertRaises(EnrollmentError):
             reserve_next_device_user_id(
@@ -429,8 +449,8 @@ class TestReservation(unittest.TestCase):
     def test_cancelled_reservation_allows_new_reservation_with_next_id(self, mock_conn_fn, mock_log):
         # Cancelled row for 1001 exists; new reservation must skip it → 1002.
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, None, (2, "1002", "RESERVED", NOW)],
-            fetchall_result=[("1001",)],
+            fetchone_queue=[[1], [1], [None], None, (2, "1002", "RESERVED", NOW)],
+            fetchall_queue=[[], [("1001",)]],
         )
         make_db(mock_conn_fn, cur)
         result = reserve_next_device_user_id(
@@ -445,8 +465,8 @@ class TestReservation(unittest.TestCase):
     @patch("app.enrollment.get_db_connection")
     def test_retired_reservation_allows_new_reservation_with_next_id(self, mock_conn_fn, mock_log):
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, None, (2, "1002", "RESERVED", NOW)],
-            fetchall_result=[("1001",)],
+            fetchone_queue=[[1], [1], [None], None, (2, "1002", "RESERVED", NOW)],
+            fetchall_queue=[[], [("1001",)]],
         )
         make_db(mock_conn_fn, cur)
         result = reserve_next_device_user_id(
@@ -462,8 +482,8 @@ class TestReservation(unittest.TestCase):
     def test_ids_scoped_per_device(self, mock_conn_fn, mock_log):
         # Device 2 has its own history: 1001 used there → next is 1002.
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, None, (3, "1002", "RESERVED", NOW)],
-            fetchall_result=[("1001",)],
+            fetchone_queue=[[1], [1], [None], None, (3, "1002", "RESERVED", NOW)],
+            fetchall_queue=[[], [("1001",)]],
         )
         make_db(mock_conn_fn, cur)
         result = reserve_next_device_user_id(
@@ -479,8 +499,8 @@ class TestReservation(unittest.TestCase):
     def test_terminal_roster_ids_considered(self, mock_conn_fn, mock_log):
         # Roster says 1001 is physically present → reserve 1002 instead.
         cur = FakeCursor(
-            fetchone_queue=[[1], [1], [None], None, None, (4, "1002", "RESERVED", NOW)],
-            fetchall_result=[],
+            fetchone_queue=[[1], [1], [None], None, (4, "1002", "RESERVED", NOW)],
+            fetchall_queue=[[], []],
         )
         make_db(mock_conn_fn, cur)
         result = reserve_next_device_user_id(
@@ -855,7 +875,8 @@ class TestSafetyInvariants(unittest.TestCase):
         # 1. Reserve
         with patch("app.enrollment.log_sync_event"), patch("app.enrollment.get_db_connection") as m1:
             cur = FakeCursor(
-                fetchone_queue=[[1], [1], [None], None, None, (1, "1001", "RESERVED", NOW)],
+                fetchone_queue=[[1], [1], [None], None, (1, "1001", "RESERVED", NOW)],
+            fetchall_queue=[[], []],
                 fetchall_result=[],
             )
             make_db(m1, cur)
@@ -958,7 +979,8 @@ class TestSafetyInvariants(unittest.TestCase):
         device = FakeDevice(users=[])
         with patch("app.enrollment.log_sync_event"), patch("app.enrollment.get_db_connection") as m:
             cur = FakeCursor(
-                fetchone_queue=[[1], [1], [None], None, None, (1, "1001", "RESERVED", NOW)],
+                fetchone_queue=[[1], [1], [None], None, (1, "1001", "RESERVED", NOW)],
+            fetchall_queue=[[], []],
                 fetchall_result=[],
             )
             make_db(m, cur)

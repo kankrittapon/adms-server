@@ -58,6 +58,70 @@ ACTIVE_ENROLLMENT_STATUSES = (
     "READY_FOR_MAPPING",
 )
 
+# ADMS-CurrentState-History-UXClosure-022: this raw-status list is a *stored*
+# approximation used only for the DB partial unique index and as a coarse
+# pre-filter — it can be stale for a row that finished its actual work
+# (READY_FOR_MAPPING) before this PromptID's self-healing existed. The
+# canonical truth is always ENROLLMENT_LIFECYCLE_STATE, derived below. Both
+# "should this show in the Active Queue" (app/api/repository.py) and "should
+# this block a new reservation" (reserve_next_device_user_id below) MUST use
+# the SAME derivation — never two independently-drifting predicates.
+
+ENROLLMENT_LIFECYCLE_JOIN_SQL = (
+    "LEFT JOIN device_users du ON du.device_id = e.device_id "
+    "AND du.device_user_id = e.reserved_device_user_id "
+    "LEFT JOIN LATERAL ("
+    "  SELECT m.valid_to, m.mapping_status "
+    "  FROM employee_device_mappings m "
+    "  WHERE m.device_user_pk = du.device_user_pk "
+    "  AND m.employee_id = e.employee_id "
+    "  AND m.mapping_status = 'VERIFIED' "
+    "  ORDER BY (m.valid_to IS NULL) DESC, m.verified_at DESC "
+    "  LIMIT 1"
+    ") vm ON true"
+)
+ENROLLMENT_LIFECYCLE_SELECT_SQL = (
+    "du.active AS device_user_active, vm.mapping_status AS verified_mapping_status, "
+    "vm.valid_to AS mapping_valid_to"
+)
+
+
+def derive_enrollment_lifecycle_state(
+    status: str,
+    device_user_active: Optional[bool],
+    verified_mapping_status: Optional[str],
+    mapping_valid_to: Any,
+) -> str:
+    """Canonical, single-source cross-lifecycle state for an enrollment.
+
+    ADMS-UX-CrossLifecycleClosure-021B / ADMS-CurrentState-History-
+    UXClosure-022: neither the frontend nor any other backend caller may
+    independently infer "is this enrollment actually finished/historical"
+    by stitching together enrollment.status + device_users.active +
+    mapping.valid_to on its own. This is the one place that interpretation
+    happens — reused verbatim by app.api.repository (read paths: Active
+    Queue, Dashboard, history) AND by reserve_next_device_user_id below
+    (write path: does an existing row block a new reservation).
+
+    Deliberately derived at READ/decision time from current joined facts
+    rather than solely trusting the stored `status` column — this self-
+    heals rows written before this logic existed (e.g. a real production
+    row still literally 'READY_FOR_MAPPING' despite its VERIFIED mapping
+    existing and later being closed by terminal removal) without requiring
+    any backfill/migration.
+    """
+    if status == "CANCELLED":
+        return "CANCELLED"
+
+    has_verified_mapping = verified_mapping_status is not None
+    if status == "RETIRED" or (status == "READY_FOR_MAPPING" and has_verified_mapping):
+        mapping_open = has_verified_mapping and mapping_valid_to is None
+        if bool(device_user_active) and mapping_open:
+            return "COMPLETED"
+        return "REMOVED_FROM_TERMINAL"
+
+    return "IN_PROGRESS"
+
 ALLOWED_TRANSITIONS: Dict[str, Set[str]] = {
     "RESERVED": {"TERMINAL_ACCOUNT_CREATED", "CANCELLED"},
     "TERMINAL_ACCOUNT_CREATED": {
@@ -401,19 +465,65 @@ def reserve_next_device_user_id(
             )
             cur.fetchone()
 
-            # Defense-in-depth: reject duplicate active enrollment for the same
-            # Human + device (the partial unique index enforces this too).
+            # ADMS-CurrentState-History-UXClosure-022: a row whose raw
+            # `status` is still in ACTIVE_ENROLLMENT_STATUSES is only a
+            # coarse pre-filter — it can be stale (e.g. READY_FOR_MAPPING
+            # from before this self-healing existed, whose VERIFIED mapping
+            # was later closed by terminal removal). The canonical lifecycle
+            # derivation (shared with app.api.repository's Active Queue/
+            # Dashboard reads — never a second, independently-drifting
+            # predicate) decides whether it genuinely blocks. A row that is
+            # NOT canonically IN_PROGRESS is atomically transitioned to its
+            # already-earned RETIRED terminal state (the exact same
+            # mechanism ADMS-UX-FinalPolish-021 uses when a mapping is
+            # freshly created) — this is not reviving, deleting, or
+            # rewriting history; it corrects a stale status column to match
+            # facts that were already true, in the same transaction as the
+            # new reservation, so the DB partial unique index
+            # (uq_active_enrollment_per_human_device) — which can only see
+            # `status`, not the joined device/mapping facts — no longer
+            # sees it as active either.
             cur.execute(
-                "SELECT enrollment_id FROM device_user_enrollments "
-                "WHERE employee_id = %s AND device_id = %s "
-                "AND status = ANY(%s) LIMIT 1;",
+                "SELECT e.enrollment_id, e.status, "
+                f"{ENROLLMENT_LIFECYCLE_SELECT_SQL} "
+                "FROM device_user_enrollments e "
+                f"{ENROLLMENT_LIFECYCLE_JOIN_SQL} "
+                "WHERE e.employee_id = %s AND e.device_id = %s "
+                "AND e.status = ANY(%s);",
                 (employee_id, device_id, list(ACTIVE_ENROLLMENT_STATUSES)),
             )
-            if cur.fetchone():
-                raise EnrollmentError(
-                    "Human %s already has an active enrollment on device %s"
-                    % (employee_id, device_id)
+            candidate_rows = cur.fetchall()
+            for row in candidate_rows:
+                (
+                    existing_enrollment_id,
+                    existing_status,
+                    device_user_active,
+                    verified_mapping_status,
+                    mapping_valid_to,
+                ) = row
+                state = derive_enrollment_lifecycle_state(
+                    existing_status, device_user_active, verified_mapping_status, mapping_valid_to
                 )
+                if state == "IN_PROGRESS":
+                    raise EnrollmentError(
+                        "Human %s already has an active enrollment on device %s"
+                        % (employee_id, device_id)
+                    )
+                # COMPLETED / REMOVED_FROM_TERMINAL — genuinely finished
+                # work whose status column just never caught up. Self-heal.
+                cur.execute(
+                    "UPDATE device_user_enrollments SET status = 'RETIRED', updated_at = now() "
+                    "WHERE enrollment_id = %s AND status = %s;",
+                    (existing_enrollment_id, existing_status),
+                )
+                if cur.rowcount == 1:
+                    log_sync_event(
+                        cfg,
+                        "ENROLLMENT_STALE_STATUS_SELF_HEALED",
+                        "enrollment_id=%s previous_status=%s lifecycle_state=%s "
+                        "healed_to=RETIRED reason=blocked_new_reservation_but_canonically_finished"
+                        % (existing_enrollment_id, existing_status, state),
+                    )
 
             used_ids = _load_used_terminal_ids(cur, device_id)
             next_id = _find_next_available_id(used_ids, roster_user_ids)

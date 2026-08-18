@@ -94,11 +94,13 @@ class TestCompleteEnrollmentE2E(unittest.TestCase):
                     (1,),                                    # human exists/active/production_scope
                     (1,),                                    # device exists/active
                     (None,),                                 # advisory lock
-                    None,                                     # no duplicate active enrollment
                     None,                                     # reclaimed-cancelled-enrollment audit lookup
                     (1, "1005", "RESERVED", NOW),             # INSERT RETURNING
                 ],
-                fetchall_result=[],  # _load_used_terminal_ids: nothing used yet
+                fetchall_queue=[
+                    [],  # 022 lifecycle candidate-row check: no blocking rows
+                    [],  # _load_used_terminal_ids: nothing used yet
+                ],
             )
             make_db(m1, cur)
             reserved = reserve_next_device_user_id(
