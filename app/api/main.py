@@ -38,6 +38,7 @@ from app.api.routers import (
     operators,
     reference,
     stream,
+    terminal_management,
     write_session,
 )
 
@@ -135,6 +136,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         enrollments.router,
         reference.router,
         stream.router,
+        terminal_management.router,
         write_session.router,
     ):
         app.include_router(router, dependencies=[VIEWER])

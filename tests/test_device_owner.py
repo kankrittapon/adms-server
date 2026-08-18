@@ -315,18 +315,24 @@ class TestNoConcurrentZkAccess(unittest.TestCase):
         self.assertIn("self.device_owner.submit_and_wait", src)
 
     def test_item20_execute_owned_command_is_the_only_command_io_path(self):
-        """_execute_owned_command is the sole place CREATE_TERMINAL_ACCOUNT
-        touches self.connection — proven by checking it's the only method
-        (besides the state-machine's own handle_* methods) passing
-        self.connection into create_or_reconcile_terminal_account."""
+        """_execute_owned_command is the sole place ANY command-triggered
+        device work (terminal-account creation, inventory, fingerprint/
+        account removal — ADMS-TerminalManagement-020) touches
+        self.connection — proven by checking every `device=self.connection`
+        occurrence in the whole module lives inside this one method, not
+        scattered elsewhere (e.g. handle_device_command)."""
         import app.collector as collector_mod
 
-        src = inspect.getsource(collector_mod)
-        occurrences = src.count("device=self.connection")
-        self.assertEqual(occurrences, 1, "device=self.connection must appear exactly once, "
-                          "inside _execute_owned_command")
+        full_src = inspect.getsource(collector_mod)
         exec_src = inspect.getsource(CollectorStateEngine._execute_owned_command)
-        self.assertIn("device=self.connection", exec_src)
+        total_occurrences = full_src.count("device=self.connection")
+        occurrences_inside_exec = exec_src.count("device=self.connection")
+        self.assertGreaterEqual(total_occurrences, 1)
+        self.assertEqual(
+            total_occurrences, occurrences_inside_exec,
+            "every device=self.connection call site must live inside "
+            "_execute_owned_command — none may appear anywhere else in the module",
+        )
 
 
 class TestLiveCaptureIntegration(unittest.TestCase):

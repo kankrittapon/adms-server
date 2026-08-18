@@ -706,6 +706,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terminal-management/account/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove Account */
+        post: operations["remove_account_api_v1_terminal_management_account_remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terminal-management/fingerprint/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove Fingerprint */
+        post: operations["remove_fingerprint_api_v1_terminal_management_fingerprint_remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terminal-management/inventory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Terminal Inventory
+         * @description Read-only — no write session required. If the device cannot be
+         *     read, device_reachable=false and items is empty; callers must never
+         *     interpret that as 'no accounts exist'.
+         */
+        get: operations["get_terminal_inventory_api_v1_terminal_management_inventory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/write-session": {
         parameters: {
             query?: never;
@@ -1603,6 +1659,41 @@ export interface components {
              */
             operator: string;
         };
+        /** RemoveAccountRequest */
+        RemoveAccountRequest: {
+            /**
+             * Acknowledge Active Human
+             * @description must be explicitly true to remove an account still linked to an ACTIVE Human's open VERIFIED mapping
+             * @default false
+             */
+            acknowledge_active_human: boolean;
+            /** Device Id */
+            device_id: number;
+            /** Device User Id */
+            device_user_id: string;
+            /**
+             * Operator
+             * @description explicit ADMIN identity performing the removal
+             */
+            operator: string;
+        };
+        /** RemoveFingerprintRequest */
+        RemoveFingerprintRequest: {
+            /** Device Id */
+            device_id: number;
+            /** Device User Id */
+            device_user_id: string;
+            /**
+             * Finger Id
+             * @description specific finger slot to remove; omit to remove all
+             */
+            finger_id?: number | null;
+            /**
+             * Operator
+             * @description explicit ADMIN identity performing the removal
+             */
+            operator: string;
+        };
         /** ReserveRequest */
         ReserveRequest: {
             /**
@@ -1639,6 +1730,36 @@ export interface components {
              * @description explicit operator identity
              */
             operator: string;
+        };
+        /** TerminalInventoryItem */
+        TerminalInventoryItem: {
+            /** Device User Id */
+            device_user_id: string;
+            /**
+             * Fingerprint Count
+             * @description Number of fingerprint templates on the device for this account. null means the device could not be read (unknown, never assumed zero).
+             */
+            fingerprint_count?: number | null;
+            /** Name */
+            name?: string | null;
+            /** Privilege */
+            privilege?: number | null;
+            /** Uid */
+            uid?: number | null;
+        };
+        /** TerminalInventoryResponse */
+        TerminalInventoryResponse: {
+            /** Device Reachable */
+            device_reachable: boolean;
+            /** Items */
+            items: components["schemas"]["TerminalInventoryItem"][];
+        };
+        /** TerminalMutationResponse */
+        TerminalMutationResponse: {
+            /** Already Absent */
+            already_absent: boolean;
+            /** Device User Id */
+            device_user_id: string;
         };
         /** ToggleActiveRequest */
         ToggleActiveRequest: {
@@ -3033,6 +3154,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    remove_account_api_v1_terminal_management_account_remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoveAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_fingerprint_api_v1_terminal_management_fingerprint_remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoveFingerprintRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_terminal_inventory_api_v1_terminal_management_inventory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalInventoryResponse"];
                 };
             };
         };

@@ -2269,6 +2269,72 @@
         "title": "ReconcileScanEvidenceRequest",
         "type": "object"
       },
+      "RemoveAccountRequest": {
+        "properties": {
+          "acknowledge_active_human": {
+            "default": false,
+            "description": "must be explicitly true to remove an account still linked to an ACTIVE Human's open VERIFIED mapping",
+            "title": "Acknowledge Active Human",
+            "type": "boolean"
+          },
+          "device_id": {
+            "title": "Device Id",
+            "type": "integer"
+          },
+          "device_user_id": {
+            "title": "Device User Id",
+            "type": "string"
+          },
+          "operator": {
+            "description": "explicit ADMIN identity performing the removal",
+            "title": "Operator",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id",
+          "device_user_id",
+          "operator"
+        ],
+        "title": "RemoveAccountRequest",
+        "type": "object"
+      },
+      "RemoveFingerprintRequest": {
+        "properties": {
+          "device_id": {
+            "title": "Device Id",
+            "type": "integer"
+          },
+          "device_user_id": {
+            "title": "Device User Id",
+            "type": "string"
+          },
+          "finger_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "specific finger slot to remove; omit to remove all",
+            "title": "Finger Id"
+          },
+          "operator": {
+            "description": "explicit ADMIN identity performing the removal",
+            "title": "Operator",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id",
+          "device_user_id",
+          "operator"
+        ],
+        "title": "RemoveFingerprintRequest",
+        "type": "object"
+      },
       "ReserveRequest": {
         "properties": {
           "device_id": {
@@ -2321,6 +2387,103 @@
           "operator"
         ],
         "title": "ScanConfirmationRequest",
+        "type": "object"
+      },
+      "TerminalInventoryItem": {
+        "properties": {
+          "device_user_id": {
+            "title": "Device User Id",
+            "type": "string"
+          },
+          "fingerprint_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Number of fingerprint templates on the device for this account. null means the device could not be read (unknown, never assumed zero).",
+            "title": "Fingerprint Count"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "privilege": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Privilege"
+          },
+          "uid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid"
+          }
+        },
+        "required": [
+          "device_user_id"
+        ],
+        "title": "TerminalInventoryItem",
+        "type": "object"
+      },
+      "TerminalInventoryResponse": {
+        "properties": {
+          "device_reachable": {
+            "title": "Device Reachable",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TerminalInventoryItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "device_reachable"
+        ],
+        "title": "TerminalInventoryResponse",
+        "type": "object"
+      },
+      "TerminalMutationResponse": {
+        "properties": {
+          "already_absent": {
+            "title": "Already Absent",
+            "type": "boolean"
+          },
+          "device_user_id": {
+            "title": "Device User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_user_id",
+          "already_absent"
+        ],
+        "title": "TerminalMutationResponse",
         "type": "object"
       },
       "ToggleActiveRequest": {
@@ -4762,6 +4925,110 @@
         "summary": "Realtime attendance events (SSE)",
         "tags": [
           "stream"
+        ]
+      }
+    },
+    "/api/v1/terminal-management/account/remove": {
+      "post": {
+        "operationId": "remove_account_api_v1_terminal_management_account_remove_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Account",
+        "tags": [
+          "terminal-management"
+        ]
+      }
+    },
+    "/api/v1/terminal-management/fingerprint/remove": {
+      "post": {
+        "operationId": "remove_fingerprint_api_v1_terminal_management_fingerprint_remove_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveFingerprintRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Fingerprint",
+        "tags": [
+          "terminal-management"
+        ]
+      }
+    },
+    "/api/v1/terminal-management/inventory": {
+      "get": {
+        "description": "Read-only \u2014 no write session required. If the device cannot be\nread, device_reachable=false and items is empty; callers must never\ninterpret that as 'no accounts exist'.",
+        "operationId": "get_terminal_inventory_api_v1_terminal_management_inventory_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalInventoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Terminal Inventory",
+        "tags": [
+          "terminal-management"
         ]
       }
     },

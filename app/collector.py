@@ -35,6 +35,15 @@ from app.enrollment import (
     TerminalRosterUnavailable,
     create_or_reconcile_terminal_account,
 )
+from app.terminal_management import (
+    ActiveHumanProtection,
+    TerminalAccountNotFound,
+    TerminalIdentityConflict,
+    TerminalManagementError,
+    read_terminal_inventory,
+    remove_terminal_account,
+    remove_terminal_fingerprint,
+)
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +53,16 @@ log = logging.getLogger(__name__)
 # cap against pathological accumulation (e.g. a stuck owner), not as a
 # throughput knob.
 DEVICE_COMMAND_QUEUE_MAXSIZE = 4
+
+# ADMS-TerminalManagement-020: every action a device command may request.
+# Each still goes through the exact same single-owner enqueue/drain path —
+# adding an action here never grants a new code path around DeviceOwner.
+SUPPORTED_DEVICE_COMMANDS = frozenset({
+    "CREATE_TERMINAL_ACCOUNT",
+    "TERMINAL_INVENTORY",
+    "REMOVE_TERMINAL_FINGERPRINT",
+    "REMOVE_TERMINAL_ACCOUNT",
+})
 
 class State(Enum):
     STARTING = auto()
@@ -135,7 +154,7 @@ class CollectorStateEngine:
         if not command_id:
             return
         log.info("Received device command %s (action=%s)", command_id, action)
-        if action != "CREATE_TERMINAL_ACCOUNT":
+        if action not in SUPPORTED_DEVICE_COMMANDS:
             self.mqtt_service.publish_command_response(
                 command_id,
                 success=False,
@@ -215,6 +234,15 @@ class CollectorStateEngine:
                 command_id, success=False, error=str(e),
                 error_code="ENROLLMENT_CONFLICT",
             )
+        except TerminalManagementError as e:
+            # Covers TerminalAccountNotFound, TerminalIdentityConflict,
+            # ActiveHumanProtection too (all subclasses) — each already
+            # carries its own specific error_code.
+            log.error("Device command %s: terminal management error: %s", command_id, e)
+            self.mqtt_service.publish_command_response(
+                command_id, success=False, error=str(e),
+                error_code=e.error_code,
+            )
         except Exception as e:
             log.error("Device command execution failed for %s: %s", command_id, e)
             self.mqtt_service.publish_command_response(
@@ -244,6 +272,30 @@ class CollectorStateEngine:
             # same connection, not a separate MQTT-thread call (that used to
             # be a second, unprotected get_users() call from the MQTT
             # thread; see PromptID-013's audit finding #9).
+            self.perform_roster_lifecycle_check()
+            return result
+        if action == "TERMINAL_INVENTORY":
+            return {"items": read_terminal_inventory(self.connection)}
+        if action == "REMOVE_TERMINAL_FINGERPRINT":
+            result = remove_terminal_fingerprint(
+                self.cfg,
+                device=self.connection,
+                device_id=int(params["device_id"]),
+                device_user_id=str(params["device_user_id"]),
+                operator=str(params["operator"]),
+                finger_id=(int(params["finger_id"]) if params.get("finger_id") is not None else None),
+            )
+            self.perform_roster_lifecycle_check()
+            return result
+        if action == "REMOVE_TERMINAL_ACCOUNT":
+            result = remove_terminal_account(
+                self.cfg,
+                device=self.connection,
+                device_id=int(params["device_id"]),
+                device_user_id=str(params["device_user_id"]),
+                operator=str(params["operator"]),
+                acknowledge_active_human=bool(params.get("acknowledge_active_human", False)),
+            )
             self.perform_roster_lifecycle_check()
             return result
         raise ValueError("unsupported device action: %s" % action)
