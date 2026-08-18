@@ -1261,6 +1261,11 @@ export interface components {
             reason_th?: string | null;
             /** Row Number */
             row_number: number;
+            /**
+             * Warning Th
+             * @description ADMS-PersonnelIdentity-AttendanceClosure-025: non-blocking advisory (e.g. a NEW row's display_name matches an existing Human) — never causes an automatic merge/update, purely a human-review hint.
+             */
+            warning_th?: string | null;
         };
         /** CsvImportSummary */
         CsvImportSummary: {

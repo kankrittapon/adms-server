@@ -49,6 +49,30 @@ def _error_body(code: str, message: str) -> dict:
     return {"error": {"code": code, "message": message}}
 
 
+def _cors_headers_for(app: FastAPI, request: Request) -> Dict[str, str]:
+    """ADMS-PersonnelIdentity-AttendanceClosure-025: Starlette installs any
+    handler registered for the base `Exception` class into
+    `ServerErrorMiddleware`, which sits OUTSIDE `CORSMiddleware` in the
+    stack (see `starlette.applications.Starlette.build_middleware_stack`).
+    That means a genuinely unhandled exception's JSON response never
+    passed through `CORSMiddleware` and carried no CORS headers — the
+    browser then reported a misleading "no Access-Control-Allow-Origin"
+    error that masked the real 500. This mirrors CORSMiddleware's own
+    simple-request allow-origin check (not a re-implementation of
+    preflight handling, which OPTIONS requests still get from
+    CORSMiddleware normally, since only a genuine exception is affected)
+    so a handled 500 for an allowed origin still carries the header the
+    frontend expects."""
+    origin = request.headers.get("origin")
+    if not origin:
+        return {}
+    settings = getattr(app.state, "settings", None)
+    allowed = getattr(settings, "cors_origins", ()) if settings else ()
+    if origin in allowed:
+        return {"Access-Control-Allow-Origin": origin, "Vary": "Origin"}
+    return {}
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
@@ -99,4 +123,5 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=500,
             content=_error_body("INTERNAL_ERROR", "internal server error"),
+            headers=_cors_headers_for(app, request),
         )

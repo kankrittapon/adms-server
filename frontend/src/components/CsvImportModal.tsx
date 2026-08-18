@@ -67,6 +67,7 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
   }
 
   const errorRows = (preview?.rows ?? []).filter((r) => r.classification === "ERROR");
+  const warningRows = (preview?.rows ?? []).filter((r) => r.warning_th);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -140,6 +141,14 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
                   <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900 space-y-1">
                     {errorRows.map((r) => (
                       <div key={r.row_number}>{r.reason_th}</div>
+                    ))}
+                  </div>
+                )}
+
+                {warningRows.length > 0 && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
+                    {warningRows.map((r) => (
+                      <div key={r.row_number}>{r.warning_th}</div>
                     ))}
                   </div>
                 )}

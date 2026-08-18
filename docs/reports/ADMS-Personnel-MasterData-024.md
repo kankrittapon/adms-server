@@ -2,6 +2,8 @@
 
 **Status:** Implementation complete, tested, committed, pushed, and **DEPLOYED** (owner-approved, gate A). `adms_api`/`adms_web` rebuilt and recreated at commit `df6f347`; all 5 containers healthy post-deploy. See §25a for the deployment record.
 
+> **SUPERSEDED NOTICE (`ADMS-PersonnelIdentity-AttendanceClosure-025`)**: §9 (CSV import design) and §14 below described `personnel_id` as the CSV matching key and required it on every import row — an owner-corrected mistake. `personnel_id` is, and was always meant to be, a fully optional business field, never a required identity. As of 025, CSV round-trip matching uses `employee_id` (the system's own canonical UUID) instead; `personnel_id` is never required and never used for matching. See [ADMS-PersonnelIdentity-AttendanceClosure-025.md](ADMS-PersonnelIdentity-AttendanceClosure-025.md) for the corrected design — that report is now authoritative for CSV identity semantics.
+
 ---
 
 ## 1. Existing source-of-truth finding

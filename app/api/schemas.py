@@ -154,6 +154,12 @@ class CsvImportRowResult(BaseModel):
     changed_fields: Optional[List[str]] = None
     reason_key: Optional[str] = None
     reason_th: Optional[str] = None
+    warning_th: Optional[str] = Field(
+        None,
+        description="ADMS-PersonnelIdentity-AttendanceClosure-025: non-blocking advisory "
+        "(e.g. a NEW row's display_name matches an existing Human) — never causes an "
+        "automatic merge/update, purely a human-review hint.",
+    )
 
 
 class CsvImportSummary(BaseModel):

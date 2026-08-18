@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import Config
-from app.db import get_db_connection
+from app.db import get_db_connection, resolve_verified_employee_mapping
 from app.enrollment import (
     ENROLLMENT_LIFECYCLE_JOIN_SQL as _ENROLLMENT_LIFECYCLE_JOIN_SQL,
     ENROLLMENT_LIFECYCLE_SELECT_SQL as _ENROLLMENT_LIFECYCLE_SELECT_SQL,

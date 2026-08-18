@@ -809,6 +809,18 @@
           "row_number": {
             "title": "Row Number",
             "type": "integer"
+          },
+          "warning_th": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADMS-PersonnelIdentity-AttendanceClosure-025: non-blocking advisory (e.g. a NEW row's display_name matches an existing Human) \u2014 never causes an automatic merge/update, purely a human-review hint.",
+            "title": "Warning Th"
           }
         },
         "required": [

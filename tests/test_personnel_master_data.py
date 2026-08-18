@@ -132,6 +132,18 @@ class TestCreateHuman(unittest.TestCase):
 
     @patch("app.personnel.log_sync_event")
     @patch("app.personnel.get_db_connection")
+    def test_item1_create_without_personnel_id_succeeds(self, mock_conn_fn, mock_log):
+        """ADMS-PersonnelIdentity-AttendanceClosure-025: personnel_id is
+        NOT a mandatory business identity — a Human can be created with
+        none at all, exactly like the other 120 legacy production rows."""
+        cur = FakeCursor(fetchone_queue=[dict(HUMAN_ROW, personnel_id=None)])
+        make_db(mock_conn_fn, cur)
+        result = create_human(self.cfg, operator="admin", display_name="ทดสอบ ระบบ", rank="พ.จ.อ.")
+        self.assertIsNone(result["personnel_id"])
+        mock_log.assert_called_once()
+
+    @patch("app.personnel.log_sync_event")
+    @patch("app.personnel.get_db_connection")
     def test_item6_no_personnel_id_never_blocks_on_name_alone(self, mock_conn_fn, mock_log):
         """No duplicate check at all fires when personnel_id is omitted —
         Thai names may legitimately repeat."""
@@ -154,6 +166,22 @@ class TestCreateHuman(unittest.TestCase):
 class TestUpdateHuman(unittest.TestCase):
     def setUp(self):
         self.cfg = Config.from_env()
+
+    @patch("app.personnel.log_sync_event")
+    @patch("app.personnel.get_db_connection")
+    def test_item2_update_legacy_human_with_null_personnel_id_succeeds(self, mock_conn_fn, mock_log):
+        """A legacy Human with personnel_id already NULL must be editable
+        without first requiring a personnel_id backfill — no owner
+        correction should demand that."""
+        before = dict(HUMAN_ROW, personnel_id=None, english_name=None)
+        after = dict(HUMAN_ROW, personnel_id=None, english_name="Test System")
+        cur = FakeCursor(fetchone_queue=[before, after])
+        make_db(mock_conn_fn, cur)
+        result = update_human(self.cfg, HUMAN_ROW["employee_id"], "admin", english_name="Test System")
+        self.assertIsNone(result["personnel_id"])
+        self.assertEqual(result["english_name"], "Test System")
+        dup_checks = [s for s in cur.sql() if "WHERE personnel_id" in s]
+        self.assertEqual(len(dup_checks), 0)
 
     @patch("app.personnel.log_sync_event")
     @patch("app.personnel.get_db_connection")
@@ -234,12 +262,17 @@ class TestUpdateHuman(unittest.TestCase):
 
 
 class TestCsvExport(unittest.TestCase):
+    """ADMS-PersonnelIdentity-AttendanceClosure-025: export now includes
+    employee_id (the system's own canonical identity) so a re-imported
+    copy of this exact file can round-trip update the correct row —
+    personnel_id is never the matching key."""
+
     def setUp(self):
         self.cfg = Config.from_env()
 
     @patch("app.personnel_csv.get_db_connection")
     def test_item22_23_export_valid_csv_with_bom_and_thai(self, mock_conn_fn):
-        cur = FakeCursor(fetchall_queue=[[("RTN-1", "พ.จ.อ.", "ทดสอบ ระบบ", "Test System", "อล.", "พันจ่า", True)]])
+        cur = FakeCursor(fetchall_queue=[[(HUMAN_ROW["employee_id"], "RTN-1", "พ.จ.อ.", "ทดสอบ ระบบ", "Test System", "อล.", "พันจ่า", True)]])
         make_db(mock_conn_fn, cur)
         csv_text = export_humans_csv(self.cfg)
         self.assertTrue(csv_text.startswith("﻿"))
@@ -255,66 +288,156 @@ class TestCsvExport(unittest.TestCase):
         self.assertEqual(where_clauses[0], (True,))
 
     @patch("app.personnel_csv.get_db_connection")
-    def test_item25_no_sensitive_internal_fields_by_default(self, mock_conn_fn):
+    def test_export_no_secret_fields(self, mock_conn_fn):
         cur = FakeCursor(fetchall_queue=[[]])
         make_db(mock_conn_fn, cur)
         csv_text = export_humans_csv(self.cfg)
-        for forbidden in ("employee_id", "password", "device_user_pk", "token"):
+        for forbidden in ("password", "token"):
             self.assertNotIn(forbidden, csv_text)
+
+    @patch("app.personnel_csv.get_db_connection")
+    def test_item19_export_includes_employee_id_for_round_trip(self, mock_conn_fn):
+        """employee_id IS present in the ADMIN CSV round-trip export —
+        distinct from the ordinary UI, which never shows it prominently
+        (§A6). This is what makes exact re-import matching possible."""
+        cur = FakeCursor(fetchall_queue=[[(HUMAN_ROW["employee_id"], None, None, "ทดสอบ", None, None, None, True)]])
+        make_db(mock_conn_fn, cur)
+        csv_text = export_humans_csv(self.cfg)
+        self.assertIn("employee_id", csv_text)
+        self.assertIn(HUMAN_ROW["employee_id"], csv_text)
+
+    def test_item20_template_has_no_employee_id_and_no_required_personnel_id(self):
+        """The blank new-person template must never require personnel_id
+        or employee_id — a normal staff member adding a new person types
+        neither."""
+        from app.personnel_csv import build_csv_template
+
+        template = build_csv_template()
+        self.assertNotIn("employee_id", template)
+        # personnel_id column may still be present (optional), but the
+        # example row's value is blank, proving it isn't required.
+        header, example = template.lstrip("﻿").strip().split("\n")
+        self.assertEqual(header.split(",")[0], "personnel_id")
+        self.assertEqual(example.split(",")[0], "")
 
 
 class TestCsvImportPreview(unittest.TestCase):
+    """ADMS-PersonnelIdentity-AttendanceClosure-025: matching key is
+    employee_id (round-trip mode), never personnel_id and never
+    display_name."""
+
     def setUp(self):
         self.cfg = Config.from_env()
 
-    def _csv(self, rows_body):
-        header = "personnel_id,rank,display_name,english_name,branch,category,active\n"
+    def _csv(self, rows_body, with_employee_id=False):
+        if with_employee_id:
+            header = "employee_id,personnel_id,rank,display_name,english_name,branch,category,active\n"
+        else:
+            header = "personnel_id,rank,display_name,english_name,branch,category,active\n"
         return header + rows_body
 
     @patch("app.personnel_csv.get_db_connection")
-    def test_item26_valid_new_row(self, mock_conn_fn):
-        cur = FakeCursor(fetchall_queue=[])
-        cur._fetchall_queue = None
-        cur.fetchone = lambda: None  # no existing match -> NEW
+    def test_item9_external_file_no_employee_id_creates_new_candidate(self, mock_conn_fn):
+        """A brand-new-person row has no employee_id column value at all —
+        it must always classify NEW, with no personnel_id required."""
+        cur = FakeCursor()
+        cur.fetchone = lambda: None  # no display_name-match warning lookup hit
         make_db(mock_conn_fn, cur)
-        result = classify_csv_rows(self.cfg, self._csv("RTN-1,พ.จ.อ.,ทดสอบ ระบบ,Test System,อล.,พันจ่า,true\n"))
+        result = classify_csv_rows(self.cfg, self._csv(",พ.จ.อ.,ทดสอบ ระบบ,Test System,อล.,พันจ่า,true\n"))
         self.assertEqual(result["summary"]["new"], 1)
         self.assertEqual(result["rows"][0]["classification"], "NEW")
 
     @patch("app.personnel_csv.get_db_connection")
-    def test_item27_valid_update_row(self, mock_conn_fn):
+    def test_item7_export_modify_preview_resolves_exact_existing_employee(self, mock_conn_fn):
+        """Round-trip mode: a row carrying a valid, existing employee_id
+        resolves to UPDATE against exactly that Human, regardless of
+        personnel_id."""
         cur = FakeCursor()
-        cur.fetchone = lambda: ("uuid-1", "OLD NAME", None, "จ.อ.", None, None, True)
+        cur.fetchone = lambda: (
+            HUMAN_ROW["employee_id"], "OLD NAME", None, "จ.อ.", None, None, True, None,
+        )
         make_db(mock_conn_fn, cur)
-        result = classify_csv_rows(self.cfg, self._csv("RTN-1,พ.จ.อ.,NEW NAME,Test System,อล.,พันจ่า,true\n"))
+        body = "%s,,พ.จ.อ.,NEW NAME,Test System,อล.,พันจ่า,true\n" % HUMAN_ROW["employee_id"]
+        result = classify_csv_rows(self.cfg, self._csv(body, with_employee_id=True))
         self.assertEqual(result["summary"]["update"], 1)
         self.assertEqual(result["rows"][0]["classification"], "UPDATE")
+        self.assertEqual(result["rows"][0]["employee_id"], HUMAN_ROW["employee_id"])
 
     @patch("app.personnel_csv.get_db_connection")
     def test_item28_unchanged_row(self, mock_conn_fn):
         cur = FakeCursor()
-        cur.fetchone = lambda: ("uuid-1", "ทดสอบ ระบบ", "Test System", "พ.จ.อ.", "อล.", "พันจ่า", True)
+        cur.fetchone = lambda: (
+            HUMAN_ROW["employee_id"], "ทดสอบ ระบบ", "Test System", "พ.จ.อ.", "อล.", "พันจ่า", True, None,
+        )
         make_db(mock_conn_fn, cur)
-        result = classify_csv_rows(self.cfg, self._csv("RTN-1,พ.จ.อ.,ทดสอบ ระบบ,Test System,อล.,พันจ่า,true\n"))
+        body = "%s,,พ.จ.อ.,ทดสอบ ระบบ,Test System,อล.,พันจ่า,true\n" % HUMAN_ROW["employee_id"]
+        result = classify_csv_rows(self.cfg, self._csv(body, with_employee_id=True))
         self.assertEqual(result["summary"]["unchanged"], 1)
+
+    @patch("app.personnel_csv.get_db_connection")
+    def test_item11_unknown_employee_id_reference_is_friendly_error(self, mock_conn_fn):
+        """An employee_id that does not match any existing Human must
+        become a friendly ERROR, never silently create a new row under
+        that UUID and never silently ignore it."""
+        cur = FakeCursor()
+        cur.fetchone = lambda: None  # employee_id lookup misses
+        make_db(mock_conn_fn, cur)
+        body = "11111111-1111-1111-1111-111111111111,,,ทดสอบ,,,,true\n"
+        result = classify_csv_rows(self.cfg, self._csv(body, with_employee_id=True))
+        self.assertEqual(result["summary"]["error"], 1)
+        self.assertNotIn("11111111", result["rows"][0]["reason_th"])  # no raw UUID shown to operator
+        self.assertIn("ไม่พบรายการกำลังพลเดิม", result["rows"][0]["reason_th"])
+
+    @patch("app.personnel_csv.get_db_connection")
+    def test_invalid_employee_id_format_is_friendly_error(self, mock_conn_fn):
+        cur = FakeCursor()
+        make_db(mock_conn_fn, cur)
+        body = "not-a-uuid,,,ทดสอบ,,,,true\n"
+        result = classify_csv_rows(self.cfg, self._csv(body, with_employee_id=True))
+        self.assertEqual(result["summary"]["error"], 1)
+
+    @patch("app.personnel_csv.get_db_connection")
+    def test_item10_12_13_same_name_external_row_does_not_auto_update_existing(self, mock_conn_fn):
+        """A NEW candidate (no employee_id) whose display_name happens to
+        match an existing Human must NEVER be silently merged/updated —
+        it stays NEW, with only an advisory warning attached. Duplicate
+        Thai names across genuinely separate Humans remain allowed."""
+        cur = FakeCursor()
+        cur.fetchone = lambda: (1,)  # display_name-match lookup hits
+        make_db(mock_conn_fn, cur)
+        result = classify_csv_rows(self.cfg, self._csv(",,ทดสอบ ระบบ,,,,true\n"))
+        self.assertEqual(result["rows"][0]["classification"], "NEW")
+        self.assertIsNotNone(result["rows"][0].get("warning_th"))
+        # never auto-updates: no employee_id is attached to a NEW row
+        self.assertNotIn("employee_id", result["rows"][0])
 
     @patch("app.personnel_csv.get_db_connection")
     def test_item29_invalid_rank_reported_as_error(self, mock_conn_fn):
         cur = FakeCursor()
         make_db(mock_conn_fn, cur)
-        result = classify_csv_rows(self.cfg, self._csv("RTN-1,NOT_A_RANK,ทดสอบ,,,, true\n"))
+        result = classify_csv_rows(self.cfg, self._csv(",NOT_A_RANK,ทดสอบ,,,, true\n"))
         self.assertEqual(result["summary"]["error"], 1)
         self.assertIn("ไม่พบยศนี้", result["rows"][0]["reason_th"])
 
-    def test_item30_duplicate_personnel_id_within_file(self):
-        body = "RTN-1,,คนที่หนึ่ง,,,,true\nRTN-1,,คนที่สอง,,,,true\n"
+    @patch("app.personnel_csv.get_db_connection")
+    def test_item3_personnel_id_not_required_to_create_new(self, mock_conn_fn):
+        """No personnel_id column value at all — still classifies NEW
+        cleanly, no backfill demanded."""
+        cur = FakeCursor()
+        cur.fetchone = lambda: None
+        make_db(mock_conn_fn, cur)
+        result = classify_csv_rows(self.cfg, self._csv(",พ.จ.อ.,ทดสอบ ระบบ,,,,true\n"))
+        self.assertEqual(result["summary"]["new"], 1)
+        self.assertEqual(result["summary"]["error"], 0)
+
+    def test_duplicate_personnel_id_against_different_existing_human_is_error(self):
+        body = "RTN-1,,คนใหม่,,,,true\n"
         with patch("app.personnel_csv.get_db_connection") as mock_conn_fn:
             cur = FakeCursor()
-            cur.fetchone = lambda: None
+            cur.fetchone = lambda: ("some-other-uuid",)
             make_db(mock_conn_fn, cur)
             result = classify_csv_rows(self.cfg, self._csv(body))
         self.assertEqual(result["summary"]["error"], 1)
-        self.assertIn("ซ้ำ", result["rows"][1]["reason_th"])
 
     def test_item31_malformed_csv_missing_required_column(self):
         with self.assertRaises(PersonnelCsvError):
@@ -329,23 +452,40 @@ class TestCsvImportPreview(unittest.TestCase):
         self.assertIn("ชื่อ-นามสกุล", result["rows"][0]["reason_th"])
 
     @patch("app.personnel_csv.get_db_connection")
-    def test_item33_preview_never_writes(self, mock_conn_fn):
+    def test_item17_preview_never_writes(self, mock_conn_fn):
         cur = FakeCursor()
         cur.fetchone = lambda: None
         make_db(mock_conn_fn, cur)
-        classify_csv_rows(self.cfg, self._csv("RTN-1,พ.จ.อ.,ทดสอบ,Test,,,true\n"))
+        classify_csv_rows(self.cfg, self._csv(",พ.จ.อ.,ทดสอบ,Test,,,true\n"))
         for sql, _ in cur.executed:
             self.assertNotIn("INSERT", sql.upper())
             self.assertNotIn("UPDATE", sql.upper())
             self.assertNotIn("DELETE", sql.upper())
+
+    @patch("app.personnel_csv.get_db_connection")
+    def test_item14_old_120_person_style_row_remains_editable_without_personnel_id(self, mock_conn_fn):
+        """A legacy row with personnel_id NULL, referenced by employee_id
+        (as export_humans_csv now always emits), must be editable/updatable
+        via round-trip import — no backfill required."""
+        cur = FakeCursor()
+        cur.fetchone = lambda: (
+            HUMAN_ROW["employee_id"], "OLD NAME", None, None, None, None, True, None,  # personnel_id NULL
+        )
+        make_db(mock_conn_fn, cur)
+        body = "%s,,,NEW NAME,,,,true\n" % HUMAN_ROW["employee_id"]
+        result = classify_csv_rows(self.cfg, self._csv(body, with_employee_id=True))
+        self.assertEqual(result["rows"][0]["classification"], "UPDATE")
 
 
 class TestCsvImportCommit(unittest.TestCase):
     def setUp(self):
         self.cfg = Config.from_env()
 
-    def _csv(self, rows_body):
-        header = "personnel_id,rank,display_name,english_name,branch,category,active\n"
+    def _csv(self, rows_body, with_employee_id=False):
+        if with_employee_id:
+            header = "employee_id,personnel_id,rank,display_name,english_name,branch,category,active\n"
+        else:
+            header = "personnel_id,rank,display_name,english_name,branch,category,active\n"
         return header + rows_body
 
     @patch("app.personnel_csv.log_sync_event")
@@ -354,29 +494,32 @@ class TestCsvImportCommit(unittest.TestCase):
         cur = FakeCursor()
         cur.fetchone = lambda: None
         make_db(mock_conn_fn, cur)
-        result = commit_csv_rows(self.cfg, self._csv("RTN-1,พ.จ.อ.,ทดสอบ,Test,,,true\n"), operator="admin")
+        result = commit_csv_rows(self.cfg, self._csv(",พ.จ.อ.,ทดสอบ,Test,,,true\n"), operator="admin")
         self.assertEqual(result["created"], 1)
         insert_calls = [s for s in cur.sql() if "INSERT INTO human_employees" in s]
         self.assertEqual(len(insert_calls), 1)
 
     @patch("app.personnel_csv.log_sync_event")
     @patch("app.personnel_csv.get_db_connection")
-    def test_item35_commit_updates_existing(self, mock_conn_fn, mock_log):
+    def test_item8_round_trip_import_updates_correct_human(self, mock_conn_fn, mock_log):
         cur = FakeCursor()
-        cur.fetchone = lambda: ("uuid-1", "OLD", None, None, None, None, True)
+        cur.fetchone = lambda: (HUMAN_ROW["employee_id"], "OLD", None, None, None, None, True, None)
         make_db(mock_conn_fn, cur)
-        result = commit_csv_rows(self.cfg, self._csv("RTN-1,,NEW,,,,true\n"), operator="admin")
+        body = "%s,,,NEW,,,,true\n" % HUMAN_ROW["employee_id"]
+        result = commit_csv_rows(self.cfg, self._csv(body, with_employee_id=True), operator="admin")
         self.assertEqual(result["updated"], 1)
+        update_calls = [p for s, p in cur.executed if s.strip().upper().startswith("UPDATE HUMAN_EMPLOYEES")]
+        self.assertEqual(update_calls[0][-1], HUMAN_ROW["employee_id"])
 
     @patch("app.personnel_csv.log_sync_event")
     @patch("app.personnel_csv.get_db_connection")
     def test_item37_no_auto_deactivation_for_missing_rows(self, mock_conn_fn, mock_log):
-        """Import never touches any row whose personnel_id isn't in the
-        file — no bulk/blanket UPDATE statement exists at all."""
+        """Import never touches any row absent from the file — no bulk/
+        blanket UPDATE statement exists at all."""
         cur = FakeCursor()
         cur.fetchone = lambda: None
         make_db(mock_conn_fn, cur)
-        commit_csv_rows(self.cfg, self._csv("RTN-1,,ทดสอบ,,,,true\n"), operator="admin")
+        commit_csv_rows(self.cfg, self._csv(",,ทดสอบ,,,,true\n"), operator="admin")
         for sql, _ in cur.executed:
             self.assertNotIn("SET active = false", sql)
 
@@ -397,7 +540,7 @@ class TestCsvImportCommit(unittest.TestCase):
         cur = FakeCursor()
         cur.fetchone = lambda: None
         make_db(mock_conn_fn, cur)
-        commit_csv_rows(self.cfg, self._csv("RTN-1,,ทดสอบ,,,,true\n"), operator="admin")
+        commit_csv_rows(self.cfg, self._csv(",,ทดสอบ,,,,true\n"), operator="admin")
         mock_log.assert_called_once()
         self.assertEqual(mock_log.call_args[0][1], "PERSONNEL_CSV_IMPORT")
         # No raw CSV content in the audit message.
@@ -405,14 +548,15 @@ class TestCsvImportCommit(unittest.TestCase):
 
     @patch("app.personnel_csv.log_sync_event")
     @patch("app.personnel_csv.get_db_connection")
-    def test_item36_second_identical_import_is_idempotent(self, mock_conn_fn, mock_log):
-        """Simulates re-running the same file after the first commit —
-        the row now matches exactly, so it must classify UNCHANGED, not
-        create a duplicate."""
+    def test_item36_second_identical_round_trip_import_is_idempotent(self, mock_conn_fn, mock_log):
+        """Re-running the same exported-then-reimported file: the row now
+        matches exactly by employee_id, so it must classify UNCHANGED, not
+        create a duplicate or re-update."""
         cur = FakeCursor()
-        cur.fetchone = lambda: ("uuid-1", "ทดสอบ", None, "พ.จ.อ.", None, None, True)
+        cur.fetchone = lambda: (HUMAN_ROW["employee_id"], "ทดสอบ", None, "พ.จ.อ.", None, None, True, None)
         make_db(mock_conn_fn, cur)
-        result = commit_csv_rows(self.cfg, self._csv("RTN-1,พ.จ.อ.,ทดสอบ,,,,true\n"), operator="admin")
+        body = "%s,,พ.จ.อ.,ทดสอบ,,,,true\n" % HUMAN_ROW["employee_id"]
+        result = commit_csv_rows(self.cfg, self._csv(body, with_employee_id=True), operator="admin")
         self.assertEqual(result["created"], 0)
         self.assertEqual(result["updated"], 0)
         self.assertEqual(result["unchanged"], 1)
