@@ -70,20 +70,30 @@ export function Dashboard() {
           value={data.devices_total}
           hint={`${data.devices_active} ${t.common.active} (ZEM560)`}
         />
+        {/* ADMS-CurrentState-History-UXClosure-022: the primary number
+            here must answer "how many accounts are on the scanner right
+            now," not "how many device_users rows has the system ever
+            seen." device_users_total includes historical/inactive rows
+            (e.g. removed 1002/1004) — those must never inflate the
+            headline KPI. device_users_active is the current count. */}
         <StatCard
-          label={t.devices.discoveredUsers}
-          value={data.device_users_total}
-          hint={`${data.device_users_active} ${t.common.active}`}
+          label={t.devices.currentTerminalAccounts}
+          value={data.device_users_active}
+          hint={`${data.device_users_total} ${t.devices.discoveredUsersHistoricalHint}`}
         />
         <StatCard
           label={t.dashboard.kpiAttendanceToday}
           value={data.attendance_today}
           hint={`${data.attendance_total} ${t.common.all} / ${data.attendance_unattributed} ${t.dashboard.kpiUnattributed}`}
         />
+        {/* Same fix as the terminal-account KPI: mappings_total includes
+            historical/closed mappings (e.g. Pimai's closed #2) —
+            mappings_verified_active is the current-only count and must
+            be the headline number. */}
         <StatCard
           label={t.mappings.verifiedMappings}
-          value={data.mappings_total}
-          hint={`${data.mappings_verified_active} ${t.mappings.activeMapping}`}
+          value={data.mappings_verified_active}
+          hint={`${data.mappings_total} ${t.dashboard.mappingsHistoricalHint}`}
         />
         <StatCard
           label={t.dashboard.enrollmentActiveCountLabel}

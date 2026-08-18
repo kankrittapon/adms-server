@@ -1491,8 +1491,18 @@ export interface components {
             employee_id: string;
             /** Employee Name */
             employee_name?: string | null;
+            /**
+             * Is Current
+             * @description True only when mapping_lifecycle_state == CURRENT — convenience boolean for simple current/history filtering.
+             */
+            is_current: boolean;
             /** Mapping Id */
             mapping_id: number;
+            /**
+             * Mapping Lifecycle State
+             * @description Canonical, server-derived (ADMS-CurrentState-History-UXClosure-022): CURRENT, REMOVED_FROM_TERMINAL, or ENDED. A historical VERIFIED mapping must never be presented identically to a current one — the frontend must use this instead of independently inferring current-vs-history from valid_to.
+             */
+            mapping_lifecycle_state: string;
             /** Mapping Source */
             mapping_source: string;
             /** Mapping Status */

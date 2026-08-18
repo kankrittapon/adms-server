@@ -375,6 +375,38 @@ def get_attendance_raw_payload(cfg: Config, attendance_id: int) -> Optional[Dict
 # --- Mappings -------------------------------------------------------------
 
 
+def _derive_mapping_lifecycle_state(
+    mapping_status: str, valid_to: Any, device_user_active: Optional[bool]
+) -> str:
+    """Canonical current/history classification for a mapping row —
+    ADMS-CurrentState-History-UXClosure-022. A historical VERIFIED mapping
+    is historically verified, but must never be presented as a CURRENT
+    green "verified/active user" row alongside genuinely current mappings
+    (the exact Mapping #2/Pimai defect: valid_to set, but still rendered
+    identically to Mapping #1/1001 in a single flat table).
+
+    CURRENT: the only state allowed to read as "this person is on the
+    terminal right now."
+    REMOVED_FROM_TERMINAL: closed AND we can canonically prove the
+    account was actually removed (device_users.active=false) — never
+    fabricated, only asserted when the underlying fact supports it.
+    ENDED: closed for some other/unproven reason — neutral wording,
+    never invents a cause the data doesn't establish.
+    """
+    if mapping_status == "VERIFIED" and valid_to is None:
+        return "CURRENT"
+    if device_user_active is False:
+        return "REMOVED_FROM_TERMINAL"
+    return "ENDED"
+
+
+def _attach_mapping_lifecycle_state(row: Dict[str, Any]) -> None:
+    device_user_active = row.pop("device_user_active", None)
+    state = _derive_mapping_lifecycle_state(row["mapping_status"], row["valid_to"], device_user_active)
+    row["mapping_lifecycle_state"] = state
+    row["is_current"] = state == "CURRENT"
+
+
 def list_mappings(
     cfg: Config,
     limit: int,
@@ -405,29 +437,34 @@ def list_mappings(
         "SELECT m.mapping_id, m.employee_id, m.device_user_pk, m.mapping_status, "
         "m.mapping_source, m.verified_by, m.verification_method, m.verification_note, "
         "m.valid_from, m.valid_to, m.verified_at, m.created_at, m.updated_at, "
-        "h.display_name AS employee_name, du.device_user_id "
+        "h.display_name AS employee_name, du.device_user_id, du.active AS device_user_active "
         "FROM employee_device_mappings m "
         "LEFT JOIN human_employees h ON h.employee_id = m.employee_id "
         "LEFT JOIN device_users du ON du.device_user_pk = m.device_user_pk "
         f"{where_sql} ORDER BY m.mapping_id LIMIT %s OFFSET %s",
         tuple(params) + (limit, offset),
     )
+    for r in rows:
+        _attach_mapping_lifecycle_state(r)
     return {"items": rows, "total": total, "limit": limit, "offset": offset}
 
 
 def get_mapping(cfg: Config, mapping_id: int) -> Optional[Dict[str, Any]]:
-    return _fetch_one(
+    row = _fetch_one(
         cfg,
         "SELECT m.mapping_id, m.employee_id, m.device_user_pk, m.mapping_status, "
         "m.mapping_source, m.verified_by, m.verification_method, m.verification_note, "
         "m.valid_from, m.valid_to, m.verified_at, m.created_at, m.updated_at, "
-        "h.display_name AS employee_name, du.device_user_id "
+        "h.display_name AS employee_name, du.device_user_id, du.active AS device_user_active "
         "FROM employee_device_mappings m "
         "LEFT JOIN human_employees h ON h.employee_id = m.employee_id "
         "LEFT JOIN device_users du ON du.device_user_pk = m.device_user_pk "
         "WHERE m.mapping_id = %s",
         (mapping_id,),
     )
+    if row:
+        _attach_mapping_lifecycle_state(row)
+    return row
 
 
 # --- F5 hardening: audit trail -------------------------------------------

@@ -1559,9 +1559,19 @@
             ],
             "title": "Employee Name"
           },
+          "is_current": {
+            "description": "True only when mapping_lifecycle_state == CURRENT \u2014 convenience boolean for simple current/history filtering.",
+            "title": "Is Current",
+            "type": "boolean"
+          },
           "mapping_id": {
             "title": "Mapping Id",
             "type": "integer"
+          },
+          "mapping_lifecycle_state": {
+            "description": "Canonical, server-derived (ADMS-CurrentState-History-UXClosure-022): CURRENT, REMOVED_FROM_TERMINAL, or ENDED. A historical VERIFIED mapping must never be presented identically to a current one \u2014 the frontend must use this instead of independently inferring current-vs-history from valid_to.",
+            "title": "Mapping Lifecycle State",
+            "type": "string"
           },
           "mapping_source": {
             "title": "Mapping Source",
@@ -1647,7 +1657,9 @@
           "mapping_source",
           "valid_from",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "mapping_lifecycle_state",
+          "is_current"
         ],
         "title": "Mapping",
         "type": "object"

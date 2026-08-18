@@ -227,6 +227,16 @@ class Mapping(BaseModel):
     updated_at: datetime
     employee_name: Optional[str] = None
     device_user_id: Optional[str] = None
+    mapping_lifecycle_state: str = Field(
+        description="Canonical, server-derived (ADMS-CurrentState-History-UXClosure-022): "
+        "CURRENT, REMOVED_FROM_TERMINAL, or ENDED. A historical VERIFIED mapping must "
+        "never be presented identically to a current one — the frontend must use this "
+        "instead of independently inferring current-vs-history from valid_to.",
+    )
+    is_current: bool = Field(
+        description="True only when mapping_lifecycle_state == CURRENT — convenience "
+        "boolean for simple current/history filtering.",
+    )
 
 
 class MappingEligibilityItem(BaseModel):

@@ -118,6 +118,7 @@ export interface Translations {
     lifecycleCompleted: string;
     lifecycleRemoved: string;
     lifecycleCancelled: string;
+    mappingsHistoricalHint: string;
   };
   personnel: {
     title: string;
@@ -265,6 +266,8 @@ export interface Translations {
     firmware: string;
     lastSeen: string;
     discoveredUsers: string;
+    discoveredUsersHistoricalHint: string;
+    currentTerminalAccounts: string;
     deviceUserPk: string;
     privilege: string;
     incarnation: string;
@@ -292,6 +295,15 @@ export interface Translations {
     evidenceIncompleteBody: string;
     mappingConflictBody: string;
     alreadyMappedBody: string;
+    currentSectionTitle: string;
+    currentSectionEmpty: string;
+    historySectionTitle: string;
+    historySectionEmpty: string;
+    removedFromTerminalState: string;
+    endedState: string;
+    startedLabel: string;
+    endedLabel: string;
+    formerTerminalIdLabel: string;
   };
   terminalManagement: {
     title: string;

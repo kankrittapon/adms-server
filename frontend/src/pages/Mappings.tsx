@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
-import { ErrorBanner, Loading, StatusBadge } from "../components/Status";
+import { ErrorBanner, Loading } from "../components/Status";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { useTranslation } from "../i18n";
 import { verificationMethodLabels, enumLabel } from "../i18n/enumLabels";
@@ -12,6 +12,14 @@ export function Mappings() {
   const { isAdmin } = useAuth();
   const { t, locale } = useTranslation();
   const { data, loading, error, reload } = useApi((s) => api.mappings({ limit: 100 }, s), []);
+
+  // ADMS-CurrentState-History-UXClosure-022: current/history is derived
+  // server-side (mapping_lifecycle_state / is_current) — never
+  // reimplemented here from valid_to. A historical VERIFIED mapping (e.g.
+  // Pimai/1004, closed by terminal removal) must never render identically
+  // to a genuinely current one in the same flat list.
+  const currentItems = (data?.items ?? []).filter((m) => m.is_current);
+  const historyItems = (data?.items ?? []).filter((m) => !m.is_current);
 
   return (
     <div className="space-y-5">
@@ -23,64 +31,123 @@ export function Mappings() {
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-2xs">
-            {data ? `${data.total} ${t.mappings.verifiedMappings}` : t.common.loading}
+            {data ? `${currentItems.length} ${t.mappings.verifiedMappings}` : t.common.loading}
           </span>
         </div>
       </div>
 
       {isAdmin && <CreateMappingPanel onCreated={reload} />}
 
-      {/* Main Mappings Table */}
       {loading ? (
         <Loading />
       ) : error ? (
         <ErrorBanner message={error} />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xs">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-xs table-dense">
-              <thead>
-                <tr>
-                  <th className="w-16">Map ID</th>
-                  <th>{t.personnel.thaiName}</th>
-                  <th>{t.attendance.terminalIdColumn}</th>
-                  <th>{t.common.status}</th>
-                  <th>{t.mappings.validFrom} (UTC)</th>
-                  <th>{t.mappings.validTo} (UTC)</th>
-                  <th>Verification Method</th>
-                  <th>{t.mappings.verifiedBy}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data?.items.map((m) => (
-                  <tr key={m.mapping_id} className="transition-colors hover:bg-slate-50/80">
-                    <td className="font-mono font-bold text-blue-600">#{m.mapping_id}</td>
-                    <td className="font-semibold text-slate-900">
-                      {m.employee_name ?? m.employee_id.slice(0, 8)}
-                    </td>
-                    <td className="font-mono text-slate-700">{m.device_user_id ?? m.device_user_pk}</td>
-                    <td>
-                      <StatusBadge status={m.mapping_status} />
-                    </td>
-                    <td className="font-mono text-slate-700 whitespace-nowrap">{fmt(m.valid_from)}</td>
-                    <td className="font-mono text-slate-500 whitespace-nowrap">
-                      {m.valid_to ? fmt(m.valid_to) : `— (${t.mappings.activeMapping})`}
-                    </td>
-                    <td>
-                      <span className="inline-block rounded bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700 border border-purple-200">
-                        {m.verification_method ? enumLabel(verificationMethodLabels, m.verification_method, locale) : "—"}
-                      </span>
-                    </td>
-                    <td className="font-medium text-slate-800">{m.verified_by}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          {/* CURRENT — the only section allowed to read as "on the
+              terminal right now." */}
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xs">
+            <div className="border-b border-slate-100 bg-emerald-50/50 px-4 py-2.5">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                {t.mappings.currentSectionTitle} ({currentItems.length})
+              </h2>
+            </div>
+            {currentItems.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-500">{t.mappings.currentSectionEmpty}</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left text-xs table-dense">
+                  <thead>
+                    <tr>
+                      <th className="w-16">Map ID</th>
+                      <th>{t.personnel.thaiName}</th>
+                      <th>{t.attendance.terminalIdColumn}</th>
+                      <th>{t.common.status}</th>
+                      <th>{t.mappings.startedLabel} (UTC)</th>
+                      <th>Verification Method</th>
+                      <th>{t.mappings.verifiedBy}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {currentItems.map((m) => (
+                      <tr key={m.mapping_id} className="transition-colors hover:bg-slate-50/80">
+                        <td className="font-mono font-bold text-blue-600">#{m.mapping_id}</td>
+                        <td className="font-semibold text-slate-900">
+                          {m.employee_name ?? m.employee_id.slice(0, 8)}
+                        </td>
+                        <td className="font-mono text-slate-700">{m.device_user_id ?? m.device_user_pk}</td>
+                        <td>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                            {t.mappings.activeMapping}
+                          </span>
+                        </td>
+                        <td className="font-mono text-slate-700 whitespace-nowrap">{fmt(m.valid_from)}</td>
+                        <td>
+                          <span className="inline-block rounded bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700 border border-purple-200">
+                            {m.verification_method ? enumLabel(verificationMethodLabels, m.verification_method, locale) : "—"}
+                          </span>
+                        </td>
+                        <td className="font-medium text-slate-800">{m.verified_by}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2 text-[11px] text-slate-500">
+
+          {/* HISTORY — read-only, visually separated, never mixed with
+              current rows. */}
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xs opacity-90">
+            <div className="border-b border-slate-100 bg-slate-50 px-4 py-2.5">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                {t.mappings.historySectionTitle} ({historyItems.length})
+              </h2>
+            </div>
+            {historyItems.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-500">{t.mappings.historySectionEmpty}</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left text-xs table-dense">
+                  <thead>
+                    <tr>
+                      <th className="w-16">Map ID</th>
+                      <th>{t.personnel.thaiName}</th>
+                      <th>{t.mappings.formerTerminalIdLabel}</th>
+                      <th>{t.common.status}</th>
+                      <th>{t.mappings.startedLabel} (UTC)</th>
+                      <th>{t.mappings.endedLabel} (UTC)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {historyItems.map((m) => (
+                      <tr key={m.mapping_id} className="text-slate-500">
+                        <td className="font-mono font-bold text-slate-400">#{m.mapping_id}</td>
+                        <td className="font-semibold text-slate-600">
+                          {m.employee_name ?? m.employee_id.slice(0, 8)}
+                        </td>
+                        <td className="font-mono text-slate-500">{m.device_user_id ?? m.device_user_pk}</td>
+                        <td>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                            {m.mapping_lifecycle_state === "REMOVED_FROM_TERMINAL"
+                              ? t.mappings.removedFromTerminalState
+                              : t.mappings.endedState}
+                          </span>
+                        </td>
+                        <td className="font-mono whitespace-nowrap">{fmt(m.valid_from)}</td>
+                        <td className="font-mono whitespace-nowrap">{m.valid_to ? fmt(m.valid_to) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-4 py-2 text-[11px] text-slate-500">
             {t.mappings.temporalFooterNote}
           </div>
-        </div>
+        </>
       )}
     </div>
   );

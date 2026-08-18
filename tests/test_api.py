@@ -116,6 +116,8 @@ MAPPING_ROW = {
     "updated_at": NOW,
     "employee_name": "กฤตพล หมาดเส็น",
     "device_user_id": "1001",
+    "mapping_lifecycle_state": "CURRENT",
+    "is_current": True,
 }
 
 ENROLLMENT_ROW = {
