@@ -288,6 +288,10 @@ export interface Translations {
     reservedIdLabel: string;
     reservedByPrefix: string;
     stepOfLabel: string;
+    // ADMS-FrontendUX-ConsistencySweep-026 Phase 5
+    searchPersonPlaceholder: string;
+    noPersonMatchFound: string;
+    fixEnglishNameLink: string;
   };
   attendance: {
     title: string;

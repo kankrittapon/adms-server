@@ -286,6 +286,9 @@ export const th: Translations = {
     reservedIdLabel: "รหัสที่จองไว้",
     reservedByPrefix: "โดย",
     stepOfLabel: "ขั้นตอนที่",
+    searchPersonPlaceholder: "พิมพ์ชื่อเพื่อค้นหา...",
+    noPersonMatchFound: "ไม่พบชื่อที่ค้นหา",
+    fixEnglishNameLink: "ไปแก้ไขชื่อภาษาอังกฤษ →",
   },
   attendance: {
     title: "บันทึกเวลาเข้า-ออก (สด)",

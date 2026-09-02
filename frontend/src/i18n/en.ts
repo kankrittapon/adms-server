@@ -286,6 +286,9 @@ export const en: Translations = {
     reservedIdLabel: "Reserved ID",
     reservedByPrefix: "By",
     stepOfLabel: "Step",
+    searchPersonPlaceholder: "Type a name to search...",
+    noPersonMatchFound: "No matching person found",
+    fixEnglishNameLink: "Fix English name →",
   },
   attendance: {
     title: "Attendance Monitor",

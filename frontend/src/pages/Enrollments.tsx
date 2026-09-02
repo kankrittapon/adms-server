@@ -9,6 +9,7 @@ import { WriteSessionBadge } from "../components/WriteSessionControl";
 import { useTranslation } from "../i18n";
 import { friendlyApiError } from "../i18n/apiErrors";
 import { computeTerminalNamePreview } from "../lib/terminalName";
+import { PersonCombobox } from "../components/PersonCombobox";
 import type { Enrollment, EnrollmentNextActions } from "../api/types";
 
 function getStepIndex(status: string): number {
@@ -466,19 +467,12 @@ function ReserveCard({
           <label className="block text-[11px] font-bold text-slate-700">
             {t.enrollment.selectPerson} ({eligible.data?.total ?? "..."})
           </label>
-          <select
+          <PersonCombobox
+            humans={eligible.data?.items}
             value={employeeId}
+            onChange={setEmployeeId}
             disabled={!canMutate || busy}
-            onChange={(e) => setEmployeeId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-500"
-          >
-            <option value="">— {t.enrollment.selectPerson} —</option>
-            {eligible.data?.items.map((h) => (
-              <option key={h.employee_id} value={h.employee_id}>
-                {h.display_name} {h.rank ? `(${h.rank})` : ""}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div>
@@ -720,7 +714,17 @@ function ActiveEnrollmentInspector({
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
               />
               {!enrollment.english_name && (
-                <p className="mt-1 text-[11px] text-blue-800/80 leading-snug">{t.enrollment.terminalNameNoEnglishHint}</p>
+                <p className="mt-1 text-[11px] text-blue-800/80 leading-snug">
+                  {t.enrollment.terminalNameNoEnglishHint}{" "}
+                  <Link
+                    to={`/personnel/${enrollment.employee_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-blue-700 hover:underline"
+                  >
+                    {t.enrollment.fixEnglishNameLink}
+                  </Link>
+                </p>
               )}
               {namePreview.rankOmittedForLength && (
                 <p className="mt-1 text-[11px] text-blue-800/80 leading-snug">{t.enrollment.terminalNameRankOmittedHint}</p>
