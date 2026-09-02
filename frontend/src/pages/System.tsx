@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { api, ApiClientError } from "../api/client";
+import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { Badge, ErrorBanner, Loading, StatCard } from "../components/Status";
 import { WriteSessionControl } from "../components/WriteSessionControl";
 import { useApi } from "../hooks/useApi";
 import { useTranslation } from "../i18n";
+import { friendlyApiError } from "../i18n/apiErrors";
 
 export function System() {
   const { me } = useAuth();
@@ -89,7 +90,7 @@ export function System() {
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
             {t.system.rankReferenceTitle} ({ranks.data?.length ?? 0})
           </h2>
-          <span className="text-[11px] text-slate-400">Canonical Display Metadata</span>
+          <span className="text-[11px] text-slate-400">{t.system.rankTableHint}</span>
         </div>
 
         {ranks.loading ? (
@@ -102,11 +103,11 @@ export function System() {
               <table className="w-full border-collapse text-left text-xs table-dense">
                 <thead>
                   <tr>
-                    <th>Thai Full Rank</th>
-                    <th>Thai Abbreviation</th>
-                    <th>English Rank</th>
-                    <th>English Abbr</th>
-                    <th>Rank Category</th>
+                    <th>{t.system.rankThFullColumn}</th>
+                    <th>{t.system.rankThAbbrColumn}</th>
+                    <th>{t.system.rankEnColumn}</th>
+                    <th>{t.system.rankEnAbbrColumn}</th>
+                    <th>{t.system.rankCategoryColumn}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -147,7 +148,7 @@ function ChangePasswordForm() {
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!current || next.length < 12) {
-      setMsg({ tone: "err", text: "Enter your current password and a new password of at least 12 characters." });
+      setMsg({ tone: "err", text: t.system.passwordValidationError });
       return;
     }
     setBusy(true);
@@ -163,11 +164,7 @@ function ChangePasswordForm() {
         });
       })
       .catch((e: unknown) => {
-        if (e instanceof ApiClientError) {
-          setMsg({ tone: "err", text: `${e.code}: ${e.message}` });
-        } else {
-          setMsg({ tone: "err", text: e instanceof Error ? e.message : String(e) });
-        }
+        setMsg({ tone: "err", text: friendlyApiError(e, t) });
       })
       .finally(() => setBusy(false));
   }
@@ -177,7 +174,7 @@ function ChangePasswordForm() {
       <div className="border-b border-slate-100 pb-3">
         <h2 className="text-sm font-bold text-slate-900">{t.system.changePasswordTitle}</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          Changing your password signs out all other active sessions (this current session stays authenticated).
+          {t.system.passwordFormSubtitle}
         </p>
       </div>
 
@@ -250,7 +247,7 @@ function OperatorAccountsManagement() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!username.trim() || !displayName.trim() || password.length < 12) {
-      setCreateMsg({ tone: "err", text: "Username, Display Name, and Password (≥ 12 chars) are required." });
+      setCreateMsg({ tone: "err", text: t.system.operatorValidationError });
       return;
     }
     setCreateBusy(true);
@@ -265,10 +262,10 @@ function OperatorAccountsManagement() {
       setUsername("");
       setDisplayName("");
       setPassword("");
-      setCreateMsg({ tone: "ok", text: `Operator account '${username}' created successfully.` });
+      setCreateMsg({ tone: "ok", text: `${t.system.operatorCreateSuccessPrefix} '${username}' ${t.system.operatorCreateSuccessSuffix}` });
       operators.reload();
     } catch (err) {
-      setCreateMsg({ tone: "err", text: err instanceof Error ? err.message : String(err) });
+      setCreateMsg({ tone: "err", text: friendlyApiError(err, t) });
     } finally {
       setCreateBusy(false);
     }
@@ -280,7 +277,7 @@ function OperatorAccountsManagement() {
       await api.toggleOperatorActive(operatorId, !currentActive);
       operators.reload();
     } catch (err) {
-      setToggleError(err instanceof Error ? err.message : String(err));
+      setToggleError(friendlyApiError(err, t));
     }
   }
 
@@ -291,7 +288,7 @@ function OperatorAccountsManagement() {
           <h2 className="text-sm font-bold text-slate-900">{t.system.operatorsTitle}</h2>
           <p className="mt-0.5 text-xs text-slate-500">{t.system.operatorsSubtitle}</p>
         </div>
-        <Badge tone="purple">ADMIN ONLY</Badge>
+        <Badge tone="purple">{t.system.adminOnlyBadge}</Badge>
       </div>
 
       {toggleError && (
@@ -409,7 +406,7 @@ function OperatorAccountsManagement() {
                 <th>{t.system.displayName}</th>
                 <th>{t.system.role}</th>
                 <th>{t.common.status}</th>
-                <th>Created</th>
+                <th>{t.system.createdColumn}</th>
                 <th>{t.common.actions}</th>
               </tr>
             </thead>
@@ -438,7 +435,7 @@ function OperatorAccountsManagement() {
                   </td>
                   <td>
                     {op.operator_id === me?.operator_id ? (
-                      <span className="text-slate-400 italic text-[11px]">(Current Session)</span>
+                      <span className="text-slate-400 italic text-[11px]">{t.system.currentSessionLabel}</span>
                     ) : (
                       <button
                         type="button"

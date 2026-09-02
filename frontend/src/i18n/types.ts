@@ -36,6 +36,15 @@ export interface Translations {
     showing: string;
     to: string;
     results: string;
+    // ADMS-FrontendUX-ConsistencySweep-026
+    productionEnvironmentLabel: string;
+    apiErrors: {
+      validationError: string;
+      notFound: string;
+      rateLimited: string;
+      internalError: string;
+      genericErrorPrefix: string;
+    };
   };
   nav: {
     operations: string;
@@ -263,6 +272,22 @@ export interface Translations {
     scanConfirmedMessage: string;
     readyForMappingSuccessMessage: string;
     startScanWindowButton: string;
+    // ADMS-FrontendUX-ConsistencySweep-026
+    badgeBrowserAction: string;
+    badgePhysicalAction: string;
+    badgeAdminAction: string;
+    technicalDetailsToggle: string;
+    metaEmployeeIdLabel: string;
+    metaTerminalUidLabel: string;
+    metaReservedAtLabel: string;
+    metaAccountCreatedLabel: string;
+    metaFpConfirmedAtLabel: string;
+    metaScanConfirmedAtLabel: string;
+    sessionHeaderPrefix: string;
+    targetTerminalLabel: string;
+    reservedIdLabel: string;
+    reservedByPrefix: string;
+    stepOfLabel: string;
   };
   attendance: {
     title: string;
@@ -281,6 +306,14 @@ export interface Translations {
     unknown: string;
     reconciliationTitle: string;
     reconciliationDesc: string;
+    // ADMS-FrontendUX-ConsistencySweep-026
+    logIdColumn: string;
+    deviceUserPkColumn: string;
+    unmappedUserLabel: string;
+    noUnattributedRows: string;
+    terminalUserColumn: string;
+    temporalClassificationColumn: string;
+    diagnosticDetailColumn: string;
   };
   devices: {
     title: string;
@@ -296,6 +329,12 @@ export interface Translations {
     deviceUserPk: string;
     privilege: string;
     incarnation: string;
+    // ADMS-FrontendUX-ConsistencySweep-026
+    terminalUidColumn: string;
+    displayNameColumn: string;
+    rosterSyncHint: string;
+    inactiveSincePrefix: string;
+    recycledLabel: string;
   };
   mappings: {
     title: string;
@@ -329,6 +368,18 @@ export interface Translations {
     startedLabel: string;
     endedLabel: string;
     formerTerminalIdLabel: string;
+    // ADMS-FrontendUX-ConsistencySweep-026
+    mapIdColumn: string;
+    verificationMethodColumn: string;
+    eligibleEnrollmentLabel: string;
+    selectEligibleSessionPlaceholder: string;
+    verificationNoteLabel: string;
+    verificationNotePlaceholder: string;
+    noEligibleEnrollments: string;
+    selectAndFillRequired: string;
+    humanFieldLabel: string;
+    terminalAccountFieldLabel: string;
+    controlledScanEvidenceLabel: string;
   };
   terminalManagement: {
     title: string;
@@ -381,6 +432,8 @@ export interface Translations {
     eventTypeColumn: string;
     operatorColumn: string;
     detailsColumn: string;
+    // ADMS-FrontendUX-ConsistencySweep-026
+    originIpColumn: string;
   };
   system: {
     title: string;
@@ -411,6 +464,21 @@ export interface Translations {
     toggleActive: string;
     deactivate: string;
     activate: string;
+    // ADMS-FrontendUX-ConsistencySweep-026
+    passwordFormSubtitle: string;
+    passwordValidationError: string;
+    operatorValidationError: string;
+    operatorCreateSuccessPrefix: string;
+    operatorCreateSuccessSuffix: string;
+    createdColumn: string;
+    adminOnlyBadge: string;
+    currentSessionLabel: string;
+    rankTableHint: string;
+    rankThFullColumn: string;
+    rankThAbbrColumn: string;
+    rankEnColumn: string;
+    rankEnAbbrColumn: string;
+    rankCategoryColumn: string;
   };
   stream: {
     connected: string;

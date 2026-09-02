@@ -1,10 +1,12 @@
 import { api } from "../api/client";
+import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
 import { ErrorBanner, Loading, StatusBadge } from "../components/Status";
 import { useTranslation } from "../i18n";
 
 export function Devices() {
   const { t } = useTranslation();
+  const { isAdmin } = useAuth();
   const devices = useApi((s) => api.devices(s), []);
   const users = useApi((s) => api.deviceUsers({ limit: 100 }, s), []);
 
@@ -75,7 +77,7 @@ export function Devices() {
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
             {t.devices.discoveredUsers} ({users.data?.total ?? 0})
           </h2>
-          <span className="text-[11px] text-slate-400">Synced via Collector Roster Ingestion</span>
+          <span className="text-[11px] text-slate-400">{t.devices.rosterSyncHint}</span>
         </div>
 
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xs">
@@ -83,10 +85,10 @@ export function Devices() {
             <table className="w-full border-collapse text-left text-xs table-dense">
               <thead>
                 <tr>
-                  <th className="w-14">PK</th>
+                  {isAdmin && <th className="w-14">{t.devices.deviceUserPk}</th>}
                   <th>{t.attendance.terminalIdColumn}</th>
-                  <th>Terminal UID</th>
-                  <th>Display Name</th>
+                  <th>{t.devices.terminalUidColumn}</th>
+                  <th>{t.devices.displayNameColumn}</th>
                   <th>{t.devices.privilege}</th>
                   <th>{t.common.status}</th>
                   <th>{t.devices.incarnation}</th>
@@ -96,7 +98,7 @@ export function Devices() {
               <tbody className="divide-y divide-slate-100">
                 {users.data?.items.map((u) => (
                   <tr key={u.device_user_pk} className="transition-colors hover:bg-slate-50/80">
-                    <td className="font-mono text-slate-400">#{u.device_user_pk}</td>
+                    {isAdmin && <td className="font-mono text-slate-400">#{u.device_user_pk}</td>}
                     <td className="font-mono font-bold text-slate-900">{u.device_user_id}</td>
                     <td className="font-mono text-slate-600">{u.device_uid ?? "—"}</td>
                     <td className="font-medium text-slate-800">{u.device_display_name ?? "—"}</td>
@@ -110,14 +112,14 @@ export function Devices() {
                         <StatusBadge status="ACTIVE" />
                       ) : (
                         <span className="text-slate-400">
-                          Inactive {u.inactive_at ? `(since ${fmt(u.inactive_at)})` : ""}
+                          {t.common.inactive} {u.inactive_at ? `(${t.devices.inactiveSincePrefix} ${fmt(u.inactive_at)})` : ""}
                         </span>
                       )}
                     </td>
                     <td>
                       {u.account_incarnation > 1 ? (
                         <span className="inline-block rounded bg-amber-100 px-1.5 py-0.2 font-mono text-[11px] font-bold text-amber-800">
-                          v{u.account_incarnation} (Recycled)
+                          v{u.account_incarnation} ({t.devices.recycledLabel})
                         </span>
                       ) : (
                         <span className="font-mono text-slate-500">v{u.account_incarnation}</span>

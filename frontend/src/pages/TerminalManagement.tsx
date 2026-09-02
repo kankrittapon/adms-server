@@ -6,6 +6,7 @@ import { ErrorBanner, Loading } from "../components/Status";
 import { WriteSessionBadge } from "../components/WriteSessionControl";
 import { useApi } from "../hooks/useApi";
 import { useTranslation } from "../i18n";
+import { friendlyApiError } from "../i18n/apiErrors";
 import type { TerminalInventoryItem } from "../api/types";
 
 const DEVICE_ID = 1; // this production system's only device
@@ -42,9 +43,8 @@ export function TerminalManagement() {
         return t.enrollment.writeSessionLockedBody;
       }
       if (err.code === "WRITE_SESSION_EXPIRED") return t.enrollment.writeSessionExpiredMidWorkflow;
-      return `${err.code}: ${err.message}`;
     }
-    return err instanceof Error ? err.message : String(err);
+    return friendlyApiError(err, t);
   }
 
   async function handleRemoveFingerprint() {

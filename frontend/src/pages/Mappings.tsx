@@ -5,6 +5,7 @@ import { useApi } from "../hooks/useApi";
 import { ErrorBanner, Loading } from "../components/Status";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { useTranslation } from "../i18n";
+import { friendlyApiError } from "../i18n/apiErrors";
 import { verificationMethodLabels, enumLabel } from "../i18n/enumLabels";
 import type { MappingEligibilityItem } from "../api/types";
 
@@ -59,12 +60,12 @@ export function Mappings() {
                 <table className="w-full border-collapse text-left text-xs table-dense">
                   <thead>
                     <tr>
-                      <th className="w-16">Map ID</th>
+                      <th className="w-16">{t.mappings.mapIdColumn}</th>
                       <th>{t.personnel.thaiName}</th>
                       <th>{t.attendance.terminalIdColumn}</th>
                       <th>{t.common.status}</th>
                       <th>{t.mappings.startedLabel} (UTC)</th>
-                      <th>Verification Method</th>
+                      <th>{t.mappings.verificationMethodColumn}</th>
                       <th>{t.mappings.verifiedBy}</th>
                     </tr>
                   </thead>
@@ -111,7 +112,7 @@ export function Mappings() {
                 <table className="w-full border-collapse text-left text-xs table-dense">
                   <thead>
                     <tr>
-                      <th className="w-16">Map ID</th>
+                      <th className="w-16">{t.mappings.mapIdColumn}</th>
                       <th>{t.personnel.thaiName}</th>
                       <th>{t.mappings.formerTerminalIdLabel}</th>
                       <th>{t.common.status}</th>
@@ -173,7 +174,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
 
   function requestSubmit() {
     if (!item || !verifiedBy.trim() || !note.trim()) {
-      setError("Select an eligible enrollment, and fill verified_by + note.");
+      setError(t.mappings.selectAndFillRequired);
       return;
     }
     // Evidence completeness guard (ADMS-OperatorUX-Fingerprint-Rank-
@@ -228,10 +229,8 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
               ? t.mappings.alreadyMappedBody
               : t.mappings.mappingConflictBody
           );
-        } else if (e instanceof ApiClientError) {
-          setError(`${e.code}: ${e.message}`);
         } else {
-          setError(e instanceof Error ? e.message : String(e));
+          setError(friendlyApiError(e, t));
         }
       })
       .finally(() => setBusy(false));
@@ -247,7 +246,7 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
           </p>
         </div>
         <span className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-purple-800">
-          Admin Action
+          {t.enrollment.badgeAdminAction}
         </span>
       </div>
 
@@ -265,14 +264,14 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
         <ErrorBanner message={elig.error} />
       ) : elig.data?.items.length === 0 ? (
         <p className="text-xs text-slate-500">
-          No eligible enrollments awaiting activation.
+          {t.mappings.noEligibleEnrollments}
         </p>
       ) : (
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div>
               <label className="block text-[11px] font-bold text-slate-700">
-                Eligible Enrollment (READY_FOR_MAPPING)
+                {t.mappings.eligibleEnrollmentLabel}
               </label>
               <select
                 value={selectedId ?? ""}
@@ -283,10 +282,10 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
                 disabled={!canMutate || busy}
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 disabled:bg-slate-100"
               >
-                <option value="">— Select eligible session —</option>
+                <option value="">{t.mappings.selectEligibleSessionPlaceholder}</option>
                 {elig.data?.items.map((e) => (
                   <option key={e.enrollment_id} value={e.enrollment_id}>
-                    #{e.enrollment_id} · {e.employee_name ?? e.employee_id.slice(0, 8)} · Terminal User {e.reserved_device_user_id}
+                    {e.employee_name ?? e.employee_id.slice(0, 8)} · {t.attendance.terminalIdColumn} {e.reserved_device_user_id}
                   </option>
                 ))}
               </select>
@@ -304,13 +303,13 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700">Verification Note</label>
+              <label className="block text-[11px] font-bold text-slate-700">{t.mappings.verificationNoteLabel}</label>
               <input
                 type="text"
                 value={note}
                 disabled={!canMutate || busy}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Reference evidence log & physical check"
+                placeholder={t.mappings.verificationNotePlaceholder}
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 disabled:bg-slate-100"
               />
             </div>
@@ -319,13 +318,13 @@ function CreateMappingPanel({ onCreated }: { onCreated: () => void }) {
           {item && (
             <div className="rounded-lg border border-purple-200 bg-white p-3.5 text-xs text-purple-950 shadow-2xs space-y-1">
               <div>
-                <strong>Human:</strong> {item.employee_name} (<code className="font-mono">{item.employee_id}</code>)
+                <strong>{t.mappings.humanFieldLabel}:</strong> {item.employee_name}
               </div>
               <div>
-                <strong>Terminal Account:</strong> User ID {item.device_user_id} (PK {item.device_user_pk}) · Device: {item.device_name}
+                <strong>{t.mappings.terminalAccountFieldLabel}:</strong> {item.device_user_id} · {item.device_name}
               </div>
               <div>
-                <strong>Controlled Scan Evidence:</strong> Scan at {item.controlled_scan_time ? fmt(item.controlled_scan_time) : "—"} · Attendance ID #{item.controlled_attendance_id ?? "?"}
+                <strong>{t.mappings.controlledScanEvidenceLabel}:</strong> {item.controlled_scan_time ? fmt(item.controlled_scan_time) : "—"}
               </div>
             </div>
           )}

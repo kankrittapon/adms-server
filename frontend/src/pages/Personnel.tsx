@@ -8,6 +8,7 @@ import { PersonnelFormModal } from "../components/PersonnelFormModal";
 import { ErrorBanner, Loading, ScopeBadge } from "../components/Status";
 import { useApi } from "../hooks/useApi";
 import { useTranslation } from "../i18n";
+import { friendlyApiError } from "../i18n/apiErrors";
 
 export function Personnel() {
   const { t } = useTranslation();
@@ -50,7 +51,7 @@ export function Personnel() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : String(err));
+      setExportError(friendlyApiError(err, t));
     } finally {
       setExportBusy(false);
     }
@@ -300,7 +301,7 @@ export function HumanDetail() {
       if (err instanceof ApiClientError && (err.code === "WRITE_DISABLED" || err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_SESSION_EXPIRED")) {
         setSaveError(t.personnel.writesDisabledNotice);
       } else {
-        setSaveError(err instanceof Error ? err.message : String(err));
+        setSaveError(friendlyApiError(err, t));
       }
     } finally {
       setSaveBusy(false);
@@ -326,7 +327,7 @@ export function HumanDetail() {
       if (err instanceof ApiClientError && (err.code === "WRITE_DISABLED" || err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_SESSION_EXPIRED")) {
         setLifecycleError(t.personnel.writesDisabledNotice);
       } else {
-        setLifecycleError(err instanceof Error ? err.message : String(err));
+        setLifecycleError(friendlyApiError(err, t));
       }
     } finally {
       setLifecycleBusy(false);
@@ -345,7 +346,7 @@ export function HumanDetail() {
       if (err instanceof ApiClientError && (err.code === "WRITE_DISABLED" || err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_SESSION_EXPIRED")) {
         setLifecycleError(t.personnel.writesDisabledNotice);
       } else {
-        setLifecycleError(err instanceof Error ? err.message : String(err));
+        setLifecycleError(friendlyApiError(err, t));
       }
     } finally {
       setLifecycleBusy(false);

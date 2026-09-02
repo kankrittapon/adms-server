@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { api, ApiClientError } from "../api/client";
 import { useTranslation } from "../i18n";
+import { friendlyApiError } from "../i18n/apiErrors";
 import type { CsvImportPreview } from "../api/types";
 
 /**
@@ -30,7 +31,7 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
       if (err instanceof ApiClientError && err.code === "CSV_MALFORMED") {
         setError(t.personnel.csvMalformedBody);
       } else {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(friendlyApiError(err, t));
       }
     } finally {
       setBusy(false);
@@ -49,7 +50,7 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
       if (err instanceof ApiClientError && (err.code === "WRITE_DISABLED" || err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_SESSION_EXPIRED")) {
         setError(t.personnel.writesDisabledNotice);
       } else {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(friendlyApiError(err, t));
       }
     } finally {
       setBusy(false);

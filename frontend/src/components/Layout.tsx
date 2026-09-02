@@ -187,7 +187,7 @@ export function Layout() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span className="text-xs font-semibold text-slate-700">Production 192.168.1.248</span>
+              <span className="text-xs font-semibold text-slate-700">{t.common.productionEnvironmentLabel} 192.168.1.248</span>
             </div>
             <span className="text-slate-300">|</span>
             <div className="flex items-center gap-1.5 text-xs text-slate-600">

@@ -122,12 +122,12 @@ export function Attendance() {
             <table className="w-full border-collapse text-left text-xs table-dense">
               <thead>
                 <tr>
-                  <th className="w-16">Log ID</th>
+                  <th className="w-16">{t.attendance.logIdColumn}</th>
                   <th>
                     {t.attendance.timeColumn} <span className="font-normal text-slate-400">({t.attendance.timeColumnSuffix})</span>
                   </th>
                   <th>{t.attendance.terminalIdColumn}</th>
-                  <th>Device User PK</th>
+                  {isAdmin && <th>{t.attendance.deviceUserPkColumn}</th>}
                   <th>{t.attendance.personColumn}</th>
                   <th>{t.attendance.statusColumn}</th>
                 </tr>
@@ -144,7 +144,7 @@ export function Attendance() {
                       {formatBangkokTime(a.scan_time)}
                     </td>
                     <td className="font-mono font-semibold text-slate-900">{a.user_id}</td>
-                    <td className="font-mono text-slate-500">{a.device_user_pk ?? "—"}</td>
+                    {isAdmin && <td className="font-mono text-slate-500">{a.device_user_pk ?? "—"}</td>}
                     <td>
                       {a.employee_id ? (
                         <span className="font-semibold text-slate-900">
@@ -152,7 +152,7 @@ export function Attendance() {
                         </span>
                       ) : (
                         <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
-                          (Unmapped User)
+                          {t.attendance.unmappedUserLabel}
                         </span>
                       )}
                     </td>
@@ -193,18 +193,18 @@ function ReconciliationSection() {
       ) : error ? (
         <ErrorBanner message={error} />
       ) : (data?.items.length ?? 0) === 0 ? (
-        <p className="text-xs text-slate-500">No unattributed attendance rows found in current range.</p>
+        <p className="text-xs text-slate-500">{t.attendance.noUnattributedRows}</p>
       ) : (
         <div className="overflow-x-auto rounded border border-slate-200">
           <table className="w-full border-collapse text-left text-xs table-dense">
             <thead>
               <tr>
-                <th className="w-16">Log ID</th>
-                <th>Scan Time ({t.attendance.timeColumnSuffix})</th>
-                <th>Terminal User</th>
-                <th>Device User PK</th>
-                <th>Temporal Classification</th>
-                <th>Diagnostic Detail</th>
+                <th className="w-16">{t.attendance.logIdColumn}</th>
+                <th>{t.attendance.timeColumn} ({t.attendance.timeColumnSuffix})</th>
+                <th>{t.attendance.terminalUserColumn}</th>
+                <th>{t.attendance.deviceUserPkColumn}</th>
+                <th>{t.attendance.temporalClassificationColumn}</th>
+                <th>{t.attendance.diagnosticDetailColumn}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">

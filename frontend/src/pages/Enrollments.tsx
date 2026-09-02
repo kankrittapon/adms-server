@@ -7,6 +7,7 @@ import { useAttendanceStream } from "../hooks/useAttendanceStream";
 import { ErrorBanner, Loading, StatusBadge, StreamStatusBadge } from "../components/Status";
 import { WriteSessionBadge } from "../components/WriteSessionControl";
 import { useTranslation } from "../i18n";
+import { friendlyApiError } from "../i18n/apiErrors";
 import { computeTerminalNamePreview } from "../lib/terminalName";
 import type { Enrollment, EnrollmentNextActions } from "../api/types";
 
@@ -34,7 +35,7 @@ function getStepIndex(status: string): number {
 }
 
 export function Enrollments() {
-  const { me, serverWriteEnabled, writeSessionActive, canMutate } = useAuth();
+  const { me, serverWriteEnabled, writeSessionActive, canMutate, isAdmin } = useAuth();
   const { t } = useTranslation();
   const list = useApi((s) => api.enrollments({ limit: 100 }, s), []);
   // Active Enrollment Queue policy: ADMS-UX-CrossLifecycleClosure-021B —
@@ -179,7 +180,7 @@ export function Enrollments() {
                           {e.employee_name ?? e.employee_id.slice(0, 8)}
                         </div>
                         <div className="mt-0.5 font-mono text-[11px] text-slate-500">
-                          ID #{e.enrollment_id} · Terminal User{" "}
+                          {t.attendance.terminalIdColumn}{" "}
                           <span className="font-bold text-slate-800">{e.reserved_device_user_id}</span>
                         </div>
                       </div>
@@ -187,9 +188,9 @@ export function Enrollments() {
                     </div>
 
                     <div className="mt-2.5 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500">
-                      <span>By: {e.reserved_by ?? "—"}</span>
+                      <span>{t.enrollment.reservedByPrefix}: {e.reserved_by ?? "—"}</span>
                       <span>
-                        {stepIdx >= 0 ? `Step ${stepIdx + 1} / 6` : t.enrollment.cancelledTitle}
+                        {stepIdx >= 0 ? `${t.enrollment.stepOfLabel} ${stepIdx + 1} / 6` : t.enrollment.cancelledTitle}
                       </span>
                     </div>
                   </div>
@@ -246,6 +247,7 @@ export function Enrollments() {
               enrollment={selected}
               steps={STEPS}
               canMutate={canMutate}
+              isAdmin={isAdmin}
               busyAction={busyAction}
               terminalAccountUncertain={terminalAccountUncertain}
               onRunAction={async (action, payload) => {
@@ -336,7 +338,7 @@ export function Enrollments() {
                           : t.enrollment.enrollmentConflictBody
                       );
                     } else {
-                      setActionError(`${err.code}: ${err.message}`);
+                      setActionError(friendlyApiError(err, t));
                     }
                   } else if (err instanceof ApiClientError && err.code === "WRITE_SESSION_EXPIRED") {
                     setActionError(t.enrollment.writeSessionExpiredMidWorkflow);
@@ -355,10 +357,8 @@ export function Enrollments() {
                         ? t.enrollment.scanNotFoundYetBody
                         : t.enrollment.enrollmentConflictBody
                     );
-                  } else if (err instanceof ApiClientError) {
-                    setActionError(`${err.code}: ${err.message}`);
                   } else {
-                    setActionError(err instanceof Error ? err.message : String(err));
+                    setActionError(friendlyApiError(err, t));
                   }
                   if (action === "create-terminal-account" || action === "cancel") {
                     // Outcome may be uncertain, or the frontend's cached state
@@ -440,10 +440,8 @@ function ReserveCard({
           // raw "ENROLLMENT_CONFLICT: Human <UUID> already has an active
           // enrollment on device <N>" text to an operator.
           setError(t.enrollment.activeEnrollmentExistsBody);
-        } else if (e instanceof ApiClientError) {
-          setError(`${e.code}: ${e.message}`);
         } else {
-          setError(e instanceof Error ? e.message : String(e));
+          setError(friendlyApiError(e, t));
         }
       })
       .finally(() => setBusy(false));
@@ -459,7 +457,7 @@ function ReserveCard({
           <h2 className="text-sm font-bold text-slate-900">{t.enrollment.step1Title}</h2>
         </div>
         <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700">
-          Browser Action
+          {t.enrollment.badgeBrowserAction}
         </span>
       </div>
 
@@ -536,6 +534,7 @@ function ActiveEnrollmentInspector({
   enrollment,
   steps,
   canMutate,
+  isAdmin,
   busyAction,
   onRunAction,
   terminalAccountUncertain,
@@ -543,6 +542,7 @@ function ActiveEnrollmentInspector({
   enrollment: Enrollment;
   steps: { id: string; label: string }[];
   canMutate: boolean;
+  isAdmin: boolean;
   busyAction: string | null;
   onRunAction: (action: string, payload: Record<string, unknown>) => Promise<void>;
   terminalAccountUncertain: boolean;
@@ -606,12 +606,12 @@ function ActiveEnrollmentInspector({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-slate-900">
-              Session #{enrollment.enrollment_id}: {enrollment.employee_name ?? enrollment.employee_id}
+              {t.enrollment.sessionHeaderPrefix} {enrollment.employee_name ?? enrollment.employee_id}
             </h2>
             <StatusBadge status={enrollment.status} />
           </div>
           <div className="mt-0.5 text-xs text-slate-500">
-            Target Terminal: <strong>{enrollment.device_name ?? `#${enrollment.device_id}`}</strong> · Reserved ID:{" "}
+            {t.enrollment.targetTerminalLabel}: <strong>{enrollment.device_name ?? `#${enrollment.device_id}`}</strong> · {t.enrollment.reservedIdLabel}:{" "}
             <span className="font-mono font-bold text-blue-600">{enrollment.reserved_device_user_id}</span>
           </div>
         </div>
@@ -699,7 +699,7 @@ function ActiveEnrollmentInspector({
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-blue-900">{t.enrollment.step2Title}</span>
             <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
-              Browser Action
+              {t.enrollment.badgeBrowserAction}
             </span>
           </div>
           <p className="text-xs text-blue-900/90 leading-relaxed">
@@ -747,7 +747,7 @@ function ActiveEnrollmentInspector({
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-indigo-950">{t.enrollment.step3Title}</span>
               <span className="rounded bg-indigo-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-900">
-                Physical Action at ZEM560
+                {t.enrollment.badgePhysicalAction}
               </span>
             </div>
             <ol className="list-inside list-decimal space-y-1.5 text-xs text-indigo-950 leading-relaxed">
@@ -780,7 +780,7 @@ function ActiveEnrollmentInspector({
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-blue-900">{t.enrollment.step4Title}</span>
             <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
-              Browser Action
+              {t.enrollment.badgeBrowserAction}
             </span>
           </div>
           <p className="text-xs text-blue-900/90 leading-relaxed">
@@ -802,7 +802,7 @@ function ActiveEnrollmentInspector({
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-indigo-950">{t.enrollment.step4Title}</span>
               <span className="rounded bg-indigo-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-900">
-                Physical Action at ZEM560
+                {t.enrollment.badgePhysicalAction}
               </span>
             </div>
             <p className="text-xs text-indigo-950 leading-relaxed">
@@ -879,7 +879,7 @@ function ActiveEnrollmentInspector({
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-purple-950">{t.enrollment.step6Title}</span>
             <span className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-purple-800">
-              Admin Action
+              {t.enrollment.badgeAdminAction}
             </span>
           </div>
           <p className="text-xs text-purple-900 leading-relaxed">
@@ -900,20 +900,24 @@ function ActiveEnrollmentInspector({
         </div>
       )}
 
-      {/* Enrollment Metadata Table */}
-      <div className="border-t border-slate-100 pt-3">
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          {t.enrollment.metadataInspector}
+      {/* Enrollment Metadata Table — ADMS-FrontendUX-ConsistencySweep-026:
+          internal IDs (UUID, terminal UID) are ADMIN-technical-detail only,
+          never shown in the normal operator view. */}
+      {isAdmin && (
+        <div className="border-t border-slate-100 pt-3">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            {t.enrollment.technicalDetailsToggle}
+          </div>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs md:grid-cols-3">
+            <MetaItem dt={t.enrollment.metaEmployeeIdLabel} dd={enrollment.employee_id} mono />
+            <MetaItem dt={t.enrollment.metaTerminalUidLabel} dd={enrollment.device_uid ? String(enrollment.device_uid) : "—"} mono />
+            <MetaItem dt={t.enrollment.metaReservedAtLabel} dd={enrollment.reserved_at ? new Date(enrollment.reserved_at).toLocaleString() : "—"} />
+            <MetaItem dt={t.enrollment.metaAccountCreatedLabel} dd={enrollment.terminal_created_at ? new Date(enrollment.terminal_created_at).toLocaleString() : "—"} />
+            <MetaItem dt={t.enrollment.metaFpConfirmedAtLabel} dd={enrollment.fingerprint_confirmed_at ? new Date(enrollment.fingerprint_confirmed_at).toLocaleString() : "—"} />
+            <MetaItem dt={t.enrollment.metaScanConfirmedAtLabel} dd={enrollment.controlled_scan_time ? new Date(enrollment.controlled_scan_time).toLocaleString() : "—"} />
+          </dl>
         </div>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs md:grid-cols-3">
-          <MetaItem dt="Employee ID" dd={enrollment.employee_id} mono />
-          <MetaItem dt="Terminal UID" dd={enrollment.device_uid ? String(enrollment.device_uid) : "—"} mono />
-          <MetaItem dt="Reserved At" dd={enrollment.reserved_at ? new Date(enrollment.reserved_at).toLocaleString() : "—"} />
-          <MetaItem dt="Account Created" dd={enrollment.terminal_created_at ? new Date(enrollment.terminal_created_at).toLocaleString() : "—"} />
-          <MetaItem dt="FP Confirmed At" dd={enrollment.fingerprint_confirmed_at ? new Date(enrollment.fingerprint_confirmed_at).toLocaleString() : "—"} />
-          <MetaItem dt="Scan Confirmed At" dd={enrollment.controlled_scan_time ? new Date(enrollment.controlled_scan_time).toLocaleString() : "—"} />
-        </dl>
-      </div>
+      )}
     </div>
   );
 }

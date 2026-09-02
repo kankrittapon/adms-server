@@ -65,7 +65,7 @@ export function Audit() {
                 <tr>
                   <th className="w-44">{t.audit.timestampColumn} (UTC)</th>
                   <th className="w-48">{t.audit.eventTypeColumn}</th>
-                  <th className="w-32">Origin IP</th>
+                  <th className="w-32">{t.audit.originIpColumn}</th>
                   <th>{t.audit.detailsColumn}</th>
                 </tr>
               </thead>

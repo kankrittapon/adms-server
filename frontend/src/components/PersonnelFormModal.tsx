@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { useTranslation } from "../i18n";
+import { friendlyApiError } from "../i18n/apiErrors";
 import { computeTerminalNamePreview } from "../lib/terminalName";
 import type { Human, RankReference } from "../api/types";
 import { RankSelect } from "./RankSelect";
@@ -91,7 +92,7 @@ export function PersonnelFormModal({ mode, human, onClose, onSaved }: Props) {
       ) {
         setError(t.personnel.writesDisabledNotice);
       } else {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(friendlyApiError(err, t));
       }
     } finally {
       setBusy(false);

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, getToken, setToken } from "../api/client";
 import { useAuth } from "../auth";
 import { useTranslation } from "../i18n";
+import { friendlyApiError } from "../i18n/apiErrors";
 
 export function Login() {
   const [username, setUsername] = useState("");
@@ -33,7 +34,7 @@ export function Login() {
       reload();
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(friendlyApiError(err, t));
     } finally {
       setBusy(false);
     }
