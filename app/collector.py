@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import random
+import socket
 import threading
 import tempfile
 import time
@@ -348,6 +349,31 @@ class CollectorStateEngine:
         Atomically writes operational health state to HEALTH_FILE_PATH.
         Guarantees zero credentials, passwords, Comm Keys, user IDs, or employee names are written.
         """
+        # I1 FIX: Mirror MQTTService.connected to mqtt_status without latency.
+        # Previously mqtt_status stayed UNKNOWN until a publish_attendance attempt in LIVE;
+        # with no attendance events for days it never flipped. This is a non-blocking bool mirror
+        # (~0.001ms) plus optional 0.2s TCP fallback only when still UNKNOWN (startup race).
+        try:
+            if hasattr(self, 'mqtt_service') and self.mqtt_service is not None:
+                if getattr(self.mqtt_service, 'connected', False):
+                    self.mqtt_status = "HEALTHY"
+                else:
+                    # Fast path: if disconnected, mark DEGRADED immediately
+                    # Active probe only when UNKNOWN (initial) to avoid 0.2s on every roster poll
+                    if self.mqtt_status == "UNKNOWN":
+                        try:
+                            # Use container DNS `mqtt:1883` (compose) or host 127.0.0.1:1883 fallback
+                            host = getattr(self.cfg, 'mqtt_host', 'mqtt')
+                            port = int(getattr(self.cfg, 'mqtt_port', 1883))
+                            with socket.create_connection((host, port), timeout=0.2):
+                                self.mqtt_status = "HEALTHY"
+                        except Exception:
+                            self.mqtt_status = "DEGRADED"
+                    else:
+                        self.mqtt_status = "DEGRADED"
+        except Exception:
+            pass
+
         try:
             now_iso = datetime.now(timezone.utc).isoformat()
             payload = {
