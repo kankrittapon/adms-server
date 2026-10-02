@@ -679,6 +679,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/humans/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Humans Branches */
+        get: operations["humans_branches_api_v1_humans_branches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/humans/export.csv": {
         parameters: {
             query?: never;
@@ -756,6 +773,27 @@ export interface paths {
         get: operations["download_import_template_api_v1_humans_import_template_csv_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/humans/scan-exempt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Scan Exempt
+         * @description Set or clear scan-exempt for many people at once (e.g. finance staff,
+         *     commander's office). Registered before /humans/{employee_id}.
+         */
+        post: operations["bulk_scan_exempt_api_v1_humans_scan_exempt_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1387,6 +1425,20 @@ export interface components {
         Body_preview_import_api_v1_humans_import_preview_post: {
             /** File */
             file: string;
+        };
+        /** BulkScanExemptRequest */
+        BulkScanExemptRequest: {
+            /** Employee Ids */
+            employee_ids: string[];
+            /** Scan Exempt */
+            scan_exempt: boolean;
+            /** Scan Exempt Reason */
+            scan_exempt_reason?: string | null;
+        };
+        /** BulkScanExemptResponse */
+        BulkScanExemptResponse: {
+            /** Changed */
+            changed: number;
         };
         /** CancelAbsenceRequest */
         CancelAbsenceRequest: {
@@ -3961,6 +4013,7 @@ export interface operations {
                 category?: string | null;
                 /** @description workflow filter: needs_enrollment | enrolled | exempt | left_with_account */
                 scan_status?: string | null;
+                branch?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -4019,6 +4072,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    humans_branches_api_v1_humans_branches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
         };
@@ -4136,6 +4209,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    bulk_scan_exempt_api_v1_humans_scan_exempt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkScanExemptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkScanExemptResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

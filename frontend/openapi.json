@@ -592,6 +592,54 @@
         "title": "Body_preview_import_api_v1_humans_import_preview_post",
         "type": "object"
       },
+      "BulkScanExemptRequest": {
+        "properties": {
+          "employee_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Employee Ids",
+            "type": "array"
+          },
+          "scan_exempt": {
+            "title": "Scan Exempt",
+            "type": "boolean"
+          },
+          "scan_exempt_reason": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Exempt Reason"
+          }
+        },
+        "required": [
+          "employee_ids",
+          "scan_exempt"
+        ],
+        "title": "BulkScanExemptRequest",
+        "type": "object"
+      },
+      "BulkScanExemptResponse": {
+        "properties": {
+          "changed": {
+            "title": "Changed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "changed"
+        ],
+        "title": "BulkScanExemptResponse",
+        "type": "object"
+      },
       "CancelAbsenceRequest": {
         "properties": {
           "reason": {
@@ -6321,6 +6369,23 @@
           },
           {
             "in": "query",
+            "name": "branch",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
@@ -6405,6 +6470,31 @@
           }
         },
         "summary": "Create Human Endpoint",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/branches": {
+      "get": {
+        "operationId": "humans_branches_api_v1_humans_branches_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Humans Branches Api V1 Humans Branches Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Humans Branches",
         "tags": [
           "humans"
         ]
@@ -6556,6 +6646,48 @@
           }
         },
         "summary": "Download Import Template",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/scan-exempt": {
+      "post": {
+        "description": "Set or clear scan-exempt for many people at once (e.g. finance staff,\ncommander's office). Registered before /humans/{employee_id}.",
+        "operationId": "bulk_scan_exempt_api_v1_humans_scan_exempt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkScanExemptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkScanExemptResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bulk Scan Exempt",
         "tags": [
           "humans"
         ]

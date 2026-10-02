@@ -85,3 +85,29 @@ class TestScanStatusApi(ApiTestBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBulkScanExempt(ApiTestBase):
+    IDS = ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]
+
+    def test_admin_bulk_exempt(self):
+        client = self.make_write_client("ADMIN")
+        with patch("app.api.routers.humans.bulk_set_scan_exempt", return_value=2) as m:
+            resp = client.post(
+                "/api/v1/humans/scan-exempt",
+                json={"employee_ids": self.IDS, "scan_exempt": True, "scan_exempt_reason": "การเงิน"},
+            )
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(resp.json()["changed"], 2)
+        self.assertEqual(m.call_args.args[2], self.IDS)
+
+    def test_operator_cannot_bulk_exempt(self):
+        client = self.make_write_client("OPERATOR")
+        resp = client.post("/api/v1/humans/scan-exempt", json={"employee_ids": self.IDS, "scan_exempt": False})
+        self.assertEqual(resp.status_code, 403)
+
+    def test_bulk_exempt_requires_reason(self):
+        from app.personnel import bulk_set_scan_exempt
+
+        with self.assertRaises(PersonnelError):
+            bulk_set_scan_exempt(Config.from_env(), "admin", self.IDS, True, " ")

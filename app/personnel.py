@@ -349,3 +349,41 @@ def reactivate_human(
         "employee_id=%s reactivated_by=%s reason=%s" % (employee_id, operator, reason or ""),
     )
     return {"employee_id": employee_id, "active": True, "already_active": False}
+
+
+def bulk_set_scan_exempt(
+    cfg: Config,
+    operator: str,
+    employee_ids: List[str],
+    scan_exempt: bool,
+    reason: Optional[str],
+) -> int:
+    """Marks many people scan-exempt (or scan-required) at once, e.g. a
+    whole section. Same rule as the single edit: exempting needs a reason;
+    clearing clears it. Returns the number of rows changed."""
+    if not operator or not str(operator).strip():
+        raise PersonnelError("operator is required")
+    ids = sorted({str(i) for i in employee_ids if i})
+    if not ids:
+        raise PersonnelError("no people selected")
+    reason = (reason or "").strip() or None
+    if scan_exempt and not reason:
+        raise PersonnelError("a reason is required to mark people scan-exempt")
+    if not scan_exempt:
+        reason = None
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE human_employees SET scan_exempt = %s, scan_exempt_reason = %s, updated_at = now() "
+                "WHERE employee_id = ANY(%s::uuid[]) "
+                "AND (scan_exempt IS DISTINCT FROM %s OR scan_exempt_reason IS DISTINCT FROM %s);",
+                (scan_exempt, reason, ids, scan_exempt, reason),
+            )
+            changed = cur.rowcount
+            conn.commit()
+    log_sync_event(
+        cfg,
+        "PERSONNEL_SCAN_EXEMPT_BULK",
+        "scan_exempt=%s reason=%s count=%s by=%s ids=%s" % (scan_exempt, reason or "", changed, operator, ",".join(ids)),
+    )
+    return changed

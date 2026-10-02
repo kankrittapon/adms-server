@@ -182,6 +182,15 @@ def personnel_summary(cfg: Config) -> Dict[str, Any]:
     return row or {"active": 0, "inactive": 0, "scan_exempt": 0, "needs_enrollment": 0, "left_with_terminal_account": 0}
 
 
+def list_branches(cfg: Config) -> List[str]:
+    rows = _fetch_all(
+        cfg,
+        "SELECT DISTINCT branch FROM human_employees WHERE production_scope AND active AND branch IS NOT NULL "
+        "ORDER BY branch",
+    )
+    return [r["branch"] for r in rows]
+
+
 def human_terminal_accounts(cfg: Config, employee_id: str) -> List[Dict[str, Any]]:
     """Every terminal account ever linked to this person by a VERIFIED mapping
     (open or closed) that is still active on a device — what offboarding must
@@ -206,6 +215,7 @@ def list_humans(
     search: Optional[str] = None,
     category: Optional[str] = None,
     scan_status: Optional[str] = None,
+    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     where: List[str] = []
     params: List[Any] = []
@@ -224,6 +234,9 @@ def list_humans(
         params.append(category)
     if scan_status:
         where.append(_SCAN_STATUS_SQL[scan_status])
+    if branch:
+        where.append("branch = %s")
+        params.append(branch)
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
     total = _fetch_scalar(cfg, f"SELECT COUNT(*) FROM human_employees{where_sql}", tuple(params))

@@ -193,6 +193,19 @@ export interface Translations {
     allStatuses: string;
   };
   workflow: {
+    reasonFinance: string;
+    reasonCommandOffice: string;
+    reasonOther: string;
+    quickRequired: string;
+    quickExemptPrefix: string;
+    selectedCount: string;
+    bulkExempt: string;
+    bulkRequire: string;
+    bulkDone: string;
+    clearSelection: string;
+    allBranches: string;
+    selectPage: string;
+    positionCol: string;
     wizStep1: string;
     wizStep2: string;
     wizStep3: string;

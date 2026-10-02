@@ -154,6 +154,16 @@ class UpdateHumanRequest(BaseModel):
     scan_exempt_reason: Optional[str] = Field(None, max_length=200)
 
 
+class BulkScanExemptRequest(BaseModel):
+    employee_ids: List[str] = Field(min_length=1, max_length=500)
+    scan_exempt: bool
+    scan_exempt_reason: Optional[str] = Field(None, max_length=200)
+
+
+class BulkScanExemptResponse(BaseModel):
+    changed: int
+
+
 class HumanTerminalAccount(BaseModel):
     device_id: int
     device_user_id: str

@@ -4,7 +4,7 @@ import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { CsvImportModal } from "../components/CsvImportModal";
 import { AbsenceTable } from "./Absences";
-import { EnrollLink, OffboardPanel, ScanPolicyCard } from "../components/PersonnelLifecycle";
+import { EXEMPT_REASON_PRESETS, EnrollLink, OffboardPanel, ScanPolicyCard } from "../components/PersonnelLifecycle";
 import { PersonnelFormModal } from "../components/PersonnelFormModal";
 import { ErrorBanner, Loading, ScopeBadge } from "../components/Status";
 import { useApi } from "../hooks/useApi";
@@ -21,7 +21,9 @@ export function Personnel() {
   const [scope, setScope] = useState<string>("true");
   const [activeFilter, setActiveFilter] = useState<string>("");
   const [scanStatus, setScanStatus] = useState<ScanStatus | "">("");
+  const [branch, setBranch] = useState("");
   const [page, setPage] = useState(0);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
@@ -38,12 +40,31 @@ export function Personnel() {
           production_scope: scope === "true" ? true : scope === "false" ? false : undefined,
           active: activeFilter === "true" ? true : activeFilter === "false" ? false : undefined,
           scan_status: scanStatus || undefined,
+          branch: branch || undefined,
         },
         s
       ),
-    [search, scope, activeFilter, scanStatus, page]
+    [search, scope, activeFilter, scanStatus, branch, page]
   );
   const summary = useApi((s) => api.humansSummary(s), []);
+  const branches = useApi((s) => api.humanBranches(s), []);
+
+  function refreshAll() {
+    reload();
+    summary.reload();
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const pageIds = (data?.items ?? []).filter((h) => h.active).map((h) => h.employee_id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
 
   function applyScanFilter(next: ScanStatus | "") {
     setScanStatus(next);
@@ -172,7 +193,35 @@ export function Personnel() {
             <option value="left_with_account">{t.workflow.scanLeftWithAccount}</option>
           </select>
         </div>
+        <div>
+          <select
+            value={branch}
+            onChange={(e) => {
+              setBranch(e.target.value);
+              setPage(0);
+            }}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+          >
+            <option value="">{t.workflow.allBranches}</option>
+            {branches.data?.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
+
+      {canManagePersonnel && selected.size > 0 && (
+        <BulkExemptBar
+          ids={[...selected]}
+          onDone={() => {
+            setSelected(new Set());
+            refreshAll();
+          }}
+          onClear={() => setSelected(new Set())}
+        />
+      )}
 
       {/* Main Table */}
       {loading ? (
@@ -185,9 +234,27 @@ export function Personnel() {
             <table className="w-full border-collapse text-left text-xs table-dense">
               <thead>
                 <tr>
+                  {canManagePersonnel && (
+                    <th className="w-8">
+                      <input
+                        type="checkbox"
+                        title={t.workflow.selectPage}
+                        checked={allPageSelected}
+                        onChange={() =>
+                          setSelected((prev) => {
+                            const next = new Set(prev);
+                            if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+                            else pageIds.forEach((id) => next.add(id));
+                            return next;
+                          })
+                        }
+                      />
+                    </th>
+                  )}
                   <th>{t.personnel.thaiName}</th>
                   <th>{t.personnel.englishName}</th>
                   <th>{t.personnel.rank}</th>
+                  <th>{t.workflow.positionCol}</th>
                   <th>{t.personnel.branch}</th>
                   <th>{t.personnel.scope}</th>
                   <th>{t.workflow.colScan}</th>
@@ -197,6 +264,16 @@ export function Personnel() {
               <tbody className="divide-y divide-slate-100">
                 {data?.items.map((h) => (
                   <tr key={h.employee_id} className="transition-colors hover:bg-slate-50/80">
+                    {canManagePersonnel && (
+                      <td>
+                        <input
+                          type="checkbox"
+                          disabled={!h.active}
+                          checked={selected.has(h.employee_id)}
+                          onChange={() => toggleSelected(h.employee_id)}
+                        />
+                      </td>
+                    )}
                     <td>
                       <Link
                         to={`/personnel/${h.employee_id}`}
@@ -220,12 +297,22 @@ export function Personnel() {
                         </span>
                       ) : null}
                     </td>
+                    <td className="text-slate-600">{h.position ?? "—"}</td>
                     <td className="text-slate-600">{h.branch ?? "—"}</td>
                     <td>
                       <ScopeBadge scope={h.production_scope} />
                     </td>
                     <td>
-                      <ScanStateBadge human={h} />
+                      {canManagePersonnel && h.active ? (
+                        <div className="flex items-center gap-1.5">
+                          <QuickScanPolicy human={h} onChanged={refreshAll} />
+                          {h.has_active_terminal_account && (
+                            <span className="text-[11px] font-semibold text-emerald-700">✓ {t.workflow.scanEnrolled}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <ScanStateBadge human={h} />
+                      )}
                     </td>
                     <td>
                       {h.active ? (
@@ -671,6 +758,128 @@ function PersonAbsences({ employeeId, active }: { employeeId: string; active: bo
         )}
       </div>
       {list.error ? <ErrorBanner message={list.error} /> : <AbsenceTable items={list.data?.items ?? []} onChanged={list.reload} />}
+    </div>
+  );
+}
+
+/** Per-row scan policy: must scan, or exempt as finance / commander's office.
+ * Applies immediately (same bulk endpoint, one id). */
+function QuickScanPolicy({ human, onChanged }: { human: Human; onChanged: () => void }) {
+  const { t } = useTranslation();
+  const { canMutate } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const current = human.scan_exempt ? human.scan_exempt_reason ?? "" : "";
+  const presets = EXEMPT_REASON_PRESETS as readonly string[];
+
+  async function change(value: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.bulkScanExempt([human.employee_id], value !== "", value || null);
+      onChanged();
+    } catch (err) {
+      setError(friendlyApiError(err, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <select
+        value={current}
+        disabled={!canMutate || busy}
+        title={!canMutate ? t.workflow.needsWriteWindow : undefined}
+        onChange={(e) => change(e.target.value)}
+        className={`rounded border px-1.5 py-0.5 text-[11px] font-semibold disabled:opacity-60 ${
+          human.scan_exempt ? "border-purple-300 bg-purple-50 text-purple-800" : "border-amber-300 bg-amber-50 text-amber-800"
+        }`}
+      >
+        <option value="">{t.workflow.quickRequired}</option>
+        {presets.map((r) => (
+          <option key={r} value={r}>
+            {t.workflow.quickExemptPrefix} {r}
+          </option>
+        ))}
+        {current && !presets.includes(current) && (
+          <option value={current}>
+            {t.workflow.quickExemptPrefix} {current}
+          </option>
+        )}
+      </select>
+      {error && <div className="text-[10px] text-rose-700">{error}</div>}
+    </div>
+  );
+}
+
+function BulkExemptBar({ ids, onDone, onClear }: { ids: string[]; onDone: () => void; onClear: () => void }) {
+  const { t } = useTranslation();
+  const { canMutate } = useAuth();
+  const [preset, setPreset] = useState<string>(EXEMPT_REASON_PRESETS[0]);
+  const [other, setOther] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const reason = preset === "__other" ? other.trim() : preset;
+
+  async function apply(exempt: boolean) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await api.bulkScanExempt(ids, exempt, exempt ? reason || null : null);
+      setMsg({ ok: true, text: t.workflow.bulkDone.replace("{n}", String(res.changed)) });
+      onDone();
+    } catch (err) {
+      setMsg({ ok: false, text: friendlyApiError(err, t) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs">
+      <span className="font-bold text-purple-900">{t.workflow.selectedCount.replace("{n}", String(ids.length))}</span>
+      <select
+        value={preset}
+        onChange={(e) => setPreset(e.target.value)}
+        className="rounded border border-purple-300 bg-white px-2 py-1"
+      >
+        {EXEMPT_REASON_PRESETS.map((r) => (
+          <option key={r} value={r}>
+            {r}
+          </option>
+        ))}
+        <option value="__other">{t.workflow.reasonOther}</option>
+      </select>
+      {preset === "__other" && (
+        <input
+          value={other}
+          onChange={(e) => setOther(e.target.value)}
+          placeholder={t.workflow.exemptReasonPlaceholder}
+          className="rounded border border-purple-300 bg-white px-2 py-1"
+        />
+      )}
+      <button
+        type="button"
+        onClick={() => apply(true)}
+        disabled={!canMutate || busy || !reason}
+        className="rounded bg-purple-700 px-3 py-1 font-bold text-white hover:bg-purple-800 disabled:opacity-40"
+      >
+        {t.workflow.bulkExempt}
+      </button>
+      <button
+        type="button"
+        onClick={() => apply(false)}
+        disabled={!canMutate || busy}
+        className="rounded border border-slate-300 bg-white px-3 py-1 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+      >
+        {t.workflow.bulkRequire}
+      </button>
+      <button type="button" onClick={onClear} className="ml-auto text-[11px] font-semibold text-slate-600 hover:underline">
+        {t.workflow.clearSelection}
+      </button>
+      {!canMutate && <span className="w-full text-[11px] text-amber-800">{t.workflow.needsWriteWindow}</span>}
+      {msg && <span className={`w-full font-semibold ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</span>}
     </div>
   );
 }

@@ -365,6 +365,18 @@ export const api = {
     if (!res.ok) throw new ApiClientError(res.status, "HTTP_" + res.status, res.statusText);
     return res.blob();
   },
+  humanBranches: (signal?: AbortSignal) =>
+    request<JsonResponse<"humans_branches_api_v1_humans_branches_get">>("/api/v1/humans/branches", signal),
+  bulkScanExempt: (employeeIds: string[], scanExempt: boolean, reason: string | null) =>
+    request<JsonResponse<"bulk_scan_exempt_api_v1_humans_scan_exempt_post">>("/api/v1/humans/scan-exempt", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        employee_ids: employeeIds,
+        scan_exempt: scanExempt,
+        scan_exempt_reason: reason,
+      } satisfies BodyOf<"bulk_scan_exempt_api_v1_humans_scan_exempt_post">),
+    }),
   humansSummary: (signal?: AbortSignal) =>
     request<JsonResponse<"humans_summary_api_v1_humans_summary_get">>("/api/v1/humans/summary", signal),
   humanTerminalAccounts: (employeeId: string, signal?: AbortSignal) =>

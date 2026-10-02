@@ -28,6 +28,8 @@ from app.api.dependencies import (
 )
 from app.api.errors import ApiError, not_found
 from app.api.schemas import (
+    BulkScanExemptRequest,
+    BulkScanExemptResponse,
     CreateHumanRequest,
     CsvImportCommitResponse,
     CsvImportPreviewResponse,
@@ -43,6 +45,7 @@ from app.config import Config
 from app.personnel import (
     PersonnelDuplicateError,
     PersonnelError,
+    bulk_set_scan_exempt,
     create_human,
     deactivate_human,
     reactivate_human,
@@ -81,6 +84,7 @@ def list_humans(
         None,
         description="workflow filter: needs_enrollment | enrolled | exempt | left_with_account",
     ),
+    branch: Optional[str] = Query(None, max_length=100),
     page: tuple = Depends(pagination),
     cfg: Config = Depends(get_cfg),
 ):
@@ -96,7 +100,44 @@ def list_humans(
         search=search,
         category=category,
         scan_status=scan_status,
+        branch=branch,
     )
+
+
+@router.get(
+    "/api/v1/humans/branches",
+    response_model=list[str],
+    dependencies=[Depends(require_roles(ROLES_ENROLLMENT_READ))],
+)
+def humans_branches(cfg: Config = Depends(get_cfg)):
+    return repository.list_branches(cfg)
+
+
+@router.post(
+    "/api/v1/humans/scan-exempt",
+    response_model=BulkScanExemptResponse,
+    dependencies=[
+        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
+)
+def bulk_scan_exempt(
+    payload: BulkScanExemptRequest,
+    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    cfg: Config = Depends(get_cfg),
+):
+    """Set or clear scan-exempt for many people at once (e.g. finance staff,
+    commander's office). Registered before /humans/{employee_id}."""
+    for i in payload.employee_ids:
+        _require_uuid(i)
+    try:
+        changed = bulk_set_scan_exempt(
+            cfg, ctx.username, payload.employee_ids, payload.scan_exempt, payload.scan_exempt_reason
+        )
+    except PersonnelError as e:
+        raise ApiError(422, "VALIDATION_ERROR", str(e))
+    return {"changed": changed}
 
 
 @router.get(

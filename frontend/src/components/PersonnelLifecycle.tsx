@@ -8,6 +8,10 @@ import { useTranslation } from "../i18n";
 import { friendlyApiError } from "../i18n/apiErrors";
 import { ConfirmModal } from "./ConfirmModal";
 
+// The two places whose staff may be exempt from scanning. Stored verbatim as
+// scan_exempt_reason (data, not UI copy), so they stay Thai in every locale.
+export const EXEMPT_REASON_PRESETS = ["การเงิน", "สำนักงานผู้บังคับบัญชา"] as const;
+
 function writeError(err: unknown, t: ReturnType<typeof useTranslation>["t"]): string {
   if (
     err instanceof ApiClientError &&
@@ -69,6 +73,23 @@ export function ScanPolicyCard({ human, onChanged }: { human: Human; onChanged: 
           {!human.scan_exempt && (
             <div>
               <label className="block text-[11px] font-bold text-slate-700">{t.workflow.exemptReasonLabel}</label>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {EXEMPT_REASON_PRESETS.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => {
+                      setReason(r);
+                      setReasonError(false);
+                    }}
+                    className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${
+                      reason === r ? "border-purple-500 bg-purple-50 text-purple-800" : "border-slate-300 bg-white text-slate-600"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
               <input
                 type="text"
                 value={reason}
