@@ -1,8 +1,8 @@
 """Absence (leave / official duty / secondment) and daily roster endpoints.
 
 Record-only — leave is approved on paper before entry, so recording is an
-OPERATOR-or-ADMIN data-entry action gated by both write layers, with no
-approval step. Reads (list, types, daily roster) are open to every
+OPERATOR-or-ADMIN data-entry action with no approval step, gated by
+API_WRITE_ENABLED only (not the Work Session, which guards scanner work). Reads (list, types, daily roster) are open to every
 read-capable role. Holidays are ADMIN-managed.
 """
 
@@ -21,7 +21,6 @@ from app.api.dependencies import (
     get_cfg,
     pagination,
     require_roles,
-    require_write_session,
     require_writes,
 )
 from app.api.errors import ApiError
@@ -32,7 +31,7 @@ router = APIRouter(tags=["absences"])
 read_roles = require_roles(ROLES_GENERAL_READ)
 recorder = require_roles(ROLES_OPERATOR_PLUS)
 admin_only = require_roles(ROLES_ADMIN_ONLY)
-WRITE_GATES = [Depends(require_writes), Depends(require_write_session)]
+WRITE_GATES = [Depends(require_writes)]
 
 
 class AbsenceType(BaseModel):

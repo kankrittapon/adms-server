@@ -171,8 +171,12 @@ def change_password(
                 (ctx.operator_id,),
             )
             row = cur.fetchone()
+            # 400, not 401: a wrong *current password* must not look like an
+            # invalid session to the client (which would sign the user out).
             if row is None or not verify_password(payload.current_password, row[0]):
-                raise ApiError(401, "UNAUTHORIZED", "current password is incorrect")
+                raise ApiError(400, "CURRENT_PASSWORD_INCORRECT", "current password is incorrect")
+            if payload.new_password == payload.current_password:
+                raise ApiError(400, "NEW_PASSWORD_SAME", "new password must differ from the current password")
             cur.execute(
                 "UPDATE operators SET password_hash = %s, updated_at = now() "
                 "WHERE operator_id = %s;",

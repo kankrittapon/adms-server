@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../api/client";
+import { api, ApiClientError, UnauthorizedError } from "../api/client";
 import { useAuth } from "../auth";
 import { Badge, ErrorBanner, Loading, StatCard } from "../components/Status";
 import { SchedulerControl } from "../components/SchedulerControl";
@@ -151,8 +151,18 @@ function ChangePasswordForm() {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!current || next.length < 12) {
-      setMsg({ tone: "err", text: t.system.passwordValidationError });
+    // Say exactly what is wrong instead of one generic message.
+    const problem = !current
+      ? t.workflow.pwCurrentMissing
+      : next.length < 12
+      ? t.workflow.pwTooShort.replace("{n}", String(next.length))
+      : next.length > 256
+      ? t.workflow.pwTooLong
+      : next === current
+      ? t.workflow.pwSame
+      : null;
+    if (problem) {
+      setMsg({ tone: "err", text: problem });
       return;
     }
     setBusy(true);
@@ -168,7 +178,18 @@ function ChangePasswordForm() {
         });
       })
       .catch((e: unknown) => {
-        setMsg({ tone: "err", text: friendlyApiError(e, t) });
+        const code = e instanceof ApiClientError ? e.code : e instanceof UnauthorizedError ? "SESSION" : "";
+        const text =
+          code === "CURRENT_PASSWORD_INCORRECT"
+            ? t.workflow.pwCurrentWrong
+            : code === "NEW_PASSWORD_SAME"
+            ? t.workflow.pwSame
+            : code === "VALIDATION_ERROR"
+            ? t.workflow.pwTooShort.replace("{n}", String(next.length))
+            : code === "SESSION"
+            ? t.workflow.pwSessionExpired
+            : friendlyApiError(e, t);
+        setMsg({ tone: "err", text });
       })
       .finally(() => setBusy(false));
   }
@@ -224,7 +245,7 @@ function ChangePasswordForm() {
         <div>
           <button
             type="submit"
-            disabled={busy || !current || next.length < 12}
+            disabled={busy}
             className="rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
           >
             {busy ? t.common.saving : t.system.changePasswordButton}

@@ -26,7 +26,7 @@ function writeError(err: unknown, t: ReturnType<typeof useTranslation>["t"]): st
  * finance) are left out of "needs enrollment" lists and absence counts. */
 export function ScanPolicyCard({ human, onChanged }: { human: Human; onChanged: () => void }) {
   const { t } = useTranslation();
-  const { canManagePersonnel, canMutate } = useAuth();
+  const { canManagePersonnel, canEditRoster } = useAuth();
   const [reason, setReason] = useState(human.scan_exempt_reason ?? "");
   const [reasonError, setReasonError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -109,13 +109,13 @@ export function ScanPolicyCard({ human, onChanged }: { human: Human; onChanged: 
           )}
           <button
             type="button"
-            disabled={!canMutate || busy}
+            disabled={!canEditRoster || busy}
             onClick={() => save(!human.scan_exempt)}
             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy ? t.common.saving : human.scan_exempt ? t.workflow.clearExemptButton : t.workflow.setExemptButton}
           </button>
-          {!canMutate && <p className="text-[11px] text-amber-800">{t.workflow.needsWriteWindow}</p>}
+          {!canEditRoster && <p className="text-[11px] text-amber-800">{t.workflow.needsWriteWindow}</p>}
         </div>
       )}
       {msg && (
@@ -131,7 +131,7 @@ export function ScanPolicyCard({ human, onChanged }: { human: Human; onChanged: 
  * scanner step fails, the person stays closed and a retry is offered. */
 export function OffboardPanel({ human, onChanged }: { human: Human; onChanged: () => void }) {
   const { t } = useTranslation();
-  const { me, canMutate } = useAuth();
+  const { me, canEditRoster, canMutate } = useAuth();
   const accounts = useApi((s) => api.humanTerminalAccounts(human.employee_id, s), [human.employee_id, human.active]);
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -169,8 +169,15 @@ export function OffboardPanel({ human, onChanged }: { human: Human; onChanged: (
       setResult({ ok: false, text: writeError(err, t) });
       return;
     }
-    const removed = await removeAccounts();
-    setResult({ ok: removed, text: removed ? t.workflow.offboardDone : t.workflow.offboardPartial });
+    // Removing from the scanner is fingerprint work and needs the Work
+    // Session; outside it the person is still closed and the removal waits
+    // in "left, still on scanner".
+    if (accountList.length > 0 && !canMutate) {
+      setResult({ ok: false, text: t.workflow.offboardDeferred });
+    } else {
+      const removed = await removeAccounts();
+      setResult({ ok: removed, text: removed ? t.workflow.offboardDone : t.workflow.offboardPartial });
+    }
     setBusy(false);
     setOpen(false);
     setReason("");
@@ -221,7 +228,7 @@ export function OffboardPanel({ human, onChanged }: { human: Human; onChanged: (
             setReasonError(false);
             setOpen(true);
           }}
-          disabled={!canMutate || busy}
+          disabled={!canEditRoster || busy}
           className="w-full rounded-md bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           {t.workflow.offboardButton}
@@ -238,18 +245,21 @@ export function OffboardPanel({ human, onChanged }: { human: Human; onChanged: (
               {busy ? t.common.saving : `${t.workflow.retryRemoveButton} (${accountList.length})`}
             </button>
           )}
+          {accountList.length > 0 && !canMutate && (
+            <p className="text-[11px] text-amber-800">{t.workflow.fingerprintWindowNeeded}</p>
+          )}
           <p className="text-[11px] text-slate-600">{t.workflow.rejoinHint}</p>
           <button
             type="button"
             onClick={handleReactivate}
-            disabled={!canMutate || busy}
+            disabled={!canEditRoster || busy}
             className="w-full rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {t.personnel.reactivateButton}
           </button>
         </>
       )}
-      {!canMutate && <p className="text-[11px] text-amber-800">{t.workflow.needsWriteWindow}</p>}
+      {!canEditRoster && <p className="text-[11px] text-amber-800">{t.workflow.needsWriteWindow}</p>}
 
       <ConfirmModal
         open={open}

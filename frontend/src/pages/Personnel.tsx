@@ -388,7 +388,7 @@ export function Personnel() {
 
 export function HumanDetail() {
   const { employeeId } = useParams<{ employeeId: string }>();
-  const { me, canMutate, canManagePersonnel } = useAuth();
+  const { me, canEditRoster, canManagePersonnel } = useAuth();
   const { t } = useTranslation();
   const { data, loading, error, reload } = useApi((s) => api.human(employeeId as string, s), [employeeId]);
 
@@ -523,8 +523,8 @@ export function HumanDetail() {
                     <button
                       type="button"
                       onClick={startEdit}
-                      disabled={!canMutate}
-                      title={!canMutate ? t.personnel.writesDisabledNotice : t.personnel.editEnglishName}
+                      disabled={!canEditRoster}
+                      title={!canEditRoster ? t.personnel.writesDisabledNotice : t.personnel.editEnglishName}
                       className="ml-3 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {t.common.edit}
@@ -766,7 +766,7 @@ function PersonAbsences({ employeeId, active }: { employeeId: string; active: bo
  * Applies immediately (same bulk endpoint, one id). */
 function QuickScanPolicy({ human, onChanged }: { human: Human; onChanged: () => void }) {
   const { t } = useTranslation();
-  const { canMutate } = useAuth();
+  const { canEditRoster } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const current = human.scan_exempt ? human.scan_exempt_reason ?? "" : "";
@@ -789,8 +789,8 @@ function QuickScanPolicy({ human, onChanged }: { human: Human; onChanged: () => 
     <div>
       <select
         value={current}
-        disabled={!canMutate || busy}
-        title={!canMutate ? t.workflow.needsWriteWindow : undefined}
+        disabled={!canEditRoster || busy}
+        title={!canEditRoster ? t.workflow.needsWriteWindow : undefined}
         onChange={(e) => change(e.target.value)}
         className={`rounded border px-1.5 py-0.5 text-[11px] font-semibold disabled:opacity-60 ${
           human.scan_exempt ? "border-purple-300 bg-purple-50 text-purple-800" : "border-amber-300 bg-amber-50 text-amber-800"
@@ -815,7 +815,7 @@ function QuickScanPolicy({ human, onChanged }: { human: Human; onChanged: () => 
 
 function BulkExemptBar({ ids, onDone, onClear }: { ids: string[]; onDone: () => void; onClear: () => void }) {
   const { t } = useTranslation();
-  const { canMutate } = useAuth();
+  const { canEditRoster } = useAuth();
   const [preset, setPreset] = useState<string>(EXEMPT_REASON_PRESETS[0]);
   const [other, setOther] = useState("");
   const [busy, setBusy] = useState(false);
@@ -862,7 +862,7 @@ function BulkExemptBar({ ids, onDone, onClear }: { ids: string[]; onDone: () => 
       <button
         type="button"
         onClick={() => apply(true)}
-        disabled={!canMutate || busy || !reason}
+        disabled={!canEditRoster || busy || !reason}
         className="rounded bg-purple-700 px-3 py-1 font-bold text-white hover:bg-purple-800 disabled:opacity-40"
       >
         {t.workflow.bulkExempt}
@@ -870,7 +870,7 @@ function BulkExemptBar({ ids, onDone, onClear }: { ids: string[]; onDone: () => 
       <button
         type="button"
         onClick={() => apply(false)}
-        disabled={!canMutate || busy}
+        disabled={!canEditRoster || busy}
         className="rounded border border-slate-300 bg-white px-3 py-1 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
       >
         {t.workflow.bulkRequire}
@@ -878,7 +878,7 @@ function BulkExemptBar({ ids, onDone, onClear }: { ids: string[]; onDone: () => 
       <button type="button" onClick={onClear} className="ml-auto text-[11px] font-semibold text-slate-600 hover:underline">
         {t.workflow.clearSelection}
       </button>
-      {!canMutate && <span className="w-full text-[11px] text-amber-800">{t.workflow.needsWriteWindow}</span>}
+      {!canEditRoster && <span className="w-full text-[11px] text-amber-800">{t.workflow.needsWriteWindow}</span>}
       {msg && <span className={`w-full font-semibold ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</span>}
     </div>
   );

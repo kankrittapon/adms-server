@@ -209,7 +209,7 @@ class TestChangePassword(unittest.TestCase):
 
     AUTH_HEADERS = {"Authorization": "Bearer test-current-token-xyz"}
 
-    def test_wrong_current_password_401(self):
+    def test_wrong_current_password_400(self):
         self._authed()
         stored = hash_password("the-real-password")
         with patch("app.api.routers.auth.get_db_connection") as m:
@@ -220,8 +220,22 @@ class TestChangePassword(unittest.TestCase):
                 json={"current_password": "wrong", "new_password": "a-brand-new-password-123"},
                 headers=self.AUTH_HEADERS,
             )
-        self.assertEqual(resp.status_code, 401)
-        self.assertEqual(resp.json()["error"]["code"], "UNAUTHORIZED")
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["error"]["code"], "CURRENT_PASSWORD_INCORRECT")
+
+    def test_same_new_password_400(self):
+        self._authed()
+        stored = hash_password("the-real-password-1")
+        with patch("app.api.routers.auth.get_db_connection") as m:
+            cur = FakeCursor(fetchone_queue=[(stored,)])
+            m.return_value = fake_ctx_conn(cur)
+            resp = self.client.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": "the-real-password-1", "new_password": "the-real-password-1"},
+                headers=self.AUTH_HEADERS,
+            )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["error"]["code"], "NEW_PASSWORD_SAME")
 
     def test_weak_new_password_422(self):
         self._authed()

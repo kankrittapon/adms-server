@@ -21,6 +21,7 @@ interface AuthState {
   // ROLES_* sets — it deliberately mirrors them, not reinvents them.
   canOpenWorkSession: boolean;
   canRecordAbsence: boolean;
+  canEditRoster: boolean;
   canEnroll: boolean;
   canVerifyIdentity: boolean;
   canManagePersonnel: boolean;
@@ -41,6 +42,7 @@ const AuthContext = createContext<AuthState>({
   isAdmin: false,
   canOpenWorkSession: false,
   canRecordAbsence: false,
+  canEditRoster: false,
   canEnroll: false,
   canVerifyIdentity: false,
   canManagePersonnel: false,
@@ -127,6 +129,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canOpenWorkSession: isOperatorOrAdmin,
         // Leave is approved on paper first; recording it is OPERATOR/ADMIN data entry.
         canRecordAbsence: isOperatorOrAdmin,
+        // Roster / leave data is DB-only: gated by role and the infrastructure
+        // write switch, not by the Work Session (which guards scanner-touching
+        // fingerprint work only).
+        canEditRoster: canWrite && serverWriteEnabled,
         // Mirrors ROLES_ENROLLMENT_MUTATE.
         canEnroll: canWrite,
         // Separation of duties (Phase 9): final identity/mapping

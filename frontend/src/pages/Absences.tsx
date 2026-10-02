@@ -137,7 +137,7 @@ export function Absences() {
 
 function AbsenceForm({ initialEmployeeId, onSaved }: { initialEmployeeId: string; onSaved: () => void }) {
   const { t, locale } = useTranslation();
-  const { canMutate } = useAuth();
+  const { canEditRoster } = useAuth();
   const humans = useApi((s) => api.humans({ active: true, production_scope: true, limit: 200 }, s), []);
   const types = useApi((s) => api.absenceTypes(s), []);
   const [employeeId, setEmployeeId] = useState(initialEmployeeId);
@@ -192,7 +192,7 @@ function AbsenceForm({ initialEmployeeId, onSaved }: { initialEmployeeId: string
   }
 
   const input = "mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs disabled:bg-slate-100";
-  const disabled = !canMutate || busy;
+  const disabled = !canEditRoster || busy;
 
   return (
     <div className="rounded-lg border border-blue-200 bg-blue-50/30 p-4 shadow-2xs space-y-3">
@@ -266,7 +266,7 @@ function AbsenceForm({ initialEmployeeId, onSaved }: { initialEmployeeId: string
           </button>
         </div>
       </div>
-      {!canMutate && <p className="text-[11px] text-amber-800">{t.workflow.needsWriteWindow}</p>}
+      {!canEditRoster && <p className="text-[11px] text-amber-800">{t.workflow.needsWriteWindow}</p>}
       {msg && <div className={`text-xs font-semibold ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</div>}
     </div>
   );
@@ -284,7 +284,7 @@ export function AbsenceTable({
   showPerson?: boolean;
 }) {
   const { t, locale } = useTranslation();
-  const { canRecordAbsence, canMutate } = useAuth();
+  const { canRecordAbsence, canEditRoster } = useAuth();
   const [cancelTarget, setCancelTarget] = useState<AbsenceItem | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -374,7 +374,7 @@ export function AbsenceTable({
                   {canRecordAbsence && a.status === "RECORDED" && (
                     <button
                       type="button"
-                      disabled={!canMutate}
+                      disabled={!canEditRoster}
                       onClick={() => {
                         setReason("");
                         setCancelTarget(a);
@@ -419,7 +419,7 @@ export function AbsenceTable({
 
 function HolidayManager() {
   const { t } = useTranslation();
-  const { canMutate } = useAuth();
+  const { canEditRoster } = useAuth();
   const year = Number(todayLocal().slice(0, 4));
   const list = useApi((s) => api.holidays(year, s), [year]);
   const [day, setDay] = useState("");
@@ -468,7 +468,7 @@ function HolidayManager() {
         <button
           type="button"
           onClick={add}
-          disabled={!canMutate || !day || !name.trim()}
+          disabled={!canEditRoster || !day || !name.trim()}
           className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
         >
           {t.leave.holidayAdd}
@@ -484,7 +484,7 @@ function HolidayManager() {
             <button
               type="button"
               onClick={() => remove(h.holiday_date)}
-              disabled={!canMutate}
+              disabled={!canEditRoster}
               className="text-[11px] font-semibold text-rose-600 hover:underline disabled:opacity-40"
             >
               {t.common.delete}

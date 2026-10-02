@@ -193,6 +193,14 @@ export interface Translations {
     allStatuses: string;
   };
   workflow: {
+    offboardDeferred: string;
+    fingerprintWindowNeeded: string;
+    pwCurrentWrong: string;
+    pwSame: string;
+    pwTooShort: string;
+    pwCurrentMissing: string;
+    pwTooLong: string;
+    pwSessionExpired: string;
     reasonFinance: string;
     reasonCommandOffice: string;
     reasonOther: string;

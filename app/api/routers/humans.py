@@ -4,10 +4,12 @@ PromptID: ADMS-Frontend-F1-API-001 / ADMS-Frontend-I18n-RBAC-Personnel-004 /
 ADMS-Personnel-MasterData-024
 
 Frontend-safe Human fields only. Rank is metadata — never identity.
-All Personnel master-data writes (create, edit, CSV import commit) are
-ADMIN-only, gated by both write layers (API_WRITE_ENABLED AND an active
-Write Session) — CSV preview and export are read-only and gated by
-neither.
+All Personnel master-data writes (create, edit, CSV import commit,
+scan-exempt, deactivate and reactivate) are ADMIN-only and gated by
+API_WRITE_ENABLED, but NOT by the Work Session: they are database-only and
+audited, and the Work Session exists to guard scanner-touching fingerprint
+work (enrollment, terminal management). CSV preview and export are
+read-only.
 """
 
 import uuid
@@ -23,7 +25,6 @@ from app.api.dependencies import (
     get_cfg,
     pagination,
     require_roles,
-    require_write_session,
     require_writes,
 )
 from app.api.errors import ApiError, not_found
@@ -119,7 +120,6 @@ def humans_branches(cfg: Config = Depends(get_cfg)):
     dependencies=[
         Depends(require_roles(ROLES_ADMIN_ONLY)),
         Depends(require_writes),
-        Depends(require_write_session),
     ],
 )
 def bulk_scan_exempt(
@@ -204,7 +204,6 @@ def get_human_terminal_accounts(employee_id: str, cfg: Config = Depends(get_cfg)
     dependencies=[
         Depends(require_roles(ROLES_ADMIN_ONLY)),
         Depends(require_writes),
-        Depends(require_write_session),
     ],
 )
 def create_human_endpoint(
@@ -238,7 +237,6 @@ def create_human_endpoint(
     dependencies=[
         Depends(require_roles(ROLES_ADMIN_ONLY)),
         Depends(require_writes),
-        Depends(require_write_session),
     ],
 )
 def update_human_endpoint(
@@ -303,7 +301,6 @@ async def preview_import(
     dependencies=[
         Depends(require_roles(ROLES_ADMIN_ONLY)),
         Depends(require_writes),
-        Depends(require_write_session),
     ],
 )
 async def commit_import(
@@ -330,7 +327,6 @@ async def commit_import(
     dependencies=[
         Depends(require_roles(ROLES_ADMIN_ONLY)),
         Depends(require_writes),
-        Depends(require_write_session),
     ],
 )
 def deactivate(
@@ -356,7 +352,6 @@ def deactivate(
     dependencies=[
         Depends(require_roles(ROLES_ADMIN_ONLY)),
         Depends(require_writes),
-        Depends(require_write_session),
     ],
 )
 def reactivate(

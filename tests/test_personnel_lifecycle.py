@@ -225,7 +225,9 @@ class TestInactiveHumanBlockedFromWriteOperations(unittest.TestCase):
 class TestRBACAndWriteSession(unittest.TestCase):
     """11, 12, 13: endpoint-level RBAC/write-session/infra-lock gating."""
 
-    def test_item11_12_endpoints_require_admin_and_write_session(self):
+    def test_item11_12_endpoints_require_admin_and_writes_not_work_session(self):
+        # Roster lifecycle is DB-only: ADMIN + API_WRITE_ENABLED, but not the
+        # Work Session (that guards scanner-touching fingerprint work only).
         import inspect
 
         import app.api.routers.humans as humans_router
@@ -236,7 +238,7 @@ class TestRBACAndWriteSession(unittest.TestCase):
             segment = src[idx:idx + 300]
             self.assertIn("ROLES_ADMIN_ONLY", segment)
             self.assertIn("require_writes", segment)
-            self.assertIn("require_write_session", segment)
+            self.assertNotIn("require_write_session", segment)
 
     def test_item13_require_writes_checks_infra_master_lock(self):
         # require_writes is the SAME dependency used by every other

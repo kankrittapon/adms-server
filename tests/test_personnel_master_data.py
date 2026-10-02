@@ -597,11 +597,14 @@ class TestPersonnelMasterDataRBAC(unittest.TestCase):
             resp = client.post("/api/v1/humans", json={"display_name": "ทดสอบ ระบบ"})
         self.assertEqual(resp.status_code, 201)
 
-    def test_item3_write_session_required_for_create(self):
+    def test_item3_create_does_not_need_work_session(self):
+        """Roster edits are DB-only and no longer wait for the Work Session."""
         client, p = self._client_with("ADMIN", bypass_write_session=False)
-        with p, patch("app.write_session.is_write_session_active", return_value=(False, False)):
+        with p, patch("app.write_session.is_write_session_active", return_value=(False, False)), patch(
+            "app.api.routers.humans.create_human", return_value={"employee_id": HUMAN_ROW["employee_id"]}
+        ), patch("app.api.repository.get_human", return_value=HUMAN_ROW):
             resp = client.post("/api/v1/humans", json={"display_name": "ทดสอบ"})
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 201, resp.text)
 
     def test_item4_write_disabled_blocks_create(self):
         client, p = self._client_with("ADMIN", write_enabled=False)
@@ -632,14 +635,17 @@ class TestPersonnelMasterDataRBAC(unittest.TestCase):
                     )
                 self.assertEqual(resp.status_code, 403)
 
-    def test_item43_closed_write_session_blocks_commit(self):
+    def test_item43_commit_does_not_need_work_session(self):
         client, p = self._client_with("ADMIN", bypass_write_session=False)
-        with p, patch("app.write_session.is_write_session_active", return_value=(False, False)):
+        with p, patch("app.write_session.is_write_session_active", return_value=(False, False)), patch(
+            "app.api.routers.humans.commit_csv_rows",
+            return_value={"created": 0, "updated": 0, "unchanged": 0, "errors": 0, "rows": []},
+        ):
             resp = client.post(
                 "/api/v1/humans/import/commit",
                 files={"file": ("p.csv", b"display_name\nfoo\n", "text/csv")},
             )
-        self.assertEqual(resp.status_code, 403)
+        self.assertNotEqual(resp.status_code, 403, resp.text)
 
     def test_preview_does_not_require_write_session(self):
         """Phase 12: CSV preview is read-only — must succeed even with no
