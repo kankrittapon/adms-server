@@ -246,9 +246,9 @@ docker logs adms_api --since 24h | grep -E "401|403|429|500"; journalctl --since
 | ID | สถานะ | หมายเหตุ |
 |---|---|---|
 | A1 / I1 `mqtt_status UNKNOWN` | ✅ ปิดแล้ว | collector สะท้อน `MQTTService.connected` ลง health file (`056df7c`), ตอนนี้ `HEALTHY` |
-| A2 / I2 disk | ⚠️ แย่ลง | `/` ใช้ 80% (เดิม 75%); Docker build cache 47 GB + images 20.7 GB reclaimable — `docker builder prune` คืนพื้นที่ได้มากที่สุดโดยไม่กระทบ ADMS |
+| A2 / I2 disk | ✅ แก้แล้ว (2026-10-03) | `/` 80% → 60% หลัง `docker builder prune` |
 | A3 / I3 `fwupd`/`pam_lastlog` noise | ⏳ ยังไม่ทำ | ต้องใช้ sudo |
-| A4 PG single node | ⚠️ เสี่ยงกว่าที่คิด | backup อยู่บนดิสก์เดียวกับ DB: `/data` **ไม่ได้ mount** (เป็นแค่โฟลเดอร์บน `/`) จึงไม่มีสำเนานอกเครื่อง |
+| A4 PG single node | ✅ บรรเทาแล้ว (2026-10-03) | `/data` (LV 928 GB บน `sda`) หลุด mount ตั้งแต่รีบูต 23 ก.ย. — `fsck` ตรวจผ่าน (clean) แต่ถูก SIGTERM ระหว่างบูต จึงไม่ mount (`nofail` ทำให้เงียบ). Mount ใหม่แล้ว + เพิ่ม `x-systemd.automount` ใน fstab; backup ลงดิสก์ที่ 2 อีกครั้ง (`BACKUP ok … secondary_count 7`, sha256 OK). ยังไม่มีสำเนานอกเครื่อง |
 | A5 `sync_events` growth | ℹ️ เฝ้าดู | 11,901 แถว (~5,800/เดือน จาก roster poll); DB 12 MB — ยังไม่เป็นปัญหา |
 | A6 write session หมดอายุบ่อย | ✅ ไม่เกี่ยวแล้ว | production ปิด Work Session (`API_WORK_SESSION_REQUIRED=false`) — แก้ไขข้อมูลและลงลายนิ้วมือได้ตลอด, สิทธิ์ตาม role + audit |
 | I4 diagnostics endpoint | ⏳ ยังไม่ทำ | |
@@ -277,7 +277,6 @@ docker logs adms_api --since 24h | grep -E "401|403|429|500"; journalctl --since
 
 ### สิ่งที่ควรทำต่อ (เรียงตามความสำคัญ)
 
-1. **Mount HDD `/data`** (หรือส่ง backup ออกนอกเครื่อง) — ตอนนี้ backup กับ DB อยู่บนดิสก์เดียวกัน
-2. **คืนพื้นที่ดิสก์:** `docker builder prune` (build cache 47 GB) ก่อนแตะ 85%
-3. ปิด timer `adms-auto-session-*` ที่ไม่จำเป็นแล้ว (`sudo systemctl disable --now adms-auto-session-open.timer adms-auto-session-close.timer`)
-4. A3 log noise, S2 reverse proxy, S3 Enrollment #2 ตามเดิม
+1. ~~Mount `/data`~~ ✅ · ~~`docker builder prune`~~ ✅ · ~~ปิด timer `adms-auto-session-*`~~ ✅ (2026-10-03)
+2. สำเนา backup **นอกเครื่อง** (อีกเครื่อง / cloud) — ตอนนี้ทั้งสองสำเนาอยู่ในเครื่องเดียว
+3. A3 log noise, S2 reverse proxy, S3 Enrollment #2 ตามเดิม
