@@ -320,6 +320,20 @@
         "title": "AuditEvent",
         "type": "object"
       },
+      "AutoWindowRequest": {
+        "properties": {
+          "action": {
+            "description": "open or close",
+            "title": "Action",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "AutoWindowRequest",
+        "type": "object"
+      },
       "Body_commit_import_api_v1_humans_import_commit_post": {
         "properties": {
           "file": {
@@ -1704,6 +1718,22 @@
               }
             ]
           },
+          "scan_exempt": {
+            "default": false,
+            "title": "Scan Exempt",
+            "type": "boolean"
+          },
+          "scan_exempt_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Exempt Reason"
+          },
           "source": {
             "title": "Source",
             "type": "string"
@@ -1724,6 +1754,29 @@
           "updated_at"
         ],
         "title": "Human",
+        "type": "object"
+      },
+      "HumanTerminalAccount": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "device_id": {
+            "title": "Device Id",
+            "type": "integer"
+          },
+          "device_user_id": {
+            "title": "Device User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id",
+          "device_user_id",
+          "active"
+        ],
+        "title": "HumanTerminalAccount",
         "type": "object"
       },
       "LoginRequest": {
@@ -2458,6 +2511,40 @@
         "title": "Page[UnattributedAttendance]",
         "type": "object"
       },
+      "PersonnelSummary": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "integer"
+          },
+          "inactive": {
+            "title": "Inactive",
+            "type": "integer"
+          },
+          "left_with_terminal_account": {
+            "description": "inactive people who still have an active terminal account (offboarding cleanup pending)",
+            "title": "Left With Terminal Account",
+            "type": "integer"
+          },
+          "needs_enrollment": {
+            "title": "Needs Enrollment",
+            "type": "integer"
+          },
+          "scan_exempt": {
+            "title": "Scan Exempt",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active",
+          "inactive",
+          "scan_exempt",
+          "needs_enrollment",
+          "left_with_terminal_account"
+        ],
+        "title": "PersonnelSummary",
+        "type": "object"
+      },
       "RankMetadata": {
         "properties": {
           "acting": {
@@ -2732,6 +2819,110 @@
           "operator"
         ],
         "title": "ScanConfirmationRequest",
+        "type": "object"
+      },
+      "ScheduleSettingsOut": {
+        "properties": {
+          "active_window": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Window"
+          },
+          "days": {
+            "description": "cron days 1-5 Mon-Fri",
+            "title": "Days",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "end_time": {
+            "title": "End Time",
+            "type": "string"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run"
+          },
+          "start_time": {
+            "title": "Start Time",
+            "type": "string"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "updated_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By Name"
+          }
+        },
+        "required": [
+          "enabled",
+          "days",
+          "start_time",
+          "end_time",
+          "timezone"
+        ],
+        "title": "ScheduleSettingsOut",
+        "type": "object"
+      },
+      "ScheduleToggleRequest": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ScheduleToggleRequest",
         "type": "object"
       },
       "StartFingerprintReenrollRequest": {
@@ -3113,6 +3304,30 @@
               }
             ],
             "title": "Rank"
+          },
+          "scan_exempt": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "true = not required to scan in/out (commander office, finance); requires scan_exempt_reason",
+            "title": "Scan Exempt"
+          },
+          "scan_exempt_reason": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Exempt Reason"
           }
         },
         "title": "UpdateHumanRequest",
@@ -3261,6 +3476,66 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/schedule-settings": {
+      "get": {
+        "operationId": "get_schedule_settings_api_v1_admin_schedule_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Schedule Settings",
+        "tags": [
+          "schedule"
+        ]
+      },
+      "post": {
+        "operationId": "update_schedule_settings_api_v1_admin_schedule_settings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleToggleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Schedule Settings",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
     "/api/v1/attendance": {
       "get": {
         "operationId": "list_attendance_api_v1_attendance_get",
@@ -4777,6 +5052,24 @@
             }
           },
           {
+            "description": "workflow filter: needs_enrollment | enrolled | exempt | left_with_account",
+            "in": "query",
+            "name": "scan_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "workflow filter: needs_enrollment | enrolled | exempt | left_with_account",
+              "title": "Scan Status"
+            }
+          },
+          {
             "in": "query",
             "name": "limit",
             "required": false,
@@ -5018,6 +5311,28 @@
         ]
       }
     },
+    "/api/v1/humans/summary": {
+      "get": {
+        "description": "Counts for the Personnel workflow hub. Registered before\n/humans/{employee_id} for the same route-ordering reason as export.csv.",
+        "operationId": "humans_summary_api_v1_humans_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonnelSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Humans Summary",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
     "/api/v1/humans/{employee_id}": {
       "get": {
         "operationId": "get_human_api_v1_humans__employee_id__get",
@@ -5209,6 +5524,53 @@
           }
         },
         "summary": "Reactivate",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/{employee_id}/terminal-accounts": {
+      "get": {
+        "description": "Read-only: active terminal accounts linked to this person, used by\nthe offboarding flow to remove them from the device.",
+        "operationId": "get_human_terminal_accounts_api_v1_humans__employee_id__terminal_accounts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "required": true,
+            "schema": {
+              "title": "Employee Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HumanTerminalAccount"
+                  },
+                  "title": "Response Get Human Terminal Accounts Api V1 Humans  Employee Id  Terminal Accounts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Human Terminal Accounts",
         "tags": [
           "humans"
         ]
@@ -5787,6 +6149,74 @@
         "summary": "Get Status",
         "tags": [
           "write-session"
+        ]
+      }
+    },
+    "/api/v1/write-session/auto-window": {
+      "post": {
+        "operationId": "auto_window_api_v1_write_session_auto_window_post",
+        "parameters": [
+          {
+            "description": "open or close",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "open or close",
+              "title": "Action"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AutoWindowRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteSessionStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Auto Window",
+        "tags": [
+          "schedule"
         ]
       }
     },

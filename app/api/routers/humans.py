@@ -33,7 +33,9 @@ from app.api.schemas import (
     CsvImportPreviewResponse,
     DeactivateHumanRequest,
     Human,
+    HumanTerminalAccount,
     Page,
+    PersonnelSummary,
     ReactivateHumanRequest,
     UpdateHumanRequest,
 )
@@ -75,10 +77,16 @@ def list_humans(
     active: Optional[bool] = Query(None, description="filter to active-only (true) or inactive-only (false); omit for all"),
     search: Optional[str] = Query(None, max_length=100),
     category: Optional[str] = Query(None),
+    scan_status: Optional[str] = Query(
+        None,
+        description="workflow filter: needs_enrollment | enrolled | exempt | left_with_account",
+    ),
     page: tuple = Depends(pagination),
     cfg: Config = Depends(get_cfg),
 ):
     limit, offset = page
+    if scan_status is not None and scan_status not in repository.SCAN_STATUS_VALUES:
+        raise ApiError(422, "VALIDATION_ERROR", f"invalid scan_status: {scan_status!r}")
     return repository.list_humans(
         cfg,
         limit=limit,
@@ -87,7 +95,19 @@ def list_humans(
         active=active,
         search=search,
         category=category,
+        scan_status=scan_status,
     )
+
+
+@router.get(
+    "/api/v1/humans/summary",
+    response_model=PersonnelSummary,
+    dependencies=[Depends(require_roles(ROLES_ENROLLMENT_READ))],
+)
+def humans_summary(cfg: Config = Depends(get_cfg)):
+    """Counts for the Personnel workflow hub. Registered before
+    /humans/{employee_id} for the same route-ordering reason as export.csv."""
+    return repository.personnel_summary(cfg)
 
 
 @router.get(
@@ -122,6 +142,18 @@ def get_human(employee_id: str, cfg: Config = Depends(get_cfg)):
     if row is None:
         raise not_found("human", employee_id)
     return row
+
+
+@router.get(
+    "/api/v1/humans/{employee_id}/terminal-accounts",
+    response_model=list[HumanTerminalAccount],
+    dependencies=[Depends(require_roles(ROLES_ENROLLMENT_READ))],
+)
+def get_human_terminal_accounts(employee_id: str, cfg: Config = Depends(get_cfg)):
+    """Read-only: active terminal accounts linked to this person, used by
+    the offboarding flow to remove them from the device."""
+    _require_uuid(employee_id)
+    return repository.human_terminal_accounts(cfg, employee_id)
 
 
 @router.post(

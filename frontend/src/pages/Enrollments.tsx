@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { useApi } from "../hooks/useApi";
@@ -12,6 +12,8 @@ import { computeTerminalNamePreview } from "../lib/terminalName";
 import { PersonCombobox } from "../components/PersonCombobox";
 import type { Enrollment, EnrollmentNextActions } from "../api/types";
 
+// Operators see four steps; the server's finer-grained states that need no
+// human decision (start scan window, mark ready) are advanced automatically.
 function getStepIndex(status: string): number {
   switch (status) {
     case "RESERVED":
@@ -21,13 +23,12 @@ function getStepIndex(status: string): number {
       return 1;
     case "FINGERPRINT_ENROLLED":
     case "CONTROLLED_SCAN_PENDING":
-      return 2;
     case "CONTROLLED_SCAN_CONFIRMED":
-      return 3;
+      return 2;
     case "READY_FOR_MAPPING":
-      return 4;
+      return 3;
     case "RETIRED":
-      return 5;
+      return 4;
     case "CANCELLED":
       return -1;
     default:
@@ -53,15 +54,25 @@ export function Enrollments() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [terminalAccountUncertain, setTerminalAccountUncertain] = useState(false);
+  // Set right after "start" so the inspector creates the scanner account
+  // without a second click (only when a valid terminal name is available).
+  const [autoCreateId, setAutoCreateId] = useState<number | null>(null);
+  const [searchParams] = useSearchParams();
+  const preselectedEmployeeId = searchParams.get("employee") ?? "";
 
   const STEPS = [
-    { id: "RESERVED", label: t.enrollment.step1Title },
-    { id: "TERMINAL_ACCOUNT_CREATED", label: t.enrollment.step2Title },
-    { id: "FINGERPRINT_ENROLLED", label: t.enrollment.step3Title },
-    { id: "CONTROLLED_SCAN_CONFIRMED", label: t.enrollment.step4Title },
-    { id: "READY_FOR_MAPPING", label: t.enrollment.step5Title },
-    { id: "RETIRED", label: t.enrollment.step6Title },
+    { id: "RESERVED", label: t.workflow.wizStep1 },
+    { id: "TERMINAL_ACCOUNT_CREATED", label: t.workflow.wizStep2 },
+    { id: "CONTROLLED_SCAN_PENDING", label: t.workflow.wizStep3 },
+    { id: "READY_FOR_MAPPING", label: t.workflow.wizStep4 },
   ];
+
+  // Actions with no human decision in between: after the left one succeeds,
+  // the right one runs immediately.
+  const AUTO_NEXT: Record<string, string> = {
+    "confirm-fingerprint": "start-controlled-scan",
+    "confirm-controlled-scan": "mark-ready-for-mapping",
+  };
 
   // Auto-select the first or newest active (non-terminal) enrollment if
   // none is selected. Also fires after a cancel clears selectedId, so the
@@ -123,11 +134,13 @@ export function Enrollments() {
       <ReserveCard
         operatorName={me?.username ?? ""}
         canMutate={canMutate}
+        initialEmployeeId={preselectedEmployeeId}
         onReserved={(newId) => {
           setActionError(null);
           setActionSuccess(t.enrollment.reserveSuccessMessage);
           list.reload();
           setSelectedId(newId);
+          setAutoCreateId(newId);
         }}
       />
 
@@ -191,7 +204,9 @@ export function Enrollments() {
                     <div className="mt-2.5 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500">
                       <span>{t.enrollment.reservedByPrefix}: {e.reserved_by ?? "—"}</span>
                       <span>
-                        {stepIdx >= 0 ? `${t.enrollment.stepOfLabel} ${stepIdx + 1} / 6` : t.enrollment.cancelledTitle}
+                        {stepIdx >= 0
+                          ? `${t.workflow.wizStepOf} ${Math.min(stepIdx + 1, STEPS.length)} / ${STEPS.length}`
+                          : t.enrollment.cancelledTitle}
                       </span>
                     </div>
                   </div>
@@ -251,7 +266,16 @@ export function Enrollments() {
               isAdmin={isAdmin}
               busyAction={busyAction}
               terminalAccountUncertain={terminalAccountUncertain}
-              onRunAction={async (action, payload) => {
+              autoCreate={autoCreateId === selected.enrollment_id}
+              onAutoCreateHandled={() => setAutoCreateId(null)}
+              operatorName={me?.username ?? ""}
+              onVerified={() => {
+                setActionError(null);
+                setActionSuccess(t.workflow.verifiedDone);
+                list.reload();
+                nextActions.reload();
+              }}
+              onRunAction={async function runAction(action: string, payload: Record<string, unknown>): Promise<void> {
                 setBusyAction(action);
                 setActionError(null);
                 setActionSuccess(null);
@@ -292,6 +316,10 @@ export function Enrollments() {
                   }
                   list.reload();
                   nextActions.reload();
+                  const next = AUTO_NEXT[action];
+                  if (next) {
+                    await runAction(next, {});
+                  }
                 } catch (err: unknown) {
                   if (action === "create-terminal-account" && err instanceof ApiClientError) {
                     if (err.code === "TERMINAL_ACCOUNT_CONFLICT") {
@@ -387,16 +415,24 @@ export function Enrollments() {
 function ReserveCard({
   operatorName,
   canMutate,
+  initialEmployeeId,
   onReserved,
 }: {
   operatorName: string;
   canMutate: boolean;
+  initialEmployeeId: string;
   onReserved: (newId: number) => void;
 }) {
   const { t } = useTranslation();
-  const eligible = useApi((s) => api.humans({ production_scope: true, limit: 200 }, s), []);
+  // Only people who still need a fingerprint (active, not scan-exempt, no
+  // working scanner account) — keeps the picker short and avoids enrolling
+  // someone twice.
+  const eligible = useApi(
+    (s) => api.humans({ production_scope: true, scan_status: "needs_enrollment", limit: 200 }, s),
+    []
+  );
   const devices = useApi((s) => api.devices(s), []);
-  const [employeeId, setEmployeeId] = useState("");
+  const [employeeId, setEmployeeId] = useState(initialEmployeeId);
   const [deviceId, setDeviceId] = useState("");
   const [operator, setOperator] = useState(operatorName);
   const [busy, setBusy] = useState(false);
@@ -532,6 +568,10 @@ function ActiveEnrollmentInspector({
   busyAction,
   onRunAction,
   terminalAccountUncertain,
+  autoCreate,
+  onAutoCreateHandled,
+  operatorName,
+  onVerified,
 }: {
   enrollment: Enrollment;
   steps: { id: string; label: string }[];
@@ -540,6 +580,10 @@ function ActiveEnrollmentInspector({
   busyAction: string | null;
   onRunAction: (action: string, payload: Record<string, unknown>) => Promise<void>;
   terminalAccountUncertain: boolean;
+  autoCreate: boolean;
+  onAutoCreateHandled: () => void;
+  operatorName: string;
+  onVerified: () => void;
 }) {
   const { t } = useTranslation();
   const currentStep = getStepIndex(enrollment.status);
@@ -593,6 +637,37 @@ function ActiveEnrollmentInspector({
     }
   }, [lastEvent, enrollment.reserved_device_user_id]);
 
+  // Right after "start": create the scanner account without a second click
+  // when the canonical terminal name is usable; otherwise leave the form
+  // for the operator to fix the name.
+  useEffect(() => {
+    if (!autoCreate || enrollment.status !== "RESERVED") return;
+    onAutoCreateHandled();
+    if (canMutate && enrollment.english_name && namePreview.value.trim()) {
+      onRunAction("create-terminal-account", { display_name: namePreview.value.trim() });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoCreate, enrollment.status]);
+
+  // A live scan from this person's terminal ID during the test-scan window
+  // confirms automatically. The server still resolves and binds the actual
+  // evidence itself (ADMS-ControlledScan-EvidenceBinding-018); the SSE event
+  // only triggers the same confirm call the button makes.
+  const [autoConfirmedFor, setAutoConfirmedFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (
+      detectedScan &&
+      detectedScan !== autoConfirmedFor &&
+      enrollment.status === "CONTROLLED_SCAN_PENDING" &&
+      canMutate &&
+      busyAction === null
+    ) {
+      setAutoConfirmedFor(detectedScan);
+      onRunAction("confirm-controlled-scan", {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detectedScan, enrollment.status, canMutate, busyAction]);
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-2xs space-y-5">
       {/* Inspector Top Info */}
@@ -622,7 +697,7 @@ function ActiveEnrollmentInspector({
 
       {/* Stepper Progress Bar */}
       <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
-        <div className="grid grid-cols-6 gap-1 text-center">
+        <div className="grid grid-cols-4 gap-1 text-center">
           {steps.map((s, idx) => {
             const isCompleted = currentStep > idx;
             const isCurrent = currentStep === idx;
@@ -812,6 +887,7 @@ function ActiveEnrollmentInspector({
             <p className="text-xs text-indigo-950 leading-relaxed">
               ให้ <strong>{enrollment.employee_name}</strong> ทำการทดสอบสแกนนิ้วที่เครื่อง ADMS-ZEM560 ทันที
             </p>
+            <p className="text-[11px] font-semibold text-indigo-800">{t.workflow.autoScanHint}</p>
           </div>
 
           <div className="flex items-center justify-between">
@@ -878,25 +954,19 @@ function ActiveEnrollmentInspector({
         </div>
       )}
 
-      {enrollment.status === "READY_FOR_MAPPING" && (
-        <div className="rounded-lg border border-purple-200 bg-purple-50/80 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-purple-950">{t.enrollment.step6Title}</span>
-            <span className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-purple-800">
-              {t.enrollment.badgeAdminAction}
-            </span>
+      {enrollment.status === "READY_FOR_MAPPING" &&
+        (isAdmin ? (
+          <InlineVerifyPane
+            enrollment={enrollment}
+            canMutate={canMutate}
+            operatorName={operatorName}
+            onVerified={onVerified}
+          />
+        ) : (
+          <div className="rounded-lg border border-purple-200 bg-purple-50/80 p-4 text-xs font-semibold text-purple-900">
+            {t.workflow.waitingAdminVerify}
           </div>
-          <p className="text-xs text-purple-900 leading-relaxed">
-            {t.enrollment.step6Desc}
-          </p>
-          <Link
-            to="/mappings"
-            className="inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-purple-800"
-          >
-            {t.nav.mappings} →
-          </Link>
-        </div>
-      )}
+        ))}
 
       {enrollment.status === "RETIRED" && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900">
@@ -931,6 +1001,82 @@ function MetaItem({ dt, dd, mono }: { dt: string; dd: string; mono?: boolean }) 
     <div className="py-1">
       <dt className="text-[10px] font-bold uppercase text-slate-400">{dt}</dt>
       <dd className={`truncate text-slate-800 ${mono ? "font-mono text-[11px]" : ""}`}>{dd}</dd>
+    </div>
+  );
+}
+
+/** Final step done in place by an ADMIN, instead of switching to the
+ * Mappings page. Same createMapping call and server-side checks. */
+function InlineVerifyPane({
+  enrollment,
+  canMutate,
+  operatorName,
+  onVerified,
+}: {
+  enrollment: Enrollment;
+  canMutate: boolean;
+  operatorName: string;
+  onVerified: () => void;
+}) {
+  const { t } = useTranslation();
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function verify() {
+    if (!note.trim()) {
+      setError(t.workflow.exemptReasonRequired);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.createMapping({
+        enrollment_id: enrollment.enrollment_id,
+        verified_by: operatorName,
+        verification_note: note.trim(),
+      });
+      onVerified();
+    } catch (err) {
+      setError(friendlyApiError(err, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-purple-200 bg-purple-50/80 p-4 space-y-3">
+      <div className="text-xs font-bold text-purple-950">{t.workflow.verifyInlineTitle}</div>
+      <div className="text-xs text-purple-900">
+        {enrollment.employee_name} · {enrollment.device_name ?? `#${enrollment.device_id}`} ·{" "}
+        <span className="font-mono font-bold">{enrollment.reserved_device_user_id}</span>
+      </div>
+      <div>
+        <label className="block text-[11px] font-bold text-purple-950">{t.workflow.verifyNoteLabel}</label>
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => {
+            setNote(e.target.value);
+            setError(null);
+          }}
+          placeholder={t.workflow.verifyNotePlaceholder}
+          className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
+        />
+      </div>
+      {error && <div className="text-xs font-semibold text-rose-700">{error}</div>}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={verify}
+          disabled={!canMutate || busy}
+          className="rounded-md bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-purple-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          {busy ? t.common.saving : t.workflow.verifyButton}
+        </button>
+        <Link to="/mappings" className="text-[11px] font-semibold text-purple-700 hover:underline">
+          {t.nav.mappings} →
+        </Link>
+      </div>
     </div>
   );
 }

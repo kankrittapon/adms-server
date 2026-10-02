@@ -64,7 +64,9 @@ class TestPersonnelNoTerminalAccountCard(unittest.TestCase):
     def test_item4_no_terminal_account_card_present(self):
         self.assertIn("has_active_terminal_account === false", self.personnel_src)
         self.assertIn("t.personnel.noTerminalAccountTitle", self.personnel_src)
-        self.assertIn("t.personnel.startNewEnrollmentButton", self.personnel_src)
+        # The enroll call-to-action is the shared EnrollLink (deep-links into
+        # the enrollment flow with this person preselected).
+        self.assertIn("<EnrollLink human={data} />", self.personnel_src)
 
     def test_active_human_with_no_account_is_not_called_inactive(self):
         # The card must be gated on data.active being TRUE — removing a

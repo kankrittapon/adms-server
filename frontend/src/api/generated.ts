@@ -4,6 +4,24 @@
  */
 
 export interface paths {
+    "/api/v1/admin/schedule-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Schedule Settings */
+        get: operations["get_schedule_settings_api_v1_admin_schedule_settings_get"];
+        put?: never;
+        /** Update Schedule Settings */
+        post: operations["update_schedule_settings_api_v1_admin_schedule_settings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/attendance": {
         parameters: {
             query?: never;
@@ -606,6 +624,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/humans/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Humans Summary
+         * @description Counts for the Personnel workflow hub. Registered before
+         *     /humans/{employee_id} for the same route-ordering reason as export.csv.
+         */
+        get: operations["humans_summary_api_v1_humans_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/humans/{employee_id}": {
         parameters: {
             query?: never;
@@ -652,6 +691,27 @@ export interface paths {
         put?: never;
         /** Reactivate */
         post: operations["reactivate_api_v1_humans__employee_id__reactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/humans/{employee_id}/terminal-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Human Terminal Accounts
+         * @description Read-only: active terminal accounts linked to this person, used by
+         *     the offboarding flow to remove them from the device.
+         */
+        get: operations["get_human_terminal_accounts_api_v1_humans__employee_id__terminal_accounts_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -917,6 +977,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/write-session/auto-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Auto Window */
+        post: operations["auto_window_api_v1_write_session_auto_window_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/write-session/close": {
         parameters: {
             query?: never;
@@ -1073,6 +1150,14 @@ export interface components {
             id: number;
             /** Message */
             message?: string | null;
+        };
+        /** AutoWindowRequest */
+        AutoWindowRequest: {
+            /**
+             * Action
+             * @description open or close
+             */
+            action: string;
         };
         /** Body_commit_import_api_v1_humans_import_commit_post */
         Body_commit_import_api_v1_humans_import_commit_post: {
@@ -1611,6 +1696,13 @@ export interface components {
             /** Rank */
             rank?: string | null;
             rank_metadata?: components["schemas"]["RankMetadata"] | null;
+            /**
+             * Scan Exempt
+             * @default false
+             */
+            scan_exempt: boolean;
+            /** Scan Exempt Reason */
+            scan_exempt_reason?: string | null;
             /** Source */
             source: string;
             /**
@@ -1618,6 +1710,15 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** HumanTerminalAccount */
+        HumanTerminalAccount: {
+            /** Active */
+            active: boolean;
+            /** Device Id */
+            device_id: number;
+            /** Device User Id */
+            device_user_id: string;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1874,6 +1975,22 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PersonnelSummary */
+        PersonnelSummary: {
+            /** Active */
+            active: number;
+            /** Inactive */
+            inactive: number;
+            /**
+             * Left With Terminal Account
+             * @description inactive people who still have an active terminal account (offboarding cleanup pending)
+             */
+            left_with_terminal_account: number;
+            /** Needs Enrollment */
+            needs_enrollment: number;
+            /** Scan Exempt */
+            scan_exempt: number;
+        };
         /** RankMetadata */
         RankMetadata: {
             /** Acting */
@@ -2007,6 +2124,41 @@ export interface components {
              */
             operator: string;
         };
+        /** ScheduleSettingsOut */
+        ScheduleSettingsOut: {
+            /** Active Window */
+            active_window?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Days
+             * @description cron days 1-5 Mon-Fri
+             */
+            days: string;
+            /** Enabled */
+            enabled: boolean;
+            /** End Time */
+            end_time: string;
+            /** Last Run */
+            last_run?: {
+                [key: string]: unknown;
+            } | null;
+            /** Start Time */
+            start_time: string;
+            /** Timezone */
+            timezone: string;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Updated By */
+            updated_by?: number | null;
+            /** Updated By Name */
+            updated_by_name?: string | null;
+        };
+        /** ScheduleToggleRequest */
+        ScheduleToggleRequest: {
+            /** Enabled */
+            enabled: boolean;
+        };
         /** StartFingerprintReenrollRequest */
         StartFingerprintReenrollRequest: {
             /** Device User Id */
@@ -2132,6 +2284,13 @@ export interface components {
             position?: string | null;
             /** Rank */
             rank?: string | null;
+            /**
+             * Scan Exempt
+             * @description true = not required to scan in/out (commander office, finance); requires scan_exempt_reason
+             */
+            scan_exempt?: boolean | null;
+            /** Scan Exempt Reason */
+            scan_exempt_reason?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -2178,6 +2337,59 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_schedule_settings_api_v1_admin_schedule_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleSettingsOut"];
+                };
+            };
+        };
+    };
+    update_schedule_settings_api_v1_admin_schedule_settings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleToggleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_attendance_api_v1_attendance_get: {
         parameters: {
             query?: {
@@ -3056,6 +3268,8 @@ export interface operations {
                 active?: boolean | null;
                 search?: string | null;
                 category?: string | null;
+                /** @description workflow filter: needs_enrollment | enrolled | exempt | left_with_account */
+                scan_status?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -3235,6 +3449,26 @@ export interface operations {
             };
         };
     };
+    humans_summary_api_v1_humans_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonnelSummary"];
+                };
+            };
+        };
+    };
     get_human_api_v1_humans__employee_id__get: {
         parameters: {
             query?: never;
@@ -3358,6 +3592,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Human"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_human_terminal_accounts_api_v1_humans__employee_id__terminal_accounts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanTerminalAccount"][];
                 };
             };
             /** @description Validation Error */
@@ -3784,6 +4049,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WriteSessionStatus"];
+                };
+            };
+        };
+    };
+    auto_window_api_v1_write_session_auto_window_post: {
+        parameters: {
+            query?: {
+                /** @description open or close */
+                action?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AutoWindowRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteSessionStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

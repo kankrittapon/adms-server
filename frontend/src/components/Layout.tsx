@@ -32,45 +32,55 @@ export function Layout() {
 
   const isEnrollmentOnly = me?.role === "ENROLLMENT_OPERATOR";
 
-  const OPERATIONS_NAV: NavItem[] = isEnrollmentOnly
+  // Navigation follows the four separate jobs people actually do, so each
+  // one has its own place: daily attendance, the roster, fingerprint
+  // enrollment, and system administration.
+  const isAdminRole = me?.role === "ADMIN";
+  const NAV_GROUPS: { title: string; items: NavItem[] }[] = isEnrollmentOnly
     ? [
         {
-          to: "/enrollments",
-          label: t.nav.enrollment,
-          badge: "STEP",
-          badgeColor: "bg-blue-100 text-blue-800",
+          title: t.workflow.navFingerprintGroup,
+          items: [{ to: "/enrollments", label: t.nav.enrollment }],
         },
       ]
     : [
-        { to: "/", label: t.nav.dashboard },
         {
-          to: "/attendance",
-          label: t.nav.attendance,
-          badge: "LIVE",
-          badgeColor: "bg-emerald-100 text-emerald-800",
+          title: t.workflow.navAttendanceGroup,
+          items: [
+            { to: "/", label: t.nav.dashboard },
+            {
+              to: "/attendance",
+              label: t.nav.attendance,
+              badge: "LIVE",
+              badgeColor: "bg-emerald-100 text-emerald-800",
+            },
+          ],
         },
         {
-          to: "/enrollments",
-          label: t.nav.enrollment,
-          badge: "STEP",
-          badgeColor: "bg-blue-100 text-blue-800",
+          title: t.workflow.navPersonnelGroup,
+          items: [{ to: "/personnel", label: t.nav.personnel }],
+        },
+        {
+          title: t.workflow.navFingerprintGroup,
+          items: [
+            { to: "/enrollments", label: t.nav.enrollment },
+            { to: "/mappings", label: t.nav.mappings },
+          ],
+        },
+        {
+          title: t.workflow.navAdminGroup,
+          items: [
+            { to: "/devices", label: t.nav.devices },
+            { to: "/system", label: t.nav.system },
+            ...(isAdminRole
+              ? [
+                  { to: "/terminal-management", label: t.terminalManagement.title },
+                  { to: "/audit", label: t.nav.audit },
+                ]
+              : []),
+          ],
         },
       ];
-
-  const IDENTITY_NAV: NavItem[] = [
-    { to: "/personnel", label: t.nav.personnel },
-    { to: "/mappings", label: t.nav.mappings },
-  ];
-
-  const INFRA_NAV: NavItem[] = [
-    { to: "/devices", label: t.nav.devices },
-    { to: "/system", label: t.nav.system },
-  ];
-
-  const ADMIN_NAV: NavItem[] = [
-    { to: "/terminal-management", label: t.terminalManagement.title },
-    { to: "/audit", label: t.nav.audit },
-  ];
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900 antialiased font-sans">
@@ -91,55 +101,18 @@ export function Layout() {
 
         {/* Navigation Sections */}
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
-          <div>
-            <div className="px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              {t.nav.operations}
-            </div>
-            <div className="space-y-0.5">
-              {OPERATIONS_NAV.map((n) => (
-                <NavLinkItem key={n.to} item={n} />
-              ))}
-            </div>
-          </div>
-
-          {!isEnrollmentOnly && (
-            <>
-              <div>
-                <div className="px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  {t.nav.identityPeople}
-                </div>
-                <div className="space-y-0.5">
-                  {IDENTITY_NAV.map((n) => (
-                    <NavLinkItem key={n.to} item={n} />
-                  ))}
-                </div>
+          {NAV_GROUPS.map((g) => (
+            <div key={g.title}>
+              <div className="px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                {g.title}
               </div>
-
-              <div>
-                <div className="px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  {t.nav.infrastructure}
-                </div>
-                <div className="space-y-0.5">
-                  {INFRA_NAV.map((n) => (
-                    <NavLinkItem key={n.to} item={n} />
-                  ))}
-                </div>
+              <div className="space-y-0.5">
+                {g.items.map((n) => (
+                  <NavLinkItem key={n.to} item={n} />
+                ))}
               </div>
-
-              {me?.role === "ADMIN" && (
-                <div>
-                  <div className="px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    {t.nav.administration}
-                  </div>
-                  <div className="space-y-0.5">
-                    {ADMIN_NAV.map((n) => (
-                      <NavLinkItem key={n.to} item={n} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+            </div>
+          ))}
         </nav>
 
         {/* User Footer with Role Pill */}
@@ -243,9 +216,35 @@ export function Layout() {
               </button>
             </div>
           )}
+          <WriteWindowBanner />
           <Outlet />
         </main>
       </div>
+    </div>
+  );
+}
+
+/** Tells write-capable users up front whether edits are possible right now,
+ * instead of letting them discover it from a failed save. */
+function WriteWindowBanner() {
+  const { canWrite, serverWriteEnabled, writeSession, writeSessionActive } = useAuth();
+  const { t, locale } = useTranslation();
+  if (!canWrite || !serverWriteEnabled) return null;
+  if (writeSessionActive && writeSession?.expires_at) {
+    const until = new Date(writeSession.expires_at).toLocaleTimeString(locale === "th" ? "th-TH" : "en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return (
+      <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800">
+        ✓ {t.workflow.writeOpenBanner} {until}
+      </div>
+    );
+  }
+  return (
+    <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5">
+      <div className="text-xs font-bold text-amber-900">🔒 {t.workflow.writeClosedBanner}</div>
+      <div className="mt-0.5 text-[11px] text-amber-800">{t.workflow.writeClosedHint}</div>
     </div>
   );
 }

@@ -133,7 +133,7 @@ def dashboard_summary(cfg: Config) -> Dict[str, Any]:
 
 HUMAN_COLUMNS = (
     "employee_id, personnel_id, display_name, english_name, rank, position, branch, category, "
-    "notes, active, production_scope, source, created_at, updated_at"
+    "notes, active, production_scope, scan_exempt, scan_exempt_reason, source, created_at, updated_at"
 )
 
 # ADMS-UX-CrossLifecycleClosure-021B: whether this Human currently has an
@@ -153,6 +153,48 @@ _HAS_ACTIVE_TERMINAL_ACCOUNT_SQL = (
 )
 
 
+_HAS_ACTIVE_ACCOUNT_EXPR = _HAS_ACTIVE_TERMINAL_ACCOUNT_SQL.replace(" AS has_active_terminal_account", "")
+
+# Personnel workflow filters: who still needs fingerprint enrollment, who is
+# done, who is exempt, and who has left but still has a working account.
+_SCAN_STATUS_SQL = {
+    "needs_enrollment": f"(active AND NOT scan_exempt AND NOT {_HAS_ACTIVE_ACCOUNT_EXPR})",
+    "enrolled": f"(active AND {_HAS_ACTIVE_ACCOUNT_EXPR})",
+    "exempt": "(active AND scan_exempt)",
+    "left_with_account": f"(NOT active AND {_HAS_ACTIVE_ACCOUNT_EXPR})",
+}
+SCAN_STATUS_VALUES = tuple(_SCAN_STATUS_SQL)
+
+
+def personnel_summary(cfg: Config) -> Dict[str, Any]:
+    row = _fetch_one(
+        cfg,
+        "SELECT "
+        "COUNT(*) FILTER (WHERE active) AS active, "
+        "COUNT(*) FILTER (WHERE NOT active) AS inactive, "
+        f"COUNT(*) FILTER (WHERE {_SCAN_STATUS_SQL['exempt']}) AS scan_exempt, "
+        f"COUNT(*) FILTER (WHERE {_SCAN_STATUS_SQL['needs_enrollment']}) AS needs_enrollment, "
+        f"COUNT(*) FILTER (WHERE {_SCAN_STATUS_SQL['left_with_account']}) AS left_with_terminal_account "
+        "FROM human_employees",
+    )
+    return row or {"active": 0, "inactive": 0, "scan_exempt": 0, "needs_enrollment": 0, "left_with_terminal_account": 0}
+
+
+def human_terminal_accounts(cfg: Config, employee_id: str) -> List[Dict[str, Any]]:
+    """Every terminal account ever linked to this person by a VERIFIED mapping
+    (open or closed) that is still active on a device — what offboarding must
+    remove."""
+    return _fetch_all(
+        cfg,
+        "SELECT DISTINCT du.device_id, du.device_user_id, du.active "
+        "FROM employee_device_mappings m "
+        "JOIN device_users du ON du.device_user_pk = m.device_user_pk "
+        "WHERE m.employee_id = %s AND m.mapping_status = 'VERIFIED' AND du.active = true "
+        "ORDER BY du.device_id, du.device_user_id",
+        (employee_id,),
+    )
+
+
 def list_humans(
     cfg: Config,
     limit: int,
@@ -161,6 +203,7 @@ def list_humans(
     active: Optional[bool] = None,
     search: Optional[str] = None,
     category: Optional[str] = None,
+    scan_status: Optional[str] = None,
 ) -> Dict[str, Any]:
     where: List[str] = []
     params: List[Any] = []
@@ -177,6 +220,8 @@ def list_humans(
     if category:
         where.append("category = %s")
         params.append(category)
+    if scan_status:
+        where.append(_SCAN_STATUS_SQL[scan_status])
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
     total = _fetch_scalar(cfg, f"SELECT COUNT(*) FROM human_employees{where_sql}", tuple(params))

@@ -47,7 +47,10 @@ log = logging.getLogger(__name__)
 # rows it owns versus which were entered by an ADMIN by hand.
 SOURCE_ADMS_MANUAL = "ADMS_MANUAL"
 
-_EDITABLE_HUMAN_FIELDS = ("display_name", "english_name", "rank", "position", "branch", "category", "personnel_id")
+_EDITABLE_HUMAN_FIELDS = (
+    "display_name", "english_name", "rank", "position", "branch", "category", "personnel_id",
+    "scan_exempt", "scan_exempt_reason",
+)
 
 
 class PersonnelError(Exception):
@@ -72,7 +75,7 @@ def _validate_rank(rank: Optional[str]) -> None:
 def _fetch_human_columns(cur: Any) -> str:
     return (
         "employee_id, personnel_id, display_name, english_name, rank, position, branch, "
-        "category, notes, active, production_scope, source, created_at, updated_at"
+        "category, notes, active, production_scope, scan_exempt, scan_exempt_reason, source, created_at, updated_at"
     )
 
 
@@ -171,6 +174,16 @@ def update_human(
         fields["personnel_id"] = (fields["personnel_id"] or "").strip() or None
     if "english_name" in fields:
         fields["english_name"] = (fields["english_name"] or "").strip() or None
+    if "scan_exempt_reason" in fields:
+        fields["scan_exempt_reason"] = (fields["scan_exempt_reason"] or "").strip() or None
+    if "scan_exempt" in fields:
+        if fields["scan_exempt"] is None:
+            raise PersonnelError("scan_exempt must be true or false")
+        fields["scan_exempt"] = bool(fields["scan_exempt"])
+        if fields["scan_exempt"] and not fields.get("scan_exempt_reason"):
+            raise PersonnelError("a reason is required to mark a person scan-exempt")
+        if not fields["scan_exempt"]:
+            fields["scan_exempt_reason"] = None
     if not fields:
         raise PersonnelError("no editable fields supplied")
 

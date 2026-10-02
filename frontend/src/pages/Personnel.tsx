@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
-import { ConfirmModal } from "../components/ConfirmModal";
 import { CsvImportModal } from "../components/CsvImportModal";
+import { EnrollLink, OffboardPanel, ScanPolicyCard } from "../components/PersonnelLifecycle";
 import { PersonnelFormModal } from "../components/PersonnelFormModal";
 import { ErrorBanner, Loading, ScopeBadge } from "../components/Status";
 import { useApi } from "../hooks/useApi";
+import type { Human } from "../api/types";
 import { useTranslation } from "../i18n";
 import { friendlyApiError } from "../i18n/apiErrors";
 
@@ -16,6 +17,7 @@ export function Personnel() {
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("");
+  const [scanStatus, setScanStatus] = useState<ScanStatus | "">("");
   const [page, setPage] = useState(0);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -32,11 +34,20 @@ export function Personnel() {
           search: search || undefined,
           production_scope: scope === "true" ? true : scope === "false" ? false : undefined,
           active: activeFilter === "true" ? true : activeFilter === "false" ? false : undefined,
+          scan_status: scanStatus || undefined,
         },
         s
       ),
-    [search, scope, activeFilter, page]
+    [search, scope, activeFilter, scanStatus, page]
   );
+  const summary = useApi((s) => api.humansSummary(s), []);
+
+  function applyScanFilter(next: ScanStatus | "") {
+    setScanStatus(next);
+    // scan_status already implies active/inactive; avoid contradictory combos.
+    setActiveFilter("");
+    setPage(0);
+  }
 
   async function handleExport() {
     setExportBusy(true);
@@ -95,6 +106,15 @@ export function Personnel() {
         </div>
       </div>
 
+      <PersonnelHub
+        summary={summary.data}
+        canManage={canManagePersonnel}
+        activeScanFilter={scanStatus}
+        onFilter={applyScanFilter}
+        onImport={() => setShowImportModal(true)}
+        onAdd={() => setShowAddModal(true)}
+      />
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex-1 min-w-[240px]">
@@ -136,6 +156,19 @@ export function Personnel() {
             <option value="false">{t.personnel.filterInactiveOnly}</option>
           </select>
         </div>
+        <div>
+          <select
+            value={scanStatus}
+            onChange={(e) => applyScanFilter(e.target.value as ScanStatus | "")}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+          >
+            <option value="">{t.workflow.filterScanAll}</option>
+            <option value="needs_enrollment">{t.workflow.scanNeeds}</option>
+            <option value="enrolled">{t.workflow.scanEnrolled}</option>
+            <option value="exempt">{t.workflow.scanExempt}</option>
+            <option value="left_with_account">{t.workflow.scanLeftWithAccount}</option>
+          </select>
+        </div>
       </div>
 
       {/* Main Table */}
@@ -154,6 +187,7 @@ export function Personnel() {
                   <th>{t.personnel.rank}</th>
                   <th>{t.personnel.branch}</th>
                   <th>{t.personnel.scope}</th>
+                  <th>{t.workflow.colScan}</th>
                   <th>{t.common.status}</th>
                 </tr>
               </thead>
@@ -186,6 +220,9 @@ export function Personnel() {
                     <td className="text-slate-600">{h.branch ?? "—"}</td>
                     <td>
                       <ScopeBadge scope={h.production_scope} />
+                    </td>
+                    <td>
+                      <ScanStateBadge human={h} />
                     </td>
                     <td>
                       {h.active ? (
@@ -240,13 +277,19 @@ export function Personnel() {
           // Do NOT close on save — PersonnelFormModal shows its own
           // "เพิ่มกำลังพลเรียบร้อยแล้ว" + Enrollment-handoff screen first;
           // it closes itself. Just refresh the list underneath.
-          onSaved={() => reload()}
+          onSaved={() => {
+            reload();
+            summary.reload();
+          }}
         />
       )}
       {showImportModal && (
         <CsvImportModal
           onClose={() => setShowImportModal(false)}
-          onCommitted={() => reload()}
+          onCommitted={() => {
+            reload();
+            summary.reload();
+          }}
         />
       )}
     </div>
@@ -265,14 +308,6 @@ export function HumanDetail() {
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  // ADMS-Personnel-Lifecycle-019
-  const [lifecycleConfirmOpen, setLifecycleConfirmOpen] = useState(false);
-  const [lifecycleReason, setLifecycleReason] = useState("");
-  const [lifecycleReasonError, setLifecycleReasonError] = useState(false);
-  const [lifecycleBusy, setLifecycleBusy] = useState(false);
-  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
-  const [lifecycleSuccess, setLifecycleSuccess] = useState<string | null>(null);
 
   if (loading) return <Loading />;
   if (error) return <ErrorBanner message={error} />;
@@ -305,51 +340,6 @@ export function HumanDetail() {
       }
     } finally {
       setSaveBusy(false);
-    }
-  }
-
-  async function handleDeactivateConfirm() {
-    if (!employeeId) return;
-    if (!lifecycleReason.trim()) {
-      setLifecycleReasonError(true);
-      return;
-    }
-    setLifecycleBusy(true);
-    setLifecycleError(null);
-    try {
-      await api.deactivateHuman(employeeId, lifecycleReason.trim());
-      setLifecycleSuccess(t.personnel.deactivateSuccess);
-      setLifecycleConfirmOpen(false);
-      setLifecycleReason("");
-      reload();
-    } catch (err) {
-      setLifecycleConfirmOpen(false);
-      if (err instanceof ApiClientError && (err.code === "WRITE_DISABLED" || err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_SESSION_EXPIRED")) {
-        setLifecycleError(t.personnel.writesDisabledNotice);
-      } else {
-        setLifecycleError(friendlyApiError(err, t));
-      }
-    } finally {
-      setLifecycleBusy(false);
-    }
-  }
-
-  async function handleReactivate() {
-    if (!employeeId) return;
-    setLifecycleBusy(true);
-    setLifecycleError(null);
-    try {
-      await api.reactivateHuman(employeeId);
-      setLifecycleSuccess(t.personnel.reactivateSuccess);
-      reload();
-    } catch (err) {
-      if (err instanceof ApiClientError && (err.code === "WRITE_DISABLED" || err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_SESSION_EXPIRED")) {
-        setLifecycleError(t.personnel.writesDisabledNotice);
-      } else {
-        setLifecycleError(friendlyApiError(err, t));
-      }
-    } finally {
-      setLifecycleBusy(false);
     }
   }
 
@@ -484,97 +474,21 @@ export function HumanDetail() {
           derived (app/api/repository.py) from the same underlying facts
           Terminal Management and Enrollment use, so this page can never
           disagree with them about whether the account currently works. */}
-      {data.active && data.has_active_terminal_account === false && (
+      {data.active && !data.scan_exempt && data.has_active_terminal_account === false && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
           <div className="text-sm font-bold text-amber-900">{t.personnel.noTerminalAccountTitle}</div>
           <p className="mt-1 text-xs text-amber-800">{t.personnel.noTerminalAccountBody}</p>
-          {isAdmin && (
-            <Link
-              to="/enrollments"
-              className="mt-3 inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700"
-            >
-              {t.personnel.startNewEnrollmentButton}
-            </Link>
-          )}
+          <div className="mt-3">
+            <EnrollLink human={data} />
+          </div>
         </div>
       )}
 
-      {lifecycleSuccess && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
-          ✓ {lifecycleSuccess}
-        </div>
-      )}
-      {lifecycleError && (
-        <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">{lifecycleError}</div>
-      )}
+      <ScanPolicyCard human={data} onChanged={reload} />
 
       {/* ADMS-Personnel-Lifecycle-019: one obvious primary lifecycle action,
-          no mapping_id/device_user_pk/UUID/incarnation/valid_from exposed. */}
-      {isAdmin && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs">
-          {data.active ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setLifecycleReason("");
-                  setLifecycleReasonError(false);
-                  setLifecycleConfirmOpen(true);
-                }}
-                disabled={!canMutate || lifecycleBusy}
-                className="w-full rounded-md bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {t.personnel.deactivateButton}
-              </button>
-              {!canMutate && (
-                <p className="mt-2 text-[11px] text-amber-800">{t.personnel.writesDisabledNotice}</p>
-              )}
-            </>
-          ) : (
-            <>
-              <p className="mb-3 text-xs font-semibold text-slate-700">{t.personnel.terminalCleanupPendingNotice}</p>
-              <button
-                type="button"
-                onClick={handleReactivate}
-                disabled={!canMutate || lifecycleBusy}
-                className="w-full rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {lifecycleBusy ? t.common.saving : t.personnel.reactivateButton}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      <ConfirmModal
-        open={lifecycleConfirmOpen}
-        title={t.personnel.deactivateConfirmTitle}
-        tone="danger"
-        confirmLabel={t.personnel.deactivateButton}
-        busy={lifecycleBusy}
-        onConfirm={handleDeactivateConfirm}
-        onCancel={() => setLifecycleConfirmOpen(false)}
-      >
-        <p className="text-xs text-slate-600 leading-relaxed">{t.personnel.deactivateConfirmBody}</p>
-        <div>
-          <label className="block text-[11px] font-bold text-slate-700">{t.personnel.deactivateReasonLabel}</label>
-          <input
-            type="text"
-            value={lifecycleReason}
-            onChange={(e) => {
-              setLifecycleReason(e.target.value);
-              if (lifecycleReasonError) setLifecycleReasonError(false);
-            }}
-            placeholder={t.personnel.deactivateReasonPlaceholder}
-            className={`mt-1 w-full rounded-md border bg-white px-2.5 py-1.5 text-xs text-slate-900 ${
-              lifecycleReasonError ? "border-rose-500 ring-1 ring-rose-300" : "border-slate-300"
-            }`}
-          />
-          {lifecycleReasonError && (
-            <div className="mt-1 text-[11px] font-semibold text-rose-700">{t.personnel.deactivateReasonRequired}</div>
-          )}
-        </div>
-      </ConfirmModal>
+          no internal identifiers exposed. */}
+      {isAdmin && <OffboardPanel human={data} onChanged={reload} />}
 
       <div>
         <Link to="/personnel" className="text-xs font-semibold text-blue-600 hover:underline">
@@ -594,5 +508,142 @@ function Row({ label, value, mono, hint }: { label: string; value: string; mono?
         {hint && <span className="ml-2 text-[10px] font-normal text-slate-400">({hint})</span>}
       </dd>
     </div>
+  );
+}
+
+type ScanStatus = "needs_enrollment" | "enrolled" | "exempt" | "left_with_account";
+
+type PersonnelSummaryData = {
+  active: number;
+  inactive: number;
+  scan_exempt: number;
+  needs_enrollment: number;
+  left_with_terminal_account: number;
+};
+
+/** Separates the roster jobs (Excel update, new arrival, leaving, scan-exempt)
+ * so each has its own obvious entry point, and turns the counts that need
+ * attention into one-click filters. */
+function PersonnelHub({
+  summary,
+  canManage,
+  activeScanFilter,
+  onFilter,
+  onImport,
+  onAdd,
+}: {
+  summary: PersonnelSummaryData | null | undefined;
+  canManage: boolean;
+  activeScanFilter: ScanStatus | "";
+  onFilter: (s: ScanStatus | "") => void;
+  onImport: () => void;
+  onAdd: () => void;
+}) {
+  const { t } = useTranslation();
+  const counts: { key: ScanStatus | ""; label: string; value?: number; tone: string }[] = [
+    { key: "", label: t.workflow.countActive, value: summary?.active, tone: "text-slate-900" },
+    { key: "needs_enrollment", label: t.workflow.countNeedsEnroll, value: summary?.needs_enrollment, tone: "text-amber-700" },
+    { key: "exempt", label: t.workflow.countExempt, value: summary?.scan_exempt, tone: "text-purple-700" },
+    {
+      key: "left_with_account",
+      label: t.workflow.countLeftWithAccount,
+      value: summary?.left_with_terminal_account,
+      tone: "text-rose-700",
+    },
+  ];
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {counts.map((c) => (
+          <button
+            key={c.key || "all"}
+            type="button"
+            onClick={() => onFilter(c.key)}
+            className={`rounded-lg border bg-white p-3 text-left shadow-2xs transition-colors hover:bg-slate-50 ${
+              activeScanFilter === c.key ? "border-blue-500 ring-1 ring-blue-500" : "border-slate-200"
+            }`}
+          >
+            <div className="text-[11px] font-semibold text-slate-500">{c.label}</div>
+            <div className={`mt-1 text-2xl font-bold ${c.tone}`}>{c.value ?? "—"}</div>
+          </button>
+        ))}
+      </div>
+      <div>
+        <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{t.workflow.hubTitle}</h2>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <TaskCard
+            title={t.workflow.importTitle}
+            desc={t.workflow.importDesc}
+            action={canManage ? { label: t.personnel.importCsvButton, onClick: onImport } : undefined}
+          />
+          <TaskCard
+            title={t.workflow.joinTitle}
+            desc={t.workflow.joinDesc}
+            action={canManage ? { label: t.personnel.addPersonnelButton, onClick: onAdd } : undefined}
+          />
+          <TaskCard
+            title={t.workflow.leaveTitle}
+            desc={t.workflow.leaveDesc}
+            action={{ label: t.workflow.countLeftWithAccount, onClick: () => onFilter("left_with_account") }}
+          />
+          <TaskCard
+            title={t.workflow.exemptTitle}
+            desc={t.workflow.exemptDesc}
+            action={{ label: t.workflow.countExempt, onClick: () => onFilter("exempt") }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskCard({
+  title,
+  desc,
+  action,
+}: {
+  title: string;
+  desc: string;
+  action?: { label: string; onClick: () => void };
+}) {
+  return (
+    <div className="flex flex-col justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-2xs">
+      <div>
+        <div className="text-sm font-bold text-slate-900">{title}</div>
+        <p className="mt-1 text-xs leading-relaxed text-slate-600">{desc}</p>
+      </div>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="mt-3 self-start rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
+        >
+          {action.label}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ScanStateBadge({ human }: { human: Human }) {
+  const { t } = useTranslation();
+  if (!human.active) {
+    return human.has_active_terminal_account ? (
+      <span className="font-semibold text-rose-700">{t.workflow.scanLeftWithAccount}</span>
+    ) : (
+      <span className="text-slate-400">—</span>
+    );
+  }
+  if (human.scan_exempt) {
+    return (
+      <span className="font-semibold text-purple-700" title={human.scan_exempt_reason ?? undefined}>
+        {t.workflow.scanExempt}
+      </span>
+    );
+  }
+  return human.has_active_terminal_account ? (
+    <span className="font-semibold text-emerald-700">✓ {t.workflow.scanEnrolled}</span>
+  ) : (
+    <span className="font-semibold text-amber-700">{t.workflow.scanNeeds}</span>
   );
 }

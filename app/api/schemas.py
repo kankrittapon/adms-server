@@ -99,6 +99,8 @@ class Human(BaseModel):
     notes: Optional[str] = None
     active: bool
     production_scope: bool
+    scan_exempt: bool = False
+    scan_exempt_reason: Optional[str] = None
     source: str
     created_at: datetime
     updated_at: datetime
@@ -144,6 +146,26 @@ class UpdateHumanRequest(BaseModel):
     position: Optional[str] = Field(None, max_length=200)
     branch: Optional[str] = Field(None, max_length=200)
     category: Optional[str] = Field(None, max_length=100)
+    scan_exempt: Optional[bool] = Field(
+        None, description="true = not required to scan in/out (commander office, finance); requires scan_exempt_reason"
+    )
+    scan_exempt_reason: Optional[str] = Field(None, max_length=200)
+
+
+class HumanTerminalAccount(BaseModel):
+    device_id: int
+    device_user_id: str
+    active: bool
+
+
+class PersonnelSummary(BaseModel):
+    active: int
+    inactive: int
+    scan_exempt: int
+    needs_enrollment: int
+    left_with_terminal_account: int = Field(
+        description="inactive people who still have an active terminal account (offboarding cleanup pending)"
+    )
 
 
 class CsvImportRowResult(BaseModel):

@@ -319,6 +319,21 @@ export const api = {
       body: JSON.stringify({ english_name: englishName } satisfies BodyOf<"update_human_endpoint_api_v1_humans__employee_id__patch">),
     }),
   // ADMS-Personnel-Lifecycle-019
+  humansSummary: (signal?: AbortSignal) =>
+    request<JsonResponse<"humans_summary_api_v1_humans_summary_get">>("/api/v1/humans/summary", signal),
+  humanTerminalAccounts: (employeeId: string, signal?: AbortSignal) =>
+    request<JsonResponse<"get_human_terminal_accounts_api_v1_humans__employee_id__terminal_accounts_get">>(
+      `/api/v1/humans/${employeeId}/terminal-accounts`, signal
+    ),
+  setScanExempt: (employeeId: string, scanExempt: boolean, reason: string | null) =>
+    request<Human>(`/api/v1/humans/${employeeId}`, undefined, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scan_exempt: scanExempt,
+        scan_exempt_reason: reason,
+      } satisfies BodyOf<"update_human_endpoint_api_v1_humans__employee_id__patch">),
+    }),
   deactivateHuman: (employeeId: string, reason: string) =>
     request<Human>(`/api/v1/humans/${employeeId}/deactivate`, undefined, {
       method: "POST",
@@ -407,6 +422,36 @@ export const api = {
     }),
   closeWriteSession: () =>
     request<WriteSessionStatus>("/api/v1/write-session/close", undefined, { method: "POST" }),
+  // PRM-ADMS-004: Scheduled Business Hours
+  getScheduleSettings: (signal?: AbortSignal) =>
+    request<{
+      enabled: boolean;
+      days: string;
+      start_time: string;
+      end_time: string;
+      timezone: string;
+      updated_by: number | null;
+      updated_by_name: string | null;
+      updated_at: string | null;
+      active_window: WriteSessionStatus;
+      last_run: { action: string; result: string; at: string } | null;
+    }>("/api/v1/admin/schedule-settings", signal),
+  updateScheduleSettings: (enabled: boolean) =>
+    request<{
+      enabled: boolean;
+      days: string;
+      start_time: string;
+      end_time: string;
+      timezone: string;
+      updated_by: number | null;
+      updated_by_name: string | null;
+      updated_at: string | null;
+      active_window: WriteSessionStatus;
+    }>("/api/v1/admin/schedule-settings", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    }),
 };
 
 function enrollmentTransition<OpId extends OperationsKey>(

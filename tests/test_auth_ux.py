@@ -76,7 +76,8 @@ class TestAuthHydration(unittest.TestCase):
         # ADMIN_NAV visibility keys off me?.role === "ADMIN" directly — since
         # me is null during loading, this is false-by-construction until
         # /auth/me actually resolves, so it can't flicker into view early.
-        self.assertIn('me?.role === "ADMIN" && (', self.layout_src)
+        self.assertIn('isAdminRole = me?.role === "ADMIN"', self.layout_src)
+        self.assertIn("...(isAdminRole", self.layout_src)
 
     def test_item8_destructive_admin_controls_hidden_while_role_unknown(self):
         terminal_mgmt_src = _read("pages/TerminalManagement.tsx")
