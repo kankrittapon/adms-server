@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { CsvImportModal } from "../components/CsvImportModal";
+import { AbsenceTable } from "./Absences";
 import { EnrollLink, OffboardPanel, ScanPolicyCard } from "../components/PersonnelLifecycle";
 import { PersonnelFormModal } from "../components/PersonnelFormModal";
 import { ErrorBanner, Loading, ScopeBadge } from "../components/Status";
@@ -486,6 +487,8 @@ export function HumanDetail() {
 
       <ScanPolicyCard human={data} onChanged={reload} />
 
+      <PersonAbsences employeeId={data.employee_id} active={data.active} />
+
       {/* ADMS-Personnel-Lifecycle-019: one obvious primary lifecycle action,
           no internal identifiers exposed. */}
       {isAdmin && <OffboardPanel human={data} onChanged={reload} />}
@@ -645,5 +648,27 @@ function ScanStateBadge({ human }: { human: Human }) {
     <span className="font-semibold text-emerald-700">✓ {t.workflow.scanEnrolled}</span>
   ) : (
     <span className="font-semibold text-amber-700">{t.workflow.scanNeeds}</span>
+  );
+}
+
+function PersonAbsences({ employeeId, active }: { employeeId: string; active: boolean }) {
+  const { t } = useTranslation();
+  const { canRecordAbsence } = useAuth();
+  const list = useApi((s) => api.absences({ employee_id: employeeId, limit: 50 }, s), [employeeId]);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-slate-900">{t.leave.historyTitle}</h2>
+        {canRecordAbsence && active && (
+          <Link
+            to={`/absences?employee=${employeeId}`}
+            className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            + {t.leave.addForPerson}
+          </Link>
+        )}
+      </div>
+      {list.error ? <ErrorBanner message={list.error} /> : <AbsenceTable items={list.data?.items ?? []} onChanged={list.reload} />}
+    </div>
   );
 }

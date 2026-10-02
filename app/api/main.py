@@ -25,6 +25,7 @@ from app.api.errors import register_exception_handlers
 from app.api.schemas import Healthz
 from app.api.settings import ApiSettings, get_settings
 from app.api.routers import (
+    absences,
     attendance,
     audit,
     auth,
@@ -133,6 +134,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         humans.router,
         devices.router,
         device_users.router,
+        absences.router,
         attendance.router,
         mappings.router,
         enrollments.router,

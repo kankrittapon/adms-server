@@ -87,6 +87,7 @@ async function request<T>(path: string, signal?: AbortSignal, init?: RequestInit
     }
     throw new ApiClientError(res.status, code, message);
   }
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
@@ -319,6 +320,39 @@ export const api = {
       body: JSON.stringify({ english_name: englishName } satisfies BodyOf<"update_human_endpoint_api_v1_humans__employee_id__patch">),
     }),
   // ADMS-Personnel-Lifecycle-019
+  // Absences (record-only leave / official duty / secondment)
+  absenceTypes: (signal?: AbortSignal) =>
+    request<JsonResponse<"get_types_api_v1_absence_types_get">>("/api/v1/absence-types", signal),
+  absences: (params: QueryOf<"get_absences_api_v1_absences_get">, signal?: AbortSignal) =>
+    request<JsonResponse<"get_absences_api_v1_absences_get">>(`/api/v1/absences${qs(params)}`, signal),
+  createAbsence: (payload: BodyOf<"post_absence_api_v1_absences_post">) =>
+    request<JsonResponse<"post_absence_api_v1_absences_post">>("/api/v1/absences", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  cancelAbsence: (absenceId: number, reason: string) =>
+    request<JsonResponse<"post_cancel_api_v1_absences__absence_id__cancel_post">>(
+      `/api/v1/absences/${absenceId}/cancel`, undefined, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason } satisfies BodyOf<"post_cancel_api_v1_absences__absence_id__cancel_post">),
+      }
+    ),
+  holidays: (year: number | undefined, signal?: AbortSignal) =>
+    request<JsonResponse<"get_holidays_api_v1_holidays_get">>(`/api/v1/holidays${year ? `?year=${year}` : ""}`, signal),
+  setHoliday: (holidayDate: string, nameTh: string) =>
+    request<JsonResponse<"post_holiday_api_v1_holidays_post">>("/api/v1/holidays", undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ holiday_date: holidayDate, name_th: nameTh }),
+    }),
+  deleteHoliday: (holidayDate: string) =>
+    request<void>(`/api/v1/holidays/${holidayDate}`, undefined, { method: "DELETE" }),
+  dailyRoster: (day: string | undefined, signal?: AbortSignal) =>
+    request<JsonResponse<"get_daily_roster_api_v1_attendance_daily_get">>(
+      `/api/v1/attendance/daily${day ? `?date=${day}` : ""}`, signal
+    ),
   humansSummary: (signal?: AbortSignal) =>
     request<JsonResponse<"humans_summary_api_v1_humans_summary_get">>("/api/v1/humans/summary", signal),
   humanTerminalAccounts: (employeeId: string, signal?: AbortSignal) =>

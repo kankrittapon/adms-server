@@ -4,6 +4,58 @@
  */
 
 export interface paths {
+    "/api/v1/absence-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Types */
+        get: operations["get_types_api_v1_absence_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/absences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Absences */
+        get: operations["get_absences_api_v1_absences_get"];
+        put?: never;
+        /** Post Absence */
+        post: operations["post_absence_api_v1_absences_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/absences/{absence_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Cancel */
+        post: operations["post_cancel_api_v1_absences__absence_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/schedule-settings": {
         parameters: {
             query?: never;
@@ -31,6 +83,23 @@ export interface paths {
         };
         /** List Attendance */
         get: operations["list_attendance_api_v1_attendance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Daily Roster */
+        get: operations["get_daily_roster_api_v1_attendance_daily_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -518,6 +587,41 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/holidays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Holidays */
+        get: operations["get_holidays_api_v1_holidays_get"];
+        put?: never;
+        /** Post Holiday */
+        post: operations["post_holiday_api_v1_holidays_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/holidays/{holiday_date}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Holiday */
+        delete: operations["remove_holiday_api_v1_holidays__holiday_date__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1049,6 +1153,87 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Absence */
+        Absence: {
+            /** Absence Id */
+            absence_id: number;
+            /** Branch */
+            branch?: string | null;
+            /** Cancel Reason */
+            cancel_reason?: string | null;
+            /** Cancelled At */
+            cancelled_at?: string | null;
+            /** Cancelled By */
+            cancelled_by?: string | null;
+            /** Counts As */
+            counts_as: string;
+            /** Days */
+            days: number;
+            /** Destination */
+            destination?: string | null;
+            /** Employee Id */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Note */
+            note?: string | null;
+            /** Order Ref */
+            order_ref?: string | null;
+            /** Rank */
+            rank?: string | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /** Recorded By */
+            recorded_by: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Status */
+            status: string;
+            /** Type Code */
+            type_code: string;
+            /** Type Name En */
+            type_name_en: string;
+            /** Type Name Th */
+            type_name_th: string;
+        };
+        /** AbsencePage */
+        AbsencePage: {
+            /** Items */
+            items: components["schemas"]["Absence"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** AbsenceType */
+        AbsenceType: {
+            /** Code */
+            code: string;
+            /**
+             * Counts As
+             * @description 'LEAVE' or 'DUTY' (official duty / secondment count as working)
+             */
+            counts_as: string;
+            /** Name En */
+            name_en: string;
+            /** Name Th */
+            name_th: string;
+            /** Requires Order Ref */
+            requires_order_ref: boolean;
+        };
         /** Attendance */
         Attendance: {
             /**
@@ -1169,6 +1354,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** CancelAbsenceRequest */
+        CancelAbsenceRequest: {
+            /** Reason */
+            reason: string;
+        };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
             /** Current Password */
@@ -1197,6 +1387,29 @@ export interface components {
             state?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** CreateAbsenceRequest */
+        CreateAbsenceRequest: {
+            /** Destination */
+            destination?: string | null;
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Note */
+            note?: string | null;
+            /** Order Ref */
+            order_ref?: string | null;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Type Code */
+            type_code: string;
         };
         /**
          * CreateHumanRequest
@@ -1362,6 +1575,30 @@ export interface components {
             unchanged: number;
             /** Update */
             update: number;
+        };
+        /** DailyRoster */
+        DailyRoster: {
+            /** By Branch */
+            by_branch: components["schemas"]["RosterBranch"][];
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /** Is Workday */
+            is_workday: boolean;
+            /** Late After */
+            late_after: string;
+            /** People */
+            people: components["schemas"]["RosterPerson"][];
+            /** Total */
+            total: number;
+            /** Totals */
+            totals: {
+                [key: string]: unknown;
+            };
         };
         /** DashboardSummary */
         DashboardSummary: {
@@ -1660,6 +1897,16 @@ export interface components {
              * @default ok
              */
             status: string;
+        };
+        /** Holiday */
+        Holiday: {
+            /**
+             * Holiday Date
+             * Format: date
+             */
+            holiday_date: string;
+            /** Name Th */
+            name_th: string;
         };
         /** Human */
         Human: {
@@ -2110,6 +2357,47 @@ export interface components {
              */
             roster_user_ids?: unknown[] | null;
         };
+        /** RosterBranch */
+        RosterBranch: {
+            /** Branch */
+            branch: string;
+            /** Counts */
+            counts: {
+                [key: string]: unknown;
+            };
+        };
+        /** RosterPerson */
+        RosterPerson: {
+            /** Absence End */
+            absence_end?: string | null;
+            /** Absence Name Th */
+            absence_name_th?: string | null;
+            /** Absence Start */
+            absence_start?: string | null;
+            /** Branch */
+            branch?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Employee Id */
+            employee_id: string;
+            /** First Scan */
+            first_scan?: string | null;
+            /** Order Ref */
+            order_ref?: string | null;
+            /** Rank */
+            rank?: string | null;
+            /** Scan Exempt */
+            scan_exempt: boolean;
+            /**
+             * Status
+             * @description PRESENT | LATE | LEAVE | DUTY | EXEMPT | NOT_YET | ABSENT | OFF
+             */
+            status: string;
+            /** Type Code */
+            type_code?: string | null;
+        };
         /**
          * ScanConfirmationRequest
          * @description ADMS-ControlledScan-EvidenceBinding-018: no scan_time field — the
@@ -2337,6 +2625,134 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_types_api_v1_absence_types_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceType"][];
+                };
+            };
+        };
+    };
+    get_absences_api_v1_absences_get: {
+        parameters: {
+            query?: {
+                employee_id?: string | null;
+                /** @description absences ending on/after this date */
+                on_or_after?: string | null;
+                /** @description absences starting on/before this date */
+                on_or_before?: string | null;
+                type_code?: string | null;
+                include_cancelled?: boolean;
+                search?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsencePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_absence_api_v1_absences_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAbsenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Absence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_cancel_api_v1_absences__absence_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                absence_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelAbsenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Absence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_schedule_settings_api_v1_admin_schedule_settings_get: {
         parameters: {
             query?: never;
@@ -2414,6 +2830,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page_Attendance_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_daily_roster_api_v1_attendance_daily_get: {
+        parameters: {
+            query?: {
+                /** @description local date; defaults to today (Asia/Bangkok) */
+                date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyRoster"];
                 };
             };
             /** @description Validation Error */
@@ -3256,6 +3704,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthCheck"];
+                };
+            };
+        };
+    };
+    get_holidays_api_v1_holidays_get: {
+        parameters: {
+            query?: {
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Holiday"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_holiday_api_v1_holidays_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Holiday"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Holiday"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_holiday_api_v1_holidays__holiday_date__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                holiday_date: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -20,6 +20,7 @@ interface AuthState {
   // sole source of truth. Keep this list in sync with app/api/auth.py's
   // ROLES_* sets — it deliberately mirrors them, not reinvents them.
   canOpenWorkSession: boolean;
+  canRecordAbsence: boolean;
   canEnroll: boolean;
   canVerifyIdentity: boolean;
   canManagePersonnel: boolean;
@@ -39,6 +40,7 @@ const AuthContext = createContext<AuthState>({
   canMutate: false,
   isAdmin: false,
   canOpenWorkSession: false,
+  canRecordAbsence: false,
   canEnroll: false,
   canVerifyIdentity: false,
   canManagePersonnel: false,
@@ -123,6 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Mirrors app/api/auth.py's ROLES_OPERATOR_PLUS — matches the
         // write-session router's actual gate (Phase 3).
         canOpenWorkSession: isOperatorOrAdmin,
+        // Leave is approved on paper first; recording it is OPERATOR/ADMIN data entry.
+        canRecordAbsence: isOperatorOrAdmin,
         // Mirrors ROLES_ENROLLMENT_MUTATE.
         canEnroll: canWrite,
         // Separation of duties (Phase 9): final identity/mapping

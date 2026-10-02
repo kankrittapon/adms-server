@@ -1,6 +1,236 @@
 {
   "components": {
     "schemas": {
+      "Absence": {
+        "properties": {
+          "absence_id": {
+            "title": "Absence Id",
+            "type": "integer"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "cancel_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Reason"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "cancelled_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled By"
+          },
+          "counts_as": {
+            "title": "Counts As",
+            "type": "string"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination"
+          },
+          "employee_id": {
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "order_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Ref"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "recorded_by": {
+            "title": "Recorded By",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "type_code": {
+            "title": "Type Code",
+            "type": "string"
+          },
+          "type_name_en": {
+            "title": "Type Name En",
+            "type": "string"
+          },
+          "type_name_th": {
+            "title": "Type Name Th",
+            "type": "string"
+          }
+        },
+        "required": [
+          "absence_id",
+          "employee_id",
+          "employee_name",
+          "type_code",
+          "type_name_th",
+          "type_name_en",
+          "counts_as",
+          "start_date",
+          "end_date",
+          "days",
+          "status",
+          "recorded_by",
+          "recorded_at"
+        ],
+        "title": "Absence",
+        "type": "object"
+      },
+      "AbsencePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Absence"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "AbsencePage",
+        "type": "object"
+      },
+      "AbsenceType": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "counts_as": {
+            "description": "'LEAVE' or 'DUTY' (official duty / secondment count as working)",
+            "title": "Counts As",
+            "type": "string"
+          },
+          "name_en": {
+            "title": "Name En",
+            "type": "string"
+          },
+          "name_th": {
+            "title": "Name Th",
+            "type": "string"
+          },
+          "requires_order_ref": {
+            "title": "Requires Order Ref",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "name_th",
+          "name_en",
+          "counts_as",
+          "requires_order_ref"
+        ],
+        "title": "AbsenceType",
+        "type": "object"
+      },
       "Attendance": {
         "properties": {
           "created_at": {
@@ -362,6 +592,21 @@
         "title": "Body_preview_import_api_v1_humans_import_preview_post",
         "type": "object"
       },
+      "CancelAbsenceRequest": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "CancelAbsenceRequest",
+        "type": "object"
+      },
       "ChangePasswordRequest": {
         "properties": {
           "current_password": {
@@ -473,6 +718,72 @@
           }
         },
         "title": "CollectorSummary",
+        "type": "object"
+      },
+      "CreateAbsenceRequest": {
+        "properties": {
+          "destination": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination"
+          },
+          "employee_id": {
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "order_ref": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Ref"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "type_code": {
+            "title": "Type Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "employee_id",
+          "type_code",
+          "start_date",
+          "end_date"
+        ],
+        "title": "CreateAbsenceRequest",
         "type": "object"
       },
       "CreateHumanRequest": {
@@ -870,6 +1181,68 @@
           "error"
         ],
         "title": "CsvImportSummary",
+        "type": "object"
+      },
+      "DailyRoster": {
+        "properties": {
+          "by_branch": {
+            "items": {
+              "$ref": "#/components/schemas/RosterBranch"
+            },
+            "title": "By Branch",
+            "type": "array"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "holiday_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holiday Name"
+          },
+          "is_workday": {
+            "title": "Is Workday",
+            "type": "boolean"
+          },
+          "late_after": {
+            "title": "Late After",
+            "type": "string"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/RosterPerson"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "totals": {
+            "additionalProperties": true,
+            "title": "Totals",
+            "type": "object"
+          }
+        },
+        "required": [
+          "date",
+          "is_workday",
+          "late_after",
+          "total",
+          "totals",
+          "by_branch",
+          "people"
+        ],
+        "title": "DailyRoster",
         "type": "object"
       },
       "DashboardSummary": {
@@ -1594,6 +1967,25 @@
           }
         },
         "title": "Healthz",
+        "type": "object"
+      },
+      "Holiday": {
+        "properties": {
+          "holiday_date": {
+            "format": "date",
+            "title": "Holiday Date",
+            "type": "string"
+          },
+          "name_th": {
+            "title": "Name Th",
+            "type": "string"
+          }
+        },
+        "required": [
+          "holiday_date",
+          "name_th"
+        ],
+        "title": "Holiday",
         "type": "object"
       },
       "Human": {
@@ -2806,6 +3198,156 @@
         "title": "ReserveRequest",
         "type": "object"
       },
+      "RosterBranch": {
+        "properties": {
+          "branch": {
+            "title": "Branch",
+            "type": "string"
+          },
+          "counts": {
+            "additionalProperties": true,
+            "title": "Counts",
+            "type": "object"
+          }
+        },
+        "required": [
+          "branch",
+          "counts"
+        ],
+        "title": "RosterBranch",
+        "type": "object"
+      },
+      "RosterPerson": {
+        "properties": {
+          "absence_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absence End"
+          },
+          "absence_name_th": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absence Name Th"
+          },
+          "absence_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absence Start"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "employee_id": {
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "first_scan": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Scan"
+          },
+          "order_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Ref"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "scan_exempt": {
+            "title": "Scan Exempt",
+            "type": "boolean"
+          },
+          "status": {
+            "description": "PRESENT | LATE | LEAVE | DUTY | EXEMPT | NOT_YET | ABSENT | OFF",
+            "title": "Status",
+            "type": "string"
+          },
+          "type_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Code"
+          }
+        },
+        "required": [
+          "employee_id",
+          "display_name",
+          "scan_exempt",
+          "status"
+        ],
+        "title": "RosterPerson",
+        "type": "object"
+      },
       "ScanConfirmationRequest": {
         "description": "ADMS-ControlledScan-EvidenceBinding-018: no scan_time field \u2014 the\nserver resolves and binds the actual attendance evidence itself (see\napp.enrollment.confirm_controlled_scan). The operator/browser never\nsupplies or estimates a scan time.",
         "properties": {
@@ -3476,6 +4018,275 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/absence-types": {
+      "get": {
+        "operationId": "get_types_api_v1_absence_types_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AbsenceType"
+                  },
+                  "title": "Response Get Types Api V1 Absence Types Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Types",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/absences": {
+      "get": {
+        "operationId": "get_absences_api_v1_absences_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "employee_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Employee Id"
+            }
+          },
+          {
+            "description": "absences ending on/after this date",
+            "in": "query",
+            "name": "on_or_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "absences ending on/after this date",
+              "title": "On Or After"
+            }
+          },
+          {
+            "description": "absences starting on/before this date",
+            "in": "query",
+            "name": "on_or_before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "absences starting on/before this date",
+              "title": "On Or Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_cancelled",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Cancelled",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsencePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Absences",
+        "tags": [
+          "absences"
+        ]
+      },
+      "post": {
+        "operationId": "post_absence_api_v1_absences_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAbsenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Absence"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Absence",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/absences/{absence_id}/cancel": {
+      "post": {
+        "operationId": "post_cancel_api_v1_absences__absence_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "absence_id",
+            "required": true,
+            "schema": {
+              "title": "Absence Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelAbsenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Absence"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Cancel",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
     "/api/v1/admin/schedule-settings": {
       "get": {
         "operationId": "get_schedule_settings_api_v1_admin_schedule_settings_get",
@@ -3669,6 +4480,58 @@
         "summary": "List Attendance",
         "tags": [
           "attendance"
+        ]
+      }
+    },
+    "/api/v1/attendance/daily": {
+      "get": {
+        "operationId": "get_daily_roster_api_v1_attendance_daily_get",
+        "parameters": [
+          {
+            "description": "local date; defaults to today (Asia/Bangkok)",
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "local date; defaults to today (Asia/Bangkok)",
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyRoster"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Daily Roster",
+        "tags": [
+          "absences"
         ]
       }
     },
@@ -4977,6 +5840,136 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/v1/holidays": {
+      "get": {
+        "operationId": "get_holidays_api_v1_holidays_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2100,
+                  "minimum": 2000,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Year"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Holiday"
+                  },
+                  "title": "Response Get Holidays Api V1 Holidays Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Holidays",
+        "tags": [
+          "absences"
+        ]
+      },
+      "post": {
+        "operationId": "post_holiday_api_v1_holidays_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Holiday"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Holiday"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Holiday",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/holidays/{holiday_date}": {
+      "delete": {
+        "operationId": "remove_holiday_api_v1_holidays__holiday_date__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "holiday_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Holiday Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Holiday",
+        "tags": [
+          "absences"
         ]
       }
     },

@@ -48,6 +48,8 @@ export function Layout() {
           title: t.workflow.navAttendanceGroup,
           items: [
             { to: "/", label: t.nav.dashboard },
+            { to: "/daily", label: t.leave.navDaily },
+            { to: "/absences", label: t.leave.navLeave },
             {
               to: "/attendance",
               label: t.nav.attendance,

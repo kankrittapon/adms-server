@@ -11,6 +11,8 @@ import { Login } from "./pages/Login";
 import { Mappings } from "./pages/Mappings";
 import { Audit } from "./pages/Audit";
 import { HumanDetail, Personnel } from "./pages/Personnel";
+import { Absences } from "./pages/Absences";
+import { DailyRoster } from "./pages/DailyRoster";
 import { System } from "./pages/System";
 import { TerminalManagement } from "./pages/TerminalManagement";
 
@@ -59,6 +61,8 @@ export function App() {
         <Route path="/personnel/:employeeId" element={<HumanDetail />} />
         <Route path="/devices" element={<Devices />} />
         <Route path="/attendance" element={<Attendance />} />
+        <Route path="/daily" element={<DailyRoster />} />
+        <Route path="/absences" element={<Absences />} />
         <Route path="/attendance/:id" element={<AttendanceDetail />} />
         <Route path="/enrollments" element={<Enrollments />} />
         <Route path="/mappings" element={<Mappings />} />
