@@ -65,7 +65,7 @@ def list_operators(cfg: Config = Depends(get_cfg)):
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT operator_id, username, display_name, role, active, "
-                "created_at, updated_at FROM operators ORDER BY operator_id;"
+                "created_at, updated_at FROM operators WHERE username != 'SYSTEM_SCHEDULER' ORDER BY operator_id;"
             )
             rows = cur.fetchall()
     return [

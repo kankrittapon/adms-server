@@ -62,3 +62,6 @@ data/imports/
 data/archive/
 !docs/reports/archive/
 
+.adms_scheduler.env
+.adms_scheduler_token
+logs/

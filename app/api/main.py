@@ -37,6 +37,7 @@ from app.api.routers import (
     mappings,
     operators,
     reference,
+    schedule,
     stream,
     terminal_management,
     write_session,
@@ -120,6 +121,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     # Auth + operator management (login is public; operators is admin-gated).
     app.include_router(auth.router)
     app.include_router(operators.router)
+    app.include_router(schedule.router)
 
     # Audit trail (admin-gated inside the router).
     app.include_router(audit.router)

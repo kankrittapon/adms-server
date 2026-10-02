@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { Badge, ErrorBanner, Loading, StatCard } from "../components/Status";
+import { SchedulerControl } from "../components/SchedulerControl";
 import { WriteSessionControl } from "../components/WriteSessionControl";
 import { useApi } from "../hooks/useApi";
 import { useTranslation } from "../i18n";
@@ -25,6 +26,9 @@ export function System() {
 
       {/* Runtime Write Session control (ADMIN opens/closes; every role sees status) */}
       <WriteSessionControl />
+
+      {/* PRM-ADMS-004: Scheduled Business Hours (ADMIN toggle, all roles see badge) */}
+      <SchedulerControl />
 
       {/* System Telemetry Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
