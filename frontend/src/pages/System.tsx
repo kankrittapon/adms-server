@@ -9,7 +9,7 @@ import { useTranslation } from "../i18n";
 import { friendlyApiError } from "../i18n/apiErrors";
 
 export function System() {
-  const { me } = useAuth();
+  const { me, workSessionRequired } = useAuth();
   const { t } = useTranslation();
   const health = useApi((s) => api.health(s), []);
   const ranks = useApi((s) => api.ranks(s), []);
@@ -25,10 +25,18 @@ export function System() {
       </div>
 
       {/* Runtime Write Session control (ADMIN opens/closes; every role sees status) */}
-      <WriteSessionControl />
-
-      {/* PRM-ADMS-004: Scheduled Business Hours (ADMIN toggle, all roles see badge) */}
-      <SchedulerControl />
+      {workSessionRequired ? (
+        <>
+          <WriteSessionControl />
+          {/* PRM-ADMS-004: Scheduled Business Hours (ADMIN toggle, all roles see badge) */}
+          <SchedulerControl />
+        </>
+      ) : (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 text-xs text-slate-700 shadow-2xs">
+          <div className="text-sm font-bold text-slate-900">{t.workflow.openPolicyTitle}</div>
+          <p className="mt-1 leading-relaxed">{t.workflow.openPolicyBody}</p>
+        </div>
+      )}
 
       {/* System Telemetry Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">

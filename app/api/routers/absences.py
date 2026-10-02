@@ -105,7 +105,8 @@ class RosterPerson(BaseModel):
     order_ref: Optional[str] = None
     absence_start: Optional[date] = None
     absence_end: Optional[date] = None
-    first_scan: Optional[datetime] = None
+    first_scan: Optional[datetime] = Field(None, description="first scan inside the scan window")
+    scans_outside_window: int = 0
 
 
 class MonthlyDay(BaseModel):
@@ -134,6 +135,7 @@ class DailyRoster(BaseModel):
     is_workday: bool
     holiday_name: Optional[str] = None
     late_after: str
+    scan_window: str = "06:30–11:00"
     total: int
     totals: dict
     by_branch: List[RosterBranch]
@@ -237,6 +239,7 @@ def get_daily_roster(
 class MonthlyReport(BaseModel):
     month: str
     late_after: str
+    scan_window: str = "06:30–11:00"
     workdays: int
     days: List[MonthlyDay]
     people: List[MonthlyPerson]

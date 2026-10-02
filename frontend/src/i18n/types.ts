@@ -193,6 +193,9 @@ export interface Translations {
     allStatuses: string;
   };
   workflow: {
+    openPolicyTitle: string;
+    openPolicyBody: string;
+    outsideWindow: string;
     offboardDeferred: string;
     fingerprintWindowNeeded: string;
     pwCurrentWrong: string;

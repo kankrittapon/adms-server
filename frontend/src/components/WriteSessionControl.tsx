@@ -16,7 +16,7 @@ function formatRemaining(expiresAt: string, now: number): string {
 
 /** Compact header badge — visible to every role, read-only. */
 export function WriteSessionBadge() {
-  const { writeSession, writeSessionActive, serverWriteEnabled } = useAuth();
+  const { writeSession, writeSessionActive, serverWriteEnabled, workSessionRequired } = useAuth();
   const { t } = useTranslation();
   const [now, setNow] = useState(() => Date.now());
   // Both layers must hold for changes to actually be possible — a runtime
@@ -31,6 +31,7 @@ export function WriteSessionBadge() {
     return () => clearInterval(interval);
   }, [effectiveActive]);
 
+  if (!workSessionRequired) return null;
   if (effectiveActive && writeSession?.expires_at) {
     return (
       <span

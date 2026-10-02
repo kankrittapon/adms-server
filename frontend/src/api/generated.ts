@@ -1683,6 +1683,11 @@ export interface components {
             late_after: string;
             /** People */
             people: components["schemas"]["RosterPerson"][];
+            /**
+             * Scan Window
+             * @default 06:30–11:00
+             */
+            scan_window: string;
             /** Total */
             total: number;
             /** Totals */
@@ -2193,6 +2198,11 @@ export interface components {
             /** Username */
             username: string;
             /**
+             * Work Session Required
+             * @default true
+             */
+            work_session_required: boolean;
+            /**
              * Write Enabled
              * @default false
              */
@@ -2245,6 +2255,11 @@ export interface components {
             month: string;
             /** People */
             people: components["schemas"]["MonthlyPerson"][];
+            /**
+             * Scan Window
+             * @default 06:30–11:00
+             */
+            scan_window: string;
             /** Workdays */
             workdays: number;
         };
@@ -2521,7 +2536,10 @@ export interface components {
             display_name: string;
             /** Employee Id */
             employee_id: string;
-            /** First Scan */
+            /**
+             * First Scan
+             * @description first scan inside the scan window
+             */
             first_scan?: string | null;
             /** Order Ref */
             order_ref?: string | null;
@@ -2529,6 +2547,11 @@ export interface components {
             rank?: string | null;
             /** Scan Exempt */
             scan_exempt: boolean;
+            /**
+             * Scans Outside Window
+             * @default 0
+             */
+            scans_outside_window: number;
             /**
              * Status
              * @description PRESENT | LATE | LEAVE | DUTY | EXEMPT | NOT_YET | ABSENT | OFF

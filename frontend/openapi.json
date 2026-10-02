@@ -1293,6 +1293,11 @@
             "title": "People",
             "type": "array"
           },
+          "scan_window": {
+            "default": "06:30\u201311:00",
+            "title": "Scan Window",
+            "type": "string"
+          },
           "total": {
             "title": "Total",
             "type": "integer"
@@ -2641,6 +2646,11 @@
             "title": "Username",
             "type": "string"
           },
+          "work_session_required": {
+            "default": true,
+            "title": "Work Session Required",
+            "type": "boolean"
+          },
           "write_enabled": {
             "default": false,
             "title": "Write Enabled",
@@ -2786,6 +2796,11 @@
             },
             "title": "People",
             "type": "array"
+          },
+          "scan_window": {
+            "default": "06:30\u201311:00",
+            "title": "Scan Window",
+            "type": "string"
           },
           "workdays": {
             "title": "Workdays",
@@ -3501,6 +3516,7 @@
                 "type": "null"
               }
             ],
+            "description": "first scan inside the scan window",
             "title": "First Scan"
           },
           "order_ref": {
@@ -3528,6 +3544,11 @@
           "scan_exempt": {
             "title": "Scan Exempt",
             "type": "boolean"
+          },
+          "scans_outside_window": {
+            "default": 0,
+            "title": "Scans Outside Window",
+            "type": "integer"
           },
           "status": {
             "description": "PRESENT | LATE | LEAVE | DUTY | EXEMPT | NOT_YET | ABSENT | OFF",

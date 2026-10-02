@@ -281,9 +281,9 @@ function DeviceStatus() {
 /** Tells write-capable users up front whether edits are possible right now,
  * instead of letting them discover it from a failed save. */
 function WriteWindowBanner() {
-  const { canWrite, serverWriteEnabled, writeSession, writeSessionActive } = useAuth();
+  const { canWrite, serverWriteEnabled, writeSession, writeSessionActive, workSessionRequired } = useAuth();
   const { t, locale } = useTranslation();
-  if (!canWrite || !serverWriteEnabled) return null;
+  if (!canWrite || !serverWriteEnabled || !workSessionRequired) return null;
   if (writeSessionActive && writeSession?.expires_at) {
     const until = new Date(writeSession.expires_at).toLocaleTimeString(locale === "th" ? "th-TH" : "en-GB", {
       hour: "2-digit",

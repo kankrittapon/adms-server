@@ -38,7 +38,9 @@ export function DailyRoster() {
       <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">{t.leave.dailyTitle}</h1>
-          <p className="text-xs text-slate-500">{t.leave.dailySubtitle.replace("{time}", data?.late_after ?? "10:00")}</p>
+          <p className="text-xs text-slate-500">{t.leave.dailySubtitle
+              .replace("{window}", data?.scan_window ?? "06:30–11:00")
+              .replace("{time}", data?.late_after ?? "10:00")}</p>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -170,6 +172,11 @@ export function DailyRoster() {
                           : "—"}
                       </td>
                       <td className="text-slate-600">
+                        {p.scans_outside_window > 0 && (
+                          <span className="mr-1 rounded bg-slate-100 px-1 text-[10px] font-semibold text-slate-600">
+                            {t.workflow.outsideWindow} ×{p.scans_outside_window}
+                          </span>
+                        )}
                         {p.absence_name_th
                           ? `${p.absence_name_th} ${formatThaiDate(String(p.absence_start))}–${formatThaiDate(
                               String(p.absence_end)

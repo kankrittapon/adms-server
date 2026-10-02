@@ -131,7 +131,7 @@ export const th: Translations = {
   leave: {
     navMonthly: "รายงานประจำเดือน",
     monthlyTitle: "รายงานการมาปฏิบัติงานประจำเดือน",
-    monthlySubtitle: "วันทำงาน {n} วัน · สแกนหลัง {time} นับเป็นมาสาย",
+    monthlySubtitle: "วันทำงาน {n} วัน · นับสแกนช่วง {window} · หลัง {time} นับเป็นมาสาย",
     exportExcel: "ส่งออก Excel (CSV)",
     legend: "รหัส",
     deviceLive: "เครื่องสแกนเชื่อมต่ออยู่",
@@ -174,7 +174,7 @@ export const th: Translations = {
     holidayAdd: "เพิ่มวันหยุด",
     holidayHint: "วันเสาร์-อาทิตย์ไม่ต้องเพิ่ม ระบบนับเป็นวันหยุดอยู่แล้ว",
     dailyTitle: "ยอดกำลังพลประจำวัน",
-    dailySubtitle: "สแกนหลัง {time} นับเป็นมาสาย",
+    dailySubtitle: "นับสแกนช่วง {window} · หลัง {time} นับเป็นมาสาย",
     holidayBadge: "วันหยุด",
     totalLabel: "ยอดทั้งหมด",
     byBranch: "แยกตามแผนก",
@@ -192,6 +192,9 @@ export const th: Translations = {
     allStatuses: "ทุกสถานะ",
   },
   workflow: {
+    openPolicyTitle: "การแก้ไขข้อมูลและลงลายนิ้วมือ: เปิดตลอดเวลา",
+    openPolicyBody: "ไม่ต้องเปิดช่วงแก้ไขข้อมูลแล้ว — แก้ไขรายชื่อ บันทึกการลา และลงลายนิ้วมือได้ตลอด สิทธิ์ยังเป็นไปตาม role และทุกการแก้ไขถูกบันทึกใน audit ส่วนการสแกนเข้างานนับเฉพาะช่วง 06:30–11:00 (สแกนหลัง 10:00 = มาสาย; สแกนนอกช่วงจะถูกเก็บไว้แต่ไม่นับ)",
+    outsideWindow: "สแกนนอกเวลา",
     offboardDeferred: "ปิดชื่อแล้ว — ลบลายนิ้วมือออกจากเครื่องได้เมื่อเปิดงานลายนิ้วมือ (ดูในตัวกรอง 'ย้ายออกแล้ว แต่ยังมีนิ้วในเครื่อง')",
     fingerprintWindowNeeded: "ต้องเปิดงานลายนิ้วมือก่อน (จ.–ศ. 09:00–18:00)",
     pwCurrentWrong: "รหัสผ่านปัจจุบันไม่ถูกต้อง",

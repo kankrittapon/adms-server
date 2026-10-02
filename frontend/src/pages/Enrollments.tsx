@@ -37,7 +37,7 @@ function getStepIndex(status: string): number {
 }
 
 export function Enrollments() {
-  const { me, serverWriteEnabled, writeSessionActive, canMutate, isAdmin } = useAuth();
+  const { me, serverWriteEnabled, writeSessionActive, workSessionRequired, canMutate, isAdmin } = useAuth();
   const { t } = useTranslation();
   const list = useApi((s) => api.enrollments({ limit: 100 }, s), []);
   // Active Enrollment Queue policy: ADMS-UX-CrossLifecycleClosure-021B —
@@ -109,7 +109,7 @@ export function Enrollments() {
       </div>
 
       {/* Proactive write-session banner — plain language, no infra jargon */}
-      {!(serverWriteEnabled && writeSessionActive) && (
+      {!(serverWriteEnabled && (writeSessionActive || !workSessionRequired)) && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 shadow-2xs">
           <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 font-bold text-amber-900">
             !

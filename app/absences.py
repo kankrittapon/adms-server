@@ -18,7 +18,36 @@ import psycopg2
 from app.config import Config
 from app.db import get_db_connection, log_sync_event
 
-DEFAULT_POLICY = {"late_after": "10:00", "timezone": "Asia/Bangkok", "workdays": [1, 2, 3, 4, 5]}
+# Attendance scans only count inside scan_window (06:30–11:00 local). A scan
+# outside it is still stored (raw log) but never makes anyone present; the
+# scanner itself stays usable all day for fingerprint enrollment.
+DEFAULT_POLICY = {
+    "late_after": "10:00",
+    "scan_window_start": "06:30",
+    "scan_window_end": "11:00",
+    "timezone": "Asia/Bangkok",
+    "workdays": [1, 2, 3, 4, 5],
+}
+
+
+def _hm(value: Any, default: str) -> time:
+    hh, mm = (int(x) for x in str(value or default).split(":"))
+    return time(hh, mm)
+
+
+def policy_times(policy: Dict[str, Any]) -> Dict[str, time]:
+    return {
+        "late_after": _hm(policy.get("late_after"), "10:00"),
+        "start": _hm(policy.get("scan_window_start"), "06:30"),
+        "end": _hm(policy.get("scan_window_end"), "11:00"),
+    }
+
+
+def _window_bounds(day: date, tz: ZoneInfo, times: Dict[str, time]) -> tuple:
+    """[start, end + 1 minute): a scan stamped 11:00:xx still counts."""
+    start = datetime.combine(day, times["start"], tzinfo=tz)
+    end = datetime.combine(day, times["end"], tzinfo=tz) + timedelta(minutes=1)
+    return start, end
 
 # Daily roster statuses, in display order.
 ROSTER_STATUSES = ("PRESENT", "LATE", "LEAVE", "DUTY", "EXEMPT", "NOT_YET", "ABSENT", "OFF")
@@ -278,8 +307,8 @@ def daily_roster(cfg: Config, day: date, now: Optional[datetime] = None) -> Dict
         with conn.cursor() as cur:
             policy = load_policy(cur)
             tz = ZoneInfo(policy.get("timezone") or "Asia/Bangkok")
-            hh, mm = (int(x) for x in str(policy.get("late_after") or "10:00").split(":"))
-            late_after = time(hh, mm)
+            times = policy_times(policy)
+            late_after = times["late_after"]
             workdays = set(policy.get("workdays") or [1, 2, 3, 4, 5])
 
             cur.execute("SELECT name_th FROM holidays WHERE holiday_date = %s;", (day,))
@@ -289,25 +318,30 @@ def daily_roster(cfg: Config, day: date, now: Optional[datetime] = None) -> Dict
 
             day_start = datetime.combine(day, time(0, 0), tzinfo=tz)
             day_end = day_start + timedelta(days=1)
+            win_start, win_end = _window_bounds(day, tz, times)
             cur.execute(
                 "SELECT h.employee_id::text AS employee_id, h.display_name, h.rank, h.branch, h.category, "
                 "h.scan_exempt, a.type_code, t.name_th AS absence_name_th, t.counts_as, a.order_ref, "
                 "a.start_date AS absence_start, a.end_date AS absence_end, "
                 "(SELECT MIN(l.scan_time) FROM attendance_logs l WHERE l.employee_id = h.employee_id "
-                "  AND l.scan_time >= %s AND l.scan_time < %s) AS first_scan "
+                "  AND l.scan_time >= %s AND l.scan_time < %s) AS first_scan, "
+                "(SELECT COUNT(*) FROM attendance_logs l WHERE l.employee_id = h.employee_id "
+                "  AND l.scan_time >= %s AND l.scan_time < %s "
+                "  AND NOT (l.scan_time >= %s AND l.scan_time < %s)) AS scans_outside_window "
                 "FROM human_employees h "
                 "LEFT JOIN absence_records a ON a.employee_id = h.employee_id AND a.status = 'RECORDED' "
                 "  AND %s BETWEEN a.start_date AND a.end_date "
                 "LEFT JOIN absence_types t ON t.code = a.type_code "
                 "WHERE h.active AND h.production_scope "
                 "ORDER BY h.branch NULLS LAST, h.display_name;",
-                (day_start, day_end, day),
+                (win_start, win_end, day_start, day_end, win_start, win_end, day),
             )
             people = _rows(cur)
 
     now = now or datetime.now(tz)
     now_local = now.astimezone(tz)
-    before_cutoff = now_local.date() == day and now_local.time() <= late_after
+    # Nobody is absent until the scan window has closed.
+    before_cutoff = now_local.date() == day and now_local.time() <= times["end"]
     if now_local.date() < day:
         before_cutoff = True  # future day: nobody is absent yet
 
@@ -334,6 +368,7 @@ def daily_roster(cfg: Config, day: date, now: Optional[datetime] = None) -> Dict
         "is_workday": is_workday,
         "holiday_name": holiday_name,
         "late_after": late_after.strftime("%H:%M"),
+        "scan_window": "%s–%s" % (times["start"].strftime("%H:%M"), times["end"].strftime("%H:%M")),
         "total": len(people),
         "totals": totals,
         "by_branch": [{"branch": b, "counts": c} for b, c in by_branch.items()],
@@ -379,8 +414,8 @@ def monthly_report(cfg: Config, year: int, month: int, now: Optional[datetime] =
             policy = load_policy(cur)
             tz_name = policy.get("timezone") or "Asia/Bangkok"
             tz = ZoneInfo(tz_name)
-            hh, mm = (int(x) for x in str(policy.get("late_after") or "10:00").split(":"))
-            late_after = time(hh, mm)
+            times = policy_times(policy)
+            late_after = times["late_after"]
             workdays = set(policy.get("workdays") or [1, 2, 3, 4, 5])
 
             cur.execute(
@@ -413,8 +448,13 @@ def monthly_report(cfg: Config, year: int, month: int, now: Optional[datetime] =
             cur.execute(
                 "SELECT employee_id::text, (scan_time AT TIME ZONE %s)::date AS d, MIN(scan_time) "
                 "FROM attendance_logs WHERE employee_id IS NOT NULL AND scan_time >= %s AND scan_time < %s "
+                "AND (scan_time AT TIME ZONE %s)::time >= %s AND (scan_time AT TIME ZONE %s)::time < %s "
                 "GROUP BY 1, 2;",
-                (tz_name, start_ts, end_ts),
+                (
+                    tz_name, start_ts, end_ts,
+                    tz_name, times["start"], tz_name,
+                    (datetime.combine(first_day, times["end"]) + timedelta(minutes=1)).time(),
+                ),
             )
             first_scans = {(r[0], r[1]): r[2].astimezone(tz) for r in cur.fetchall()}
 
@@ -422,7 +462,7 @@ def monthly_report(cfg: Config, year: int, month: int, now: Optional[datetime] =
     day_meta = []
     for d in days:
         is_workday = d.isoweekday() in workdays and d not in holidays
-        pending = d > now_local.date() or (d == now_local.date() and now_local.time() <= late_after)
+        pending = d > now_local.date() or (d == now_local.date() and now_local.time() <= times["end"])
         day_meta.append({"date": d, "is_workday": is_workday, "holiday_name": holidays.get(d), "pending": pending})
 
     by_branch: Dict[str, Dict[str, int]] = {}
@@ -456,6 +496,7 @@ def monthly_report(cfg: Config, year: int, month: int, now: Optional[datetime] =
     return {
         "month": "%04d-%02d" % (year, month),
         "late_after": late_after.strftime("%H:%M"),
+        "scan_window": "%s–%s" % (times["start"].strftime("%H:%M"), times["end"].strftime("%H:%M")),
         "workdays": sum(1 for m in day_meta if m["is_workday"]),
         "days": [{k: m[k] for k in ("date", "is_workday", "holiday_name")} for m in day_meta],
         "people": people,
@@ -472,8 +513,8 @@ def monthly_report_csv(report: Dict[str, Any]) -> str:
     totals_order = ["PRESENT", "LATE", "LEAVE", "DUTY", "ABSENT"]
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["รายงานการมาปฏิบัติงานประจำเดือน", report["month"], "มาสายหลัง", report["late_after"],
-                "วันทำงาน", report["workdays"]])
+    w.writerow(["รายงานการมาปฏิบัติงานประจำเดือน", report["month"], "ช่วงสแกน", report.get("scan_window", ""),
+                "มาสายหลัง", report["late_after"], "วันทำงาน", report["workdays"]])
     w.writerow(["รหัส: " + "  ".join(f"{STATUS_CODE_TH[s]}={STATUS_LABEL_TH[s]}" for s in STATUS_CODE_TH if STATUS_CODE_TH[s])])
     w.writerow(
         ["ลำดับ", "ยศ", "ชื่อ-สกุล", "แผนก"]

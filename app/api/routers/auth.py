@@ -52,6 +52,7 @@ class MeResponse(BaseModel):
     display_name: str
     role: str
     write_enabled: bool = False
+    work_session_required: bool = True
     write_session: Optional[WriteSessionStatus] = None
 
 
@@ -129,6 +130,7 @@ def me(
         display_name=ctx.display_name,
         role=ctx.role,
         write_enabled=settings.write_enabled,
+        work_session_required=settings.work_session_required,
         write_session=WriteSessionStatus(**write_session),
     )
 

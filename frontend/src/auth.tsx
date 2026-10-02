@@ -11,6 +11,7 @@ interface AuthState {
   serverWriteEnabled: boolean;
   writeSession: WriteSessionStatus | null;
   writeSessionActive: boolean;
+  workSessionRequired: boolean;
   canMutate: boolean;
   isAdmin: boolean;
   // ADMS-RBAC-OperationalRoles-023: canonical frontend capability helpers —
@@ -38,6 +39,7 @@ const AuthContext = createContext<AuthState>({
   serverWriteEnabled: false,
   writeSession: null,
   writeSessionActive: false,
+  workSessionRequired: true,
   canMutate: false,
   isAdmin: false,
   canOpenWorkSession: false,
@@ -108,7 +110,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const role = me?.role ?? "";
   const canWrite = WRITE_CAPABLE_ROLES.has(role);
   const serverWriteEnabled = me?.write_enabled ?? false;
-  const canMutate = canWrite && serverWriteEnabled && writeSessionActive;
+  // When the server runs without the Work Session (production), edits —
+  // fingerprint enrollment included — are allowed any time.
+  const workSessionRequired = me?.work_session_required ?? true;
+  const canMutate = canWrite && serverWriteEnabled && (writeSessionActive || !workSessionRequired);
   const isAdmin = role === "ADMIN";
   const isOperatorOrAdmin = role === "OPERATOR" || role === "ADMIN";
 
@@ -122,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         serverWriteEnabled,
         writeSession,
         writeSessionActive,
+        workSessionRequired,
         canMutate,
         isAdmin,
         // Mirrors app/api/auth.py's ROLES_OPERATOR_PLUS — matches the

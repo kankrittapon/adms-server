@@ -136,3 +136,40 @@ class TestMonthlyApi(ApiTestBase):
             resp = self.client.get("/api/v1/attendance/monthly?month=2026-09")
         self.assertEqual(resp.status_code, 200, resp.text)
         self.assertEqual(m.call_args.args[1:], (2026, 9))
+
+
+class TestScanWindow(unittest.TestCase):
+    def test_policy_defaults(self):
+        t = absences.policy_times({})
+        self.assertEqual((t["start"], t["end"], t["late_after"]), (time(6, 30), time(11, 0), TEN))
+
+    def test_window_includes_the_closing_minute(self):
+        start, end = absences._window_bounds(date(2026, 10, 5), BKK, absences.policy_times({}))
+        self.assertEqual(start, datetime(2026, 10, 5, 6, 30, tzinfo=BKK))
+        self.assertEqual(end, datetime(2026, 10, 5, 11, 1, tzinfo=BKK))
+
+
+class TestWorkSessionSwitch(unittest.TestCase):
+    def _request(self, required):
+        from types import SimpleNamespace
+
+        from app.api.settings import ApiSettings
+
+        settings = ApiSettings(write_enabled=True, work_session_required=required)
+        return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings)))
+
+    def test_not_required_skips_the_session_check(self):
+        from app.api.dependencies import require_write_session
+
+        with patch("app.write_session.is_write_session_active", side_effect=AssertionError("must not be consulted")):
+            self.assertIsNone(require_write_session(self._request(False)))
+
+    def test_required_still_enforced(self):
+        from app.api.dependencies import require_write_session
+        from app.api.errors import ApiError
+
+        with patch("app.write_session.is_write_session_active", return_value=(False, False)), patch(
+            "app.api.dependencies.get_cfg", return_value=None
+        ):
+            with self.assertRaises(ApiError):
+                require_write_session(self._request(True))

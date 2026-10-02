@@ -140,6 +140,9 @@ def require_write_session(request: Request) -> None:
     """
     from app.write_session import is_write_session_active
 
+    settings: ApiSettings = request.app.state.settings
+    if not settings.work_session_required:
+        return
     cfg = get_cfg()
     active, just_expired = is_write_session_active(cfg)
     if active:

@@ -131,7 +131,7 @@ export const en: Translations = {
   leave: {
     navMonthly: "Monthly report",
     monthlyTitle: "Monthly attendance report",
-    monthlySubtitle: "{n} working days · scans after {time} are late",
+    monthlySubtitle: "{n} working days · scans count {window} · after {time} is late",
     exportExcel: "Export Excel (CSV)",
     legend: "Legend",
     deviceLive: "Scanner connected",
@@ -174,7 +174,7 @@ export const en: Translations = {
     holidayAdd: "Add holiday",
     holidayHint: "Weekends are already non-working days",
     dailyTitle: "Daily roster",
-    dailySubtitle: "Scans after {time} count as late",
+    dailySubtitle: "Scans count {window} · after {time} is late",
     holidayBadge: "Holiday",
     totalLabel: "Total",
     byBranch: "By section",
@@ -192,6 +192,9 @@ export const en: Translations = {
     allStatuses: "All statuses",
   },
   workflow: {
+    openPolicyTitle: "Editing and fingerprint enrollment: always open",
+    openPolicyBody: "No edit window needed — roster, leave and fingerprint enrollment can be done any time, still limited by role and audited. Attendance scans count only 06:30–11:00 (after 10:00 = late; scans outside are stored but not counted)",
+    outsideWindow: "Scanned outside window",
     offboardDeferred: "Closed in roster — remove from the scanner once fingerprint work is open (see 'Left, still on scanner')",
     fingerprintWindowNeeded: "Fingerprint work must be open (Mon–Fri 09:00–18:00)",
     pwCurrentWrong: "Current password is incorrect",

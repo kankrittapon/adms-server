@@ -29,6 +29,10 @@ class ApiSettings:
     rate_limit_enabled: bool = True
     login_rate_per_min: int = 5
     global_rate_per_min: int = 600
+    # Layer 2 (Work Session) on/off. Production runs with it off: all edits,
+    # fingerprint enrollment included, are allowed any time; attendance is
+    # instead limited by the scan window (attendance_policy.scan_window).
+    work_session_required: bool = True
 
     @classmethod
     def from_env(cls) -> "ApiSettings":
@@ -61,6 +65,8 @@ class ApiSettings:
             rate_limit_enabled=rate_enabled,
             login_rate_per_min=int(os.getenv("API_LOGIN_RATE_PER_MIN", "5")),
             global_rate_per_min=int(os.getenv("API_GLOBAL_RATE_PER_MIN", "600")),
+            work_session_required=os.getenv("API_WORK_SESSION_REQUIRED", "true").strip().lower()
+            in ("1", "true", "yes", "on"),
         )
 
 

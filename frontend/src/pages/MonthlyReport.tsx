@@ -56,7 +56,10 @@ export function MonthlyReport() {
           <h1 className="text-xl font-bold tracking-tight text-slate-900">{t.leave.monthlyTitle}</h1>
           {data && (
             <p className="text-xs text-slate-500">
-              {t.leave.monthlySubtitle.replace("{n}", String(data.workdays)).replace("{time}", data.late_after)}
+              {t.leave.monthlySubtitle
+                .replace("{n}", String(data.workdays))
+                .replace("{window}", data.scan_window)
+                .replace("{time}", data.late_after)}
             </p>
           )}
         </div>
