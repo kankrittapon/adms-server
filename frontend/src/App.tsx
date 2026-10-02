@@ -13,6 +13,7 @@ import { Audit } from "./pages/Audit";
 import { HumanDetail, Personnel } from "./pages/Personnel";
 import { Absences } from "./pages/Absences";
 import { DailyRoster } from "./pages/DailyRoster";
+import { MonthlyReport } from "./pages/MonthlyReport";
 import { System } from "./pages/System";
 import { TerminalManagement } from "./pages/TerminalManagement";
 
@@ -63,6 +64,7 @@ export function App() {
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/daily" element={<DailyRoster />} />
         <Route path="/absences" element={<Absences />} />
+        <Route path="/monthly" element={<MonthlyReport />} />
         <Route path="/attendance/:id" element={<AttendanceDetail />} />
         <Route path="/enrollments" element={<Enrollments />} />
         <Route path="/mappings" element={<Mappings />} />

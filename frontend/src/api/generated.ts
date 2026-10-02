@@ -108,6 +108,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/attendance/monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Monthly Report */
+        get: operations["get_monthly_report_api_v1_attendance_monthly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance/monthly.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Monthly Report Csv */
+        get: operations["get_monthly_report_csv_api_v1_attendance_monthly_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/attendance/unattributed": {
         parameters: {
             query?: never;
@@ -1379,6 +1413,10 @@ export interface components {
             db_status?: string | null;
             /** Device Connected */
             device_connected?: boolean | null;
+            /** Last Connect Success */
+            last_connect_success?: string | null;
+            /** Last Event Received */
+            last_event_received?: string | null;
             /** Loop Alive */
             loop_alive?: boolean | null;
             /** Mqtt Status */
@@ -2108,6 +2146,55 @@ export interface components {
              */
             write_enabled: boolean;
             write_session?: components["schemas"]["WriteSessionStatus"] | null;
+        };
+        /** MonthlyDay */
+        MonthlyDay: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /** Is Workday */
+            is_workday: boolean;
+        };
+        /** MonthlyPerson */
+        MonthlyPerson: {
+            /** Branch */
+            branch?: string | null;
+            /** Counts */
+            counts: {
+                [key: string]: unknown;
+            };
+            /**
+             * Days
+             * @description one roster status per day of the month
+             */
+            days: string[];
+            /** Display Name */
+            display_name: string;
+            /** Employee Id */
+            employee_id: string;
+            /** Rank */
+            rank?: string | null;
+            /** Scan Exempt */
+            scan_exempt: boolean;
+        };
+        /** MonthlyReport */
+        MonthlyReport: {
+            /** By Branch */
+            by_branch: components["schemas"]["RosterBranch"][];
+            /** Days */
+            days: components["schemas"]["MonthlyDay"][];
+            /** Late After */
+            late_after: string;
+            /** Month */
+            month: string;
+            /** People */
+            people: components["schemas"]["MonthlyPerson"][];
+            /** Workdays */
+            workdays: number;
         };
         /** OpenWriteSessionRequest */
         OpenWriteSessionRequest: {
@@ -2862,6 +2949,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DailyRoster"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_monthly_report_api_v1_attendance_monthly_get: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM; defaults to this month */
+                month?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthlyReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_monthly_report_csv_api_v1_attendance_monthly_csv_get: {
+        parameters: {
+            query?: {
+                month?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

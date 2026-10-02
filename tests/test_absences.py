@@ -104,3 +104,35 @@ class TestAbsenceApi(ApiTestBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMonthlyReport(unittest.TestCase):
+    def test_csv_has_bom_codes_and_totals(self):
+        report = {
+            "month": "2026-10", "late_after": "10:00", "workdays": 1,
+            "days": [{"date": date(2026, 10, 1), "is_workday": True, "holiday_name": None},
+                     {"date": date(2026, 10, 3), "is_workday": False, "holiday_name": None}],
+            "people": [{"employee_id": "e1", "display_name": "ทดสอบ", "rank": "จ.อ.", "branch": "สส.",
+                        "scan_exempt": False, "days": ["LATE", "OFF"],
+                        "counts": {s: 0 for s in absences.ROSTER_STATUSES} | {"LATE": 1, "OFF": 1}}],
+            "by_branch": [],
+        }
+        text = absences.monthly_report_csv(report)
+        self.assertTrue(text.startswith("﻿"))
+        row = text.splitlines()[-1].split(",")
+        self.assertEqual(row[:4], ["1", "จ.อ.", "ทดสอบ", "สส."])
+        self.assertEqual(row[4:6], ["ส", "-"])
+        self.assertEqual(row[6:], ["0", "1", "0", "0", "0"])
+
+
+class TestMonthlyApi(ApiTestBase):
+    def test_invalid_month_rejected(self):
+        resp = self.client.get("/api/v1/attendance/monthly?month=2026-13")
+        self.assertEqual(resp.status_code, 422)
+
+    def test_month_parsed(self):
+        report = {"month": "2026-09", "late_after": "10:00", "workdays": 0, "days": [], "people": [], "by_branch": []}
+        with patch("app.absences.monthly_report", return_value=report) as m:
+            resp = self.client.get("/api/v1/attendance/monthly?month=2026-09")
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(m.call_args.args[1:], (2026, 9))

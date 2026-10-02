@@ -130,6 +130,15 @@ export interface Translations {
     mappingsHistoricalHint: string;
   };
   leave: {
+    navMonthly: string;
+    monthlyTitle: string;
+    monthlySubtitle: string;
+    exportExcel: string;
+    legend: string;
+    deviceLive: string;
+    deviceOffline: string;
+    deviceUnknown: string;
+    deviceLastSeen: string;
     navLeave: string;
     navDaily: string;
     title: string;

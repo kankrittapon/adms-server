@@ -671,6 +671,28 @@
             ],
             "title": "Device Connected"
           },
+          "last_connect_success": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Connect Success"
+          },
+          "last_event_received": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event Received"
+          },
           "loop_alive": {
             "anyOf": [
               {
@@ -2594,6 +2616,143 @@
           "role"
         ],
         "title": "MeResponse",
+        "type": "object"
+      },
+      "MonthlyDay": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "holiday_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holiday Name"
+          },
+          "is_workday": {
+            "title": "Is Workday",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "date",
+          "is_workday"
+        ],
+        "title": "MonthlyDay",
+        "type": "object"
+      },
+      "MonthlyPerson": {
+        "properties": {
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "counts": {
+            "additionalProperties": true,
+            "title": "Counts",
+            "type": "object"
+          },
+          "days": {
+            "description": "one roster status per day of the month",
+            "items": {
+              "type": "string"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "employee_id": {
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "scan_exempt": {
+            "title": "Scan Exempt",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "employee_id",
+          "display_name",
+          "scan_exempt",
+          "days",
+          "counts"
+        ],
+        "title": "MonthlyPerson",
+        "type": "object"
+      },
+      "MonthlyReport": {
+        "properties": {
+          "by_branch": {
+            "items": {
+              "$ref": "#/components/schemas/RosterBranch"
+            },
+            "title": "By Branch",
+            "type": "array"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/MonthlyDay"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "late_after": {
+            "title": "Late After",
+            "type": "string"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/MonthlyPerson"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "workdays": {
+            "title": "Workdays",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "late_after",
+          "workdays",
+          "days",
+          "people",
+          "by_branch"
+        ],
+        "title": "MonthlyReport",
         "type": "object"
       },
       "OpenWriteSessionRequest": {
@@ -4530,6 +4689,104 @@
           }
         },
         "summary": "Get Daily Roster",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/attendance/monthly": {
+      "get": {
+        "operationId": "get_monthly_report_api_v1_attendance_monthly_get",
+        "parameters": [
+          {
+            "description": "YYYY-MM; defaults to this month",
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM; defaults to this month",
+              "title": "Month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthlyReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Monthly Report",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/attendance/monthly.csv": {
+      "get": {
+        "operationId": "get_monthly_report_csv_api_v1_attendance_monthly_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Monthly Report Csv",
         "tags": [
           "absences"
         ]

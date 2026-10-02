@@ -157,8 +157,10 @@ _HAS_ACTIVE_ACCOUNT_EXPR = _HAS_ACTIVE_TERMINAL_ACCOUNT_SQL.replace(" AS has_act
 
 # Personnel workflow filters: who still needs fingerprint enrollment, who is
 # done, who is exempt, and who has left but still has a working account.
+# Conscripts (production_scope = false) are outside the scanning roster and
+# never "need" enrollment.
 _SCAN_STATUS_SQL = {
-    "needs_enrollment": f"(active AND NOT scan_exempt AND NOT {_HAS_ACTIVE_ACCOUNT_EXPR})",
+    "needs_enrollment": f"(active AND production_scope AND NOT scan_exempt AND NOT {_HAS_ACTIVE_ACCOUNT_EXPR})",
     "enrolled": f"(active AND {_HAS_ACTIVE_ACCOUNT_EXPR})",
     "exempt": "(active AND scan_exempt)",
     "left_with_account": f"(NOT active AND {_HAS_ACTIVE_ACCOUNT_EXPR})",
@@ -175,7 +177,7 @@ def personnel_summary(cfg: Config) -> Dict[str, Any]:
         f"COUNT(*) FILTER (WHERE {_SCAN_STATUS_SQL['exempt']}) AS scan_exempt, "
         f"COUNT(*) FILTER (WHERE {_SCAN_STATUS_SQL['needs_enrollment']}) AS needs_enrollment, "
         f"COUNT(*) FILTER (WHERE {_SCAN_STATUS_SQL['left_with_account']}) AS left_with_terminal_account "
-        "FROM human_employees",
+        "FROM human_employees WHERE production_scope",
     )
     return row or {"active": 0, "inactive": 0, "scan_exempt": 0, "needs_enrollment": 0, "left_with_terminal_account": 0}
 

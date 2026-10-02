@@ -51,6 +51,8 @@ def health(cfg: Config = Depends(get_cfg)) -> HealthCheck:
             mqtt_status=collector_raw.get("mqtt_status"),
             loop_alive=collector_raw.get("loop_alive"),
             updated_at=collector_raw.get("updated_at"),
+            last_connect_success=collector_raw.get("last_connect_success"),
+            last_event_received=collector_raw.get("last_event_received"),
         )
 
     return HealthCheck(

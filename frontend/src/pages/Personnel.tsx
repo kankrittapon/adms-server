@@ -16,7 +16,9 @@ export function Personnel() {
   const { t } = useTranslation();
   const { canManagePersonnel } = useAuth();
   const [search, setSearch] = useState("");
-  const [scope, setScope] = useState<string>("");
+  // Conscripts (production_scope=false) are outside the personnel roster;
+  // they stay reachable through the scope filter but are hidden by default.
+  const [scope, setScope] = useState<string>("true");
   const [activeFilter, setActiveFilter] = useState<string>("");
   const [scanStatus, setScanStatus] = useState<ScanStatus | "">("");
   const [page, setPage] = useState(0);

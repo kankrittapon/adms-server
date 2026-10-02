@@ -353,6 +353,18 @@ export const api = {
     request<JsonResponse<"get_daily_roster_api_v1_attendance_daily_get">>(
       `/api/v1/attendance/daily${day ? `?date=${day}` : ""}`, signal
     ),
+  monthlyReport: (month: string, signal?: AbortSignal) =>
+    request<JsonResponse<"get_monthly_report_api_v1_attendance_monthly_get">>(
+      `/api/v1/attendance/monthly?month=${month}`, signal
+    ),
+  monthlyReportCsv: async (month: string): Promise<Blob> => {
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/api/v1/attendance/monthly.csv?month=${month}`, { headers });
+    if (!res.ok) throw new ApiClientError(res.status, "HTTP_" + res.status, res.statusText);
+    return res.blob();
+  },
   humansSummary: (signal?: AbortSignal) =>
     request<JsonResponse<"humans_summary_api_v1_humans_summary_get">>("/api/v1/humans/summary", signal),
   humanTerminalAccounts: (employeeId: string, signal?: AbortSignal) =>

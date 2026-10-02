@@ -339,3 +339,151 @@ def daily_roster(cfg: Config, day: date, now: Optional[datetime] = None) -> Dict
         "by_branch": [{"branch": b, "counts": c} for b, c in by_branch.items()],
         "people": people,
     }
+
+
+# --- Monthly report -------------------------------------------------------------
+
+# Short codes for the per-day grid (Thai, as used on paper rosters).
+STATUS_CODE_TH = {
+    "PRESENT": "ม",
+    "LATE": "ส",
+    "LEAVE": "ล",
+    "DUTY": "ร",
+    "EXEMPT": "ย",
+    "NOT_YET": "",
+    "ABSENT": "ข",
+    "OFF": "-",
+}
+STATUS_LABEL_TH = {
+    "PRESENT": "มา",
+    "LATE": "มาสาย",
+    "LEAVE": "ลา",
+    "DUTY": "ราชการ/ช่วยราชการ",
+    "EXEMPT": "ไม่ต้องสแกน",
+    "NOT_YET": "ยังไม่ถึง",
+    "ABSENT": "ขาด",
+    "OFF": "วันหยุด",
+}
+
+
+def monthly_report(cfg: Config, year: int, month: int, now: Optional[datetime] = None) -> Dict[str, Any]:
+    """Per-person, per-day status for one month, using the same rules as
+    the daily roster. Future days (and today before the late cutoff) are
+    NOT_YET, never ABSENT."""
+    first_day = date(year, month, 1)
+    next_month = date(year + (month == 12), month % 12 + 1, 1)
+    days = [first_day + timedelta(days=i) for i in range((next_month - first_day).days)]
+
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            policy = load_policy(cur)
+            tz_name = policy.get("timezone") or "Asia/Bangkok"
+            tz = ZoneInfo(tz_name)
+            hh, mm = (int(x) for x in str(policy.get("late_after") or "10:00").split(":"))
+            late_after = time(hh, mm)
+            workdays = set(policy.get("workdays") or [1, 2, 3, 4, 5])
+
+            cur.execute(
+                "SELECT holiday_date, name_th FROM holidays WHERE holiday_date >= %s AND holiday_date < %s;",
+                (first_day, next_month),
+            )
+            holidays = {r[0]: r[1] for r in cur.fetchall()}
+
+            cur.execute(
+                "SELECT employee_id::text, display_name, rank, branch, scan_exempt FROM human_employees "
+                "WHERE active AND production_scope ORDER BY branch NULLS LAST, display_name;"
+            )
+            people = [
+                {"employee_id": r[0], "display_name": r[1], "rank": r[2], "branch": r[3], "scan_exempt": r[4]}
+                for r in cur.fetchall()
+            ]
+
+            cur.execute(
+                "SELECT a.employee_id::text, a.start_date, a.end_date, t.counts_as FROM absence_records a "
+                "JOIN absence_types t ON t.code = a.type_code "
+                "WHERE a.status = 'RECORDED' AND a.end_date >= %s AND a.start_date < %s;",
+                (first_day, next_month),
+            )
+            absences_by_person: Dict[str, List[Any]] = {}
+            for emp, s, e, counts_as in cur.fetchall():
+                absences_by_person.setdefault(emp, []).append((s, e, counts_as))
+
+            start_ts = datetime.combine(first_day, time(0, 0), tzinfo=tz)
+            end_ts = datetime.combine(next_month, time(0, 0), tzinfo=tz)
+            cur.execute(
+                "SELECT employee_id::text, (scan_time AT TIME ZONE %s)::date AS d, MIN(scan_time) "
+                "FROM attendance_logs WHERE employee_id IS NOT NULL AND scan_time >= %s AND scan_time < %s "
+                "GROUP BY 1, 2;",
+                (tz_name, start_ts, end_ts),
+            )
+            first_scans = {(r[0], r[1]): r[2].astimezone(tz) for r in cur.fetchall()}
+
+    now_local = (now or datetime.now(tz)).astimezone(tz)
+    day_meta = []
+    for d in days:
+        is_workday = d.isoweekday() in workdays and d not in holidays
+        pending = d > now_local.date() or (d == now_local.date() and now_local.time() <= late_after)
+        day_meta.append({"date": d, "is_workday": is_workday, "holiday_name": holidays.get(d), "pending": pending})
+
+    by_branch: Dict[str, Dict[str, int]] = {}
+    for p in people:
+        counts = {s: 0 for s in ROSTER_STATUSES}
+        statuses = []
+        for m in day_meta:
+            d = m["date"]
+            counts_as = next(
+                (c for s, e, c in absences_by_person.get(p["employee_id"], []) if s <= d <= e), None
+            )
+            status = classify_person(
+                absence_counts_as=counts_as,
+                scan_exempt=bool(p["scan_exempt"]),
+                first_scan_local=first_scans.get((p["employee_id"], d)),
+                is_workday=m["is_workday"],
+                late_after=late_after,
+                day_in_progress_before_cutoff=m["pending"],
+            )
+            # Leave/duty/exempt on a non-working day is just a day off.
+            if not m["is_workday"] and status in ("LEAVE", "DUTY", "EXEMPT"):
+                status = "OFF"
+            statuses.append(status)
+            counts[status] += 1
+        p["days"] = statuses
+        p["counts"] = counts
+        bucket = by_branch.setdefault(p["branch"] or "—", {s: 0 for s in ROSTER_STATUSES})
+        for s, n in counts.items():
+            bucket[s] += n
+
+    return {
+        "month": "%04d-%02d" % (year, month),
+        "late_after": late_after.strftime("%H:%M"),
+        "workdays": sum(1 for m in day_meta if m["is_workday"]),
+        "days": [{k: m[k] for k in ("date", "is_workday", "holiday_name")} for m in day_meta],
+        "people": people,
+        "by_branch": [{"branch": b, "counts": c} for b, c in by_branch.items()],
+    }
+
+
+def monthly_report_csv(report: Dict[str, Any]) -> str:
+    """Excel-friendly CSV (UTF-8 with BOM so Thai renders in Excel): one row
+    per person, one column per day using short Thai codes, then totals."""
+    import csv
+    import io
+
+    totals_order = ["PRESENT", "LATE", "LEAVE", "DUTY", "ABSENT"]
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["รายงานการมาปฏิบัติงานประจำเดือน", report["month"], "มาสายหลัง", report["late_after"],
+                "วันทำงาน", report["workdays"]])
+    w.writerow(["รหัส: " + "  ".join(f"{STATUS_CODE_TH[s]}={STATUS_LABEL_TH[s]}" for s in STATUS_CODE_TH if STATUS_CODE_TH[s])])
+    w.writerow(
+        ["ลำดับ", "ยศ", "ชื่อ-สกุล", "แผนก"]
+        + [str(d["date"].day) for d in report["days"]]
+        + [STATUS_LABEL_TH[s] for s in totals_order]
+    )
+    for i, p in enumerate(report["people"], 1):
+        w.writerow(
+            [i, p["rank"] or "", p["display_name"], p["branch"] or ""]
+            + [STATUS_CODE_TH[s] for s in p["days"]]
+            + [p["counts"][s] for s in totals_order]
+        )
+    return "﻿" + buf.getvalue()

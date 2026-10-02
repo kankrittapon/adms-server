@@ -138,7 +138,7 @@ export function Absences() {
 function AbsenceForm({ initialEmployeeId, onSaved }: { initialEmployeeId: string; onSaved: () => void }) {
   const { t, locale } = useTranslation();
   const { canMutate } = useAuth();
-  const humans = useApi((s) => api.humans({ active: true, limit: 200 }, s), []);
+  const humans = useApi((s) => api.humans({ active: true, production_scope: true, limit: 200 }, s), []);
   const types = useApi((s) => api.absenceTypes(s), []);
   const [employeeId, setEmployeeId] = useState(initialEmployeeId);
   const [typeCode, setTypeCode] = useState("SICK");

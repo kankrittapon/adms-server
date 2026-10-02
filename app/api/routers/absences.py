@@ -11,6 +11,7 @@ from typing import List, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from app import absences
@@ -106,6 +107,22 @@ class RosterPerson(BaseModel):
     absence_start: Optional[date] = None
     absence_end: Optional[date] = None
     first_scan: Optional[datetime] = None
+
+
+class MonthlyDay(BaseModel):
+    date: date
+    is_workday: bool
+    holiday_name: Optional[str] = None
+
+
+class MonthlyPerson(BaseModel):
+    employee_id: str
+    display_name: str
+    rank: Optional[str] = None
+    branch: Optional[str] = None
+    scan_exempt: bool
+    days: List[str] = Field(description="one roster status per day of the month")
+    counts: dict
 
 
 class RosterBranch(BaseModel):
@@ -216,3 +233,40 @@ def get_daily_roster(
     cfg: Config = Depends(get_cfg),
 ):
     return absences.daily_roster(cfg, day or datetime.now(ZoneInfo("Asia/Bangkok")).date())
+
+
+class MonthlyReport(BaseModel):
+    month: str
+    late_after: str
+    workdays: int
+    days: List[MonthlyDay]
+    people: List[MonthlyPerson]
+    by_branch: List[RosterBranch]
+
+
+def _parse_month(month: Optional[str]) -> tuple:
+    if not month:
+        today = datetime.now(ZoneInfo("Asia/Bangkok")).date()
+        return today.year, today.month
+    try:
+        y, m = (int(x) for x in month.split("-"))
+        date(y, m, 1)
+    except ValueError:
+        raise ApiError(422, "VALIDATION_ERROR", f"invalid month: {month!r} (expected YYYY-MM)")
+    return y, m
+
+
+@router.get("/api/v1/attendance/monthly", response_model=MonthlyReport, dependencies=[Depends(read_roles)])
+def get_monthly_report(month: Optional[str] = Query(None, description="YYYY-MM; defaults to this month"), cfg: Config = Depends(get_cfg)):
+    return absences.monthly_report(cfg, *_parse_month(month))
+
+
+@router.get("/api/v1/attendance/monthly.csv", dependencies=[Depends(read_roles)])
+def get_monthly_report_csv(month: Optional[str] = Query(None), cfg: Config = Depends(get_cfg)):
+    y, m = _parse_month(month)
+    report = absences.monthly_report(cfg, y, m)
+    return PlainTextResponse(
+        content=absences.monthly_report_csv(report),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="attendance_{y:04d}-{m:02d}.csv"'},
+    )

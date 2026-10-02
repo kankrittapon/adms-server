@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import type { HealthCheck } from "../api/types";
 import { api, clearToken } from "../api/client";
 import { useAuth } from "../auth";
 import { useTranslation } from "../i18n";
@@ -50,6 +52,7 @@ export function Layout() {
             { to: "/", label: t.nav.dashboard },
             { to: "/daily", label: t.leave.navDaily },
             { to: "/absences", label: t.leave.navLeave },
+            { to: "/monthly", label: t.leave.navMonthly },
             {
               to: "/attendance",
               label: t.nav.attendance,
@@ -165,10 +168,7 @@ export function Layout() {
               <span className="text-xs font-semibold text-slate-700">{t.common.productionEnvironmentLabel} 192.168.1.248</span>
             </div>
             <span className="text-slate-300">|</span>
-            <div className="flex items-center gap-1.5 text-xs text-slate-600">
-              <span className="font-mono text-slate-500">192.168.1.201</span>
-              <span className="font-semibold text-emerald-600">● LIVE</span>
-            </div>
+            <DeviceStatus />
           </div>
 
           <div className="flex items-center gap-3">
@@ -222,6 +222,58 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+    </div>
+  );
+}
+
+// The collector rewrites its health file every few seconds; older than
+// this means the listener itself is down, so the state is unknown.
+const HEALTH_STALE_MS = 2 * 60 * 1000;
+
+/** Real scanner connectivity from the collector health file, polled — not a
+ * hard-coded "LIVE". */
+function DeviceStatus() {
+  const { t, locale } = useTranslation();
+  const [health, setHealth] = useState<HealthCheck | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      api
+        .health()
+        .then((h) => alive && setHealth(h))
+        .catch(() => alive && setHealth(null));
+    load();
+    const id = setInterval(load, 30_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  const c = health?.collector;
+  const fresh = c?.updated_at ? Date.now() - new Date(c.updated_at).getTime() < HEALTH_STALE_MS : false;
+  const state = !c || !fresh ? "unknown" : c.device_connected ? "live" : "offline";
+  const lastSeen = c?.last_connect_success
+    ? new Date(c.last_connect_success.endsWith("Z") || c.last_connect_success.includes("+") ? c.last_connect_success : `${c.last_connect_success}Z`).toLocaleString(
+        locale === "th" ? "th-TH" : "en-GB",
+        { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }
+      )
+    : null;
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-slate-600" title={lastSeen ? `${t.leave.deviceLastSeen}: ${lastSeen}` : undefined}>
+      <span className="font-mono text-slate-500">192.168.1.201</span>
+      {state === "live" ? (
+        <span className="font-semibold text-emerald-600">● {t.leave.deviceLive}</span>
+      ) : state === "offline" ? (
+        <span className="font-semibold text-slate-500">
+          ○ {t.leave.deviceOffline}
+          {lastSeen && <span className="ml-1 font-normal">({t.leave.deviceLastSeen} {lastSeen})</span>}
+        </span>
+      ) : (
+        <span className="font-semibold text-amber-600">? {t.leave.deviceUnknown}</span>
+      )}
     </div>
   );
 }

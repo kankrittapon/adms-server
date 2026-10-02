@@ -36,6 +36,8 @@ class CollectorSummary(BaseModel):
     mqtt_status: Optional[str] = None
     loop_alive: Optional[bool] = None
     updated_at: Optional[datetime] = None
+    last_connect_success: Optional[str] = None
+    last_event_received: Optional[str] = None
 
 
 class HealthCheck(BaseModel):
