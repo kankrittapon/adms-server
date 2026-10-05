@@ -1,6 +1,17 @@
 # ADMS Current Status
 
-**Latest PromptID**: `ADMS-PersonnelIdentity-AttendanceClosure-025` — closes two defects found in production after 024's deployment; see [docs/reports/ADMS-PersonnelIdentity-AttendanceClosure-025.md](docs/reports/ADMS-PersonnelIdentity-AttendanceClosure-025.md). **(A) Personnel identity correction**: `personnel_id` was never actually required by `create_human`/`update_human`/the Add/Edit form (024's backend and UI were already correct), but PromptID 024's CSV import mistakenly made `personnel_id` the CSV matching key AND required it on every row — meaning the 120 legacy Humans (0 with `personnel_id`) could never be updated via CSV, and even the downloadable template's own blank-`personnel_id` example row would have been rejected as an error. Fixed: CSV round-trip matching now uses `employee_id` (the system's own canonical UUID, included only in ADMS-generated exports) — `personnel_id` remains a fully optional business field, never required, never a matching key, never backfilled. New-person import rows (no `employee_id`) always classify NEW; a same-name match against an existing Human is a non-blocking advisory only, never an auto-update. **(B) Attendance `/unattributed` 500 fixed**: root cause was `app/api/repository.py` calling `resolve_verified_employee_mapping()` without importing it (`NameError`, confirmed via production traceback) — the bug escaped test coverage because the only prior tests mocked the whole function away. Also fixed a genuine (not merely apparent) CORS gap: Starlette routes any handler registered for the base `Exception` class into `ServerErrorMiddleware`, which sits outside `CORSMiddleware`, so a handled 500 previously carried no CORS header at all — the browser's "CORS error" was a real secondary symptom of the crash. Both fixed; 41 new/changed tests; 825 tests passing. No migration. Deployed (`adms_api`/`adms_web` rebuilt and recreated).
+**Latest (2026-10-02 → 10-05, HEAD `79a2947`)**: Personnel workflows, leave register, attendance reporting and go-live — all deployed (`adms_api`/`adms_web` rebuilt; migrations 014–017 applied; collector untouched). Plan and decisions: [docs/plans/personnel-workflow-and-leave.md](docs/plans/personnel-workflow-and-leave.md); audit follow-up: [docs/audits/ADMS-audit-2026-09-03.md](docs/audits/ADMS-audit-2026-09-03.md). Highlights:
+- **Ops fixes**: write-window timer had failed every run since 09-23 (token parse bug) — fixed, then retired; admin password moved out of systemd units and rotated; nightly backup was reported failed every night (empty-glob `ls` under `pipefail`) — fixed; `/data` (2nd disk) had silently dropped out of fstab mounting on the 09-23 reboot (`fsck` SIGTERM, `nofail`) — remounted with `x-systemd.automount`; header "LIVE" badge now reads real collector state.
+- **Personnel**: navigation by job (attendance / roster / fingerprints / admin); roster hub with attention counts; scan-exempt per row or in bulk (finance — some people, commander's office) with section filter and position column; one-step leave-unit (close + remove from scanner); conscripts (`production_scope=false`) outside roster and scanning.
+- **Enrollment**: 4 visible steps with auto-advance, auto-confirm on live test scan, inline ADMIN verification.
+- **Leave register** (record-only — signed by the battalion commander on paper): leave / official duty / secondment / training, no-overlap constraint, cancel-with-reason, holidays.
+- **Attendance**: scans count only 06:30–11:00, late after 10:00; daily roster and monthly report (+ Excel CSV); people count only from the day after their fingerprint is verified (`NOT_ENROLLED` otherwise).
+- **Go-live switch** (`attendance_policy.tracking_mode`, default `auto`): absences are trial until everyone who must scan is enrolled (excluding exempt, people on duty/secondment, conscripts); ADMIN can force on/off.
+- **Telegram**: daily absent-only report Mon–Fri 11:05 (`deploy/systemd/adms-telegram-report.timer`), silent before go-live.
+- **Write policy**: Work Session disabled in production (`API_WORK_SESSION_REQUIRED=false`) — edits and enrollment are allowed any time, still role-gated, `API_WRITE_ENABLED`-gated and audited.
+- 865 tests passing.
+
+**Deployed (previous latest)**: `ADMS-PersonnelIdentity-AttendanceClosure-025` — closes two defects found in production after 024's deployment; see [docs/reports/ADMS-PersonnelIdentity-AttendanceClosure-025.md](docs/reports/ADMS-PersonnelIdentity-AttendanceClosure-025.md). **(A) Personnel identity correction**: `personnel_id` was never actually required by `create_human`/`update_human`/the Add/Edit form (024's backend and UI were already correct), but PromptID 024's CSV import mistakenly made `personnel_id` the CSV matching key AND required it on every row — meaning the 120 legacy Humans (0 with `personnel_id`) could never be updated via CSV, and even the downloadable template's own blank-`personnel_id` example row would have been rejected as an error. Fixed: CSV round-trip matching now uses `employee_id` (the system's own canonical UUID, included only in ADMS-generated exports) — `personnel_id` remains a fully optional business field, never required, never a matching key, never backfilled. New-person import rows (no `employee_id`) always classify NEW; a same-name match against an existing Human is a non-blocking advisory only, never an auto-update. **(B) Attendance `/unattributed` 500 fixed**: root cause was `app/api/repository.py` calling `resolve_verified_employee_mapping()` without importing it (`NameError`, confirmed via production traceback) — the bug escaped test coverage because the only prior tests mocked the whole function away. Also fixed a genuine (not merely apparent) CORS gap: Starlette routes any handler registered for the base `Exception` class into `ServerErrorMiddleware`, which sits outside `CORSMiddleware`, so a handled 500 previously carried no CORS header at all — the browser's "CORS error" was a real secondary symptom of the crash. Both fixed; 41 new/changed tests; 825 tests passing. No migration. Deployed (`adms_api`/`adms_web` rebuilt and recreated).
 
 **Deployed at `df6f347`**: `ADMS-Personnel-MasterData-024` — owner-approved (gate A), `adms_api`/`adms_web` rebuilt and recreated, both healthy; `adms_zkteco_listener`/`adms_postgres`/`adms_mqtt` untouched. Makes Personnel Master Data manageable from the ADMS web UI: ADMIN-only add/edit of Human records (`POST`/`PATCH /api/v1/humans`, source `ADMS_MANUAL` distinct from legacy `EXCEL_IMPORT`), Thai rank dropdown validated against the canonical `RTN_RANK_CATALOG`, English-name editing, CSV export/import. **Superseded by 025 above**: the CSV identity/matching design described in the original 024 report was corrected in 025 — see that report for the current behavior. No migration. 800 tests passing (+44) at the time of this deployment. Zero production mutations performed during implementation.
 
@@ -28,7 +39,10 @@
 - **Container Topology**: `adms_web`, `adms_api`, `adms_zkteco_listener`, `adms_postgres`, `adms_mqtt`
 - **Collector Connection State**: `LIVE` / `device_connected = true`
 - **Master Production Write Gate**: `API_WRITE_ENABLED = true` (Layer 1 — now the deploy-time infrastructure baseline; daily write control moved to Layer 2)
-- **Runtime write-session feature (Layer 2)**: **LIVE in production as of Phase F.** ADMIN-opened, 30-minute, auto-expiring, audited. No session is open by default — production remains write-locked until an ADMIN explicitly opens one.
+- **Runtime write-session feature (Layer 2)**: **disabled in production since 2026-10-02** (`API_WORK_SESSION_REQUIRED=false`). Code and tests remain; set it back to `true` to restore the ADMIN-opened work session. The host timers that opened/closed it are disabled.
+- **Attendance policy**: scan window 06:30–11:00, late after 10:00, go-live `auto` (currently **trial** — 4/84 enrolled).
+- **Telegram report**: configured (`.env`), timer `adms-telegram-report.timer` enabled, silent until go-live.
+- **Backups**: nightly 02:15 to `/home/.../backups` and `/data/adms/backups` (2nd disk), 14-day retention; no off-site copy.
 
 ---
 
@@ -50,8 +64,8 @@ Full engineering detail: [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](do
 ## 3. Quality Baseline
 
 - **Repository HEAD**: see `git log -1` (this checkpoint's commits are recorded in the Phase F report)
-- **Database Migrations Applied to Production**: through `012_write_session_schema.sql` (12 migrations, additive-only — applied during Phase F, verified pre/post backups taken).
-- **Automated Test Baseline**: **800 passed / 0 failed** (`pytest tests/`, includes the write-session, terminal-account-idempotency, DeviceCommandBus timeout-margin, single-owner device I/O, mapping-evidence, full Step 1→6 E2E, controlled-scan evidence binding, Personnel lifecycle, Terminal Management, RBAC operational-roles, and Personnel Master Data create/edit/CSV-import matrices)
+- **Database Migrations Applied to Production**: through `017_scan_window.sql` (014 schedule config, 015 scan-exempt, 016 absences/holidays/attendance_policy, 017 scan window — all additive).
+- **Automated Test Baseline**: **865 passed / 0 failed** (2026-10-05). Earlier baseline: 800 passed (`pytest tests/`, includes the write-session, terminal-account-idempotency, DeviceCommandBus timeout-margin, single-owner device I/O, mapping-evidence, full Step 1→6 E2E, controlled-scan evidence binding, Personnel lifecycle, Terminal Management, RBAC operational-roles, and Personnel Master Data create/edit/CSV-import matrices)
 - **Frontend Typecheck & Build**: `tsc --noEmit` PASS (0 errors), `vite build` PASS
 - **OpenAPI Drift Guard**: PASS (`tests/test_openapi_contract.py`, covers the `/write-session` endpoints)
 - **Production write-control verification**: full two-layer matrix (Layer-1-only block, role enforcement, session open/close/idempotent-close, expiry-does-not-block-reopen, Layer-1-overrides-Layer-2) verified live against production via temporary, fully-cleaned-up test-fixture accounts — see the Phase F report.
@@ -75,6 +89,8 @@ Full engineering detail: [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](do
 13. **Collector Health Bridge** — shared-volume Collector telemetry to API consumers.
 14. **Runtime Write Session (Layer 2)** — ADMIN-opened, 30-minute, auto-expiring, audited work session; advisory-lock-guarded concurrency so an expired-but-unclosed session never blocks a new open and a concurrent open can never succeed twice. **In source only — see §5.**
 15. **Human-readable mapping confirmation, live-connection indicators, and no native browser `alert()`/`confirm()` in the enrollment/mapping flows.**
+16. **Leave register & attendance reporting** — record-only leave/duty/secondment, holidays, scan window, daily roster, monthly report + CSV, fingerprint readiness, go-live switch, Telegram absence report.
+17. **Personnel workflows** — scan-exempt (row/bulk), leave-unit, readiness by section, 4-step enrollment.
 
 ---
 
@@ -92,7 +108,7 @@ Full engineering detail: [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](do
 ## 6. Security & Safety Rules
 
 - **Zero Automatic Mapping**: unchanged — no assumption that Excel row number, name, or rank equals terminal user ID.
-- **Fail-Closed Write Gate**: unchanged and reinforced — every domain-mutating endpoint (including operator management, previously a gap) requires the infrastructure gate; a second, independent runtime-session gate is now live in production as of Phase F, closed by default.
+- **Fail-Closed Write Gate**: every domain-mutating endpoint requires the infrastructure gate (`API_WRITE_ENABLED`) and its role. The runtime-session gate (Layer 2) is switched off in production since 2026-10-02 by owner decision; edits are audited in `sync_events`.
 - **Lifecycle & Incarnation Protection**: unchanged.
 - **Biometric Boundary**: unchanged — no biometric templates ever leave hardware.
 - **RBAC enforcement remains server-side**: the new frontend route guard is explicitly UX-only.
@@ -110,7 +126,8 @@ Full engineering detail: [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](do
 - **Enrollment #2 canonical recovery** — a real production data split-state (terminal account exists, DB row does not / vice versa, resulting from the original incident). Not recovered. Requires explicit owner approval before any real `set_user()`/`delete_user()` call on production hardware — see the PromptID-010 report's closing gate.
 
 ### READY FOR EXECUTION
-- **Real Personnel Enrollment**: ready for on-site physical enrollment following the **normal browser-controlled procedure** in `docs/ENROLLMENT_SESSION_RUNBOOK.md` — an ADMIN opens a work session from the System page; no SSH/`.env` step is required for a routine session anymore.
+- **Real Personnel Enrollment**: 80 of 84 people still to enroll (or mark scan-exempt). No work session needed — start from Personnel → person → "ลงทะเบียนลายนิ้วมือ", or click a section in the readiness table. Attendance goes live automatically when readiness reaches 100%.
+- **Off-site backup copy**: not set up (owner declined for now).
 
 ### DEFERRED
 - **Multi-Person Enrollment Validation**: verification across multiple distinct individuals.
