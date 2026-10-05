@@ -130,6 +130,16 @@ export interface Translations {
     mappingsHistoricalHint: string;
   };
   leave: {
+    trialTitle: string;
+    trialBody: string;
+    trialAbsent: string;
+    readinessAway: string;
+    trackTitle: string;
+    trackAuto: string;
+    trackOn: string;
+    trackOff: string;
+    trackLive: string;
+    trackTrial: string;
     st_NOT_ENROLLED: string;
     readinessTitle: string;
     readinessHint: string;

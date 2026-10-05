@@ -38,6 +38,7 @@ export function System() {
         </div>
       )}
 
+      {isAdmin && <TrackingModeCard />}
       {isAdmin && <TelegramReportCard />}
 
       {/* System Telemetry Cards */}
@@ -564,6 +565,62 @@ function TelegramReportCard() {
           {text}
         </pre>
       )}
+    </div>
+  );
+}
+
+function TrackingModeCard() {
+  const { t } = useTranslation();
+  const { canEditRoster } = useAuth();
+  const tr = useApi((s) => api.tracking(s), []);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function choose(mode: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setTracking(mode);
+      tr.reload();
+    } catch (e) {
+      setError(friendlyApiError(e, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const d = tr.data;
+  const options: [string, string][] = [
+    ["auto", t.leave.trackAuto],
+    ["on", t.leave.trackOn],
+    ["off", t.leave.trackOff],
+  ];
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-slate-900">{t.leave.trackTitle}</h2>
+        {d && (
+          <Badge tone={d.live ? "green" : "neutral"}>
+            {d.live ? t.leave.trackLive : t.leave.trackTrial} · {d.readiness.enrolled}/{d.readiness.required}
+          </Badge>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {options.map(([mode, label]) => (
+          <button
+            key={mode}
+            type="button"
+            disabled={busy || !canEditRoster}
+            onClick={() => choose(mode)}
+            className={`rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
+              d?.mode === mode ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-300 bg-white text-slate-700"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {error && <div className="text-xs font-semibold text-rose-700">{error}</div>}
     </div>
   );
 }

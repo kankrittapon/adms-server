@@ -28,9 +28,10 @@ export function DailyRoster() {
   const [day, setDay] = useState(todayLocal());
   const [filter, setFilter] = useState<RosterStatus | "">("");
   const roster = useApi((s) => api.dailyRoster(day, s), [day]);
-  const label = (s: RosterStatus) => t.leave[`st_${s}` as const];
 
   const data = roster.data;
+  const label = (s: RosterStatus) =>
+    s === "ABSENT" && data && !data.live ? t.leave.trialAbsent : t.leave[`st_${s}` as const];
   const shown = STATUS_ORDER.filter((s) => s !== "OFF" || (data && !data.is_workday));
   const people = (data?.people ?? []).filter((p) => !filter || p.status === filter);
 
@@ -73,6 +74,7 @@ export function DailyRoster() {
         <ErrorBanner message={roster.error} />
       ) : data ? (
         <>
+          <TrialBanner />
           {!data.is_workday && (
             <div className="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700">
               {t.leave.holidayBadge}
@@ -192,6 +194,22 @@ export function DailyRoster() {
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/** Shown until go-live: absences are trial until fingerprints are complete. */
+export function TrialBanner() {
+  const { t } = useTranslation();
+  const tr = useApi((s) => api.tracking(s), []);
+  if (!tr.data || tr.data.live) return null;
+  const r = tr.data.readiness;
+  return (
+    <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5">
+      <div className="text-xs font-bold text-sky-900">🧪 {t.leave.trialTitle}</div>
+      <div className="mt-0.5 text-[11px] text-sky-800">
+        {t.leave.trialBody.replace("{done}", String(r.enrolled)).replace("{req}", String(r.required))}
+      </div>
     </div>
   );
 }

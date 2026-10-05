@@ -132,6 +132,7 @@ class RosterBranch(BaseModel):
 
 
 class DailyRoster(BaseModel):
+    live: bool = Field(True, description="false = before go-live: absences are trial, not real")
     date: date
     is_workday: bool
     holiday_name: Optional[str] = None
@@ -279,6 +280,7 @@ class ReadinessRow(BaseModel):
     branch: str = "ทั้งหมด"
     total: int
     exempt: int
+    away: int = Field(0, description="not enrolled but away on official duty / secondment today")
     enrolled: int
     required: int
     missing: int
@@ -322,3 +324,26 @@ def send_telegram_report(day: Optional[date] = Query(None, alias="date"), cfg: C
         raise ApiError(409, "TELEGRAM_NOT_CONFIGURED", "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID are not set")
     except telegram_report.TelegramSendError as e:
         raise ApiError(502, "TELEGRAM_SEND_FAILED", str(e))
+
+
+class TrackingState(BaseModel):
+    mode: str = Field(description="auto | on | off")
+    live: bool
+    readiness: ReadinessRow
+
+
+class TrackingModeRequest(BaseModel):
+    mode: str
+
+
+@router.get("/api/v1/attendance/tracking", response_model=TrackingState, dependencies=[Depends(read_roles)])
+def get_tracking(cfg: Config = Depends(get_cfg)):
+    return absences.tracking_state(cfg)
+
+
+@router.post("/api/v1/attendance/tracking", response_model=TrackingState, dependencies=[Depends(admin_only), *WRITE_GATES])
+def post_tracking(payload: TrackingModeRequest, ctx: OperatorContext = Depends(admin_only), cfg: Config = Depends(get_cfg)):
+    try:
+        return absences.set_tracking_mode(cfg, ctx.username, payload.mode)
+    except absences.AbsenceError as e:
+        raise _map_error(e)

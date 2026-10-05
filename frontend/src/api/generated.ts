@@ -159,6 +159,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/attendance/tracking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Tracking */
+        get: operations["get_tracking_api_v1_attendance_tracking_get"];
+        put?: never;
+        /** Post Tracking */
+        post: operations["post_tracking_api_v1_attendance_tracking_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/attendance/unattributed": {
         parameters: {
             query?: never;
@@ -1738,6 +1756,12 @@ export interface components {
             is_workday: boolean;
             /** Late After */
             late_after: string;
+            /**
+             * Live
+             * @description false = before go-live: absences are trial, not real
+             * @default true
+             */
+            live: boolean;
             /** People */
             people: components["schemas"]["RosterPerson"][];
             /**
@@ -2498,6 +2522,12 @@ export interface components {
         /** ReadinessRow */
         ReadinessRow: {
             /**
+             * Away
+             * @description not enrolled but away on official duty / secondment today
+             * @default 0
+             */
+            away: number;
+            /**
              * Branch
              * @default ทั้งหมด
              */
@@ -2769,6 +2799,22 @@ export interface components {
             operator_id: number;
             /** Username */
             username: string;
+        };
+        /** TrackingModeRequest */
+        TrackingModeRequest: {
+            /** Mode */
+            mode: string;
+        };
+        /** TrackingState */
+        TrackingState: {
+            /** Live */
+            live: boolean;
+            /**
+             * Mode
+             * @description auto | on | off
+             */
+            mode: string;
+            readiness: components["schemas"]["ReadinessRow"];
         };
         /** TransitionRequest */
         TransitionRequest: {
@@ -3213,6 +3259,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Readiness"];
+                };
+            };
+        };
+    };
+    get_tracking_api_v1_attendance_tracking_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackingState"];
+                };
+            };
+        };
+    };
+    post_tracking_api_v1_attendance_tracking_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackingModeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackingState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

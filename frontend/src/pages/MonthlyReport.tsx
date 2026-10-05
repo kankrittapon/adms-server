@@ -6,6 +6,7 @@ import { useApi } from "../hooks/useApi";
 import { useTranslation } from "../i18n";
 import { friendlyApiError } from "../i18n/apiErrors";
 import { todayLocal } from "./Absences";
+import { TrialBanner } from "./DailyRoster";
 
 const CODES: Record<string, { code: string; cls: string }> = {
   PRESENT: { code: "ม", cls: "text-emerald-700" },
@@ -82,6 +83,7 @@ export function MonthlyReport() {
         </div>
       </div>
 
+      <TrialBanner />
       {exportError && <ErrorBanner message={exportError} />}
 
       <div className="flex flex-wrap gap-3 text-[11px] text-slate-600">

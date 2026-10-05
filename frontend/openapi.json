@@ -1286,6 +1286,12 @@
             "title": "Late After",
             "type": "string"
           },
+          "live": {
+            "default": true,
+            "description": "false = before go-live: absences are trial, not real",
+            "title": "Live",
+            "type": "boolean"
+          },
           "people": {
             "items": {
               "$ref": "#/components/schemas/RosterPerson"
@@ -3316,6 +3322,12 @@
       },
       "ReadinessRow": {
         "properties": {
+          "away": {
+            "default": 0,
+            "description": "not enrolled but away on official duty / secondment today",
+            "title": "Away",
+            "type": "integer"
+          },
           "branch": {
             "default": "\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14",
             "title": "Branch",
@@ -3984,6 +3996,42 @@
           "active"
         ],
         "title": "ToggleActiveResponse",
+        "type": "object"
+      },
+      "TrackingModeRequest": {
+        "properties": {
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "TrackingModeRequest",
+        "type": "object"
+      },
+      "TrackingState": {
+        "properties": {
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
+          "mode": {
+            "description": "auto | on | off",
+            "title": "Mode",
+            "type": "string"
+          },
+          "readiness": {
+            "$ref": "#/components/schemas/ReadinessRow"
+          }
+        },
+        "required": [
+          "mode",
+          "live",
+          "readiness"
+        ],
+        "title": "TrackingState",
         "type": "object"
       },
       "TransitionRequest": {
@@ -4988,6 +5036,66 @@
           }
         },
         "summary": "Get Readiness",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/attendance/tracking": {
+      "get": {
+        "operationId": "get_tracking_api_v1_attendance_tracking_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackingState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Tracking",
+        "tags": [
+          "absences"
+        ]
+      },
+      "post": {
+        "operationId": "post_tracking_api_v1_attendance_tracking_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackingModeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackingState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Tracking",
         "tags": [
           "absences"
         ]

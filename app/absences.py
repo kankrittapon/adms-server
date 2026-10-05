@@ -9,6 +9,7 @@ The daily roster is computed on read from current facts (roster, absences,
 holidays, first scan of the day); nothing derived is stored.
 """
 
+import json
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -386,6 +387,7 @@ def daily_roster(cfg: Config, day: date, now: Optional[datetime] = None) -> Dict
         "holiday_name": holiday_name,
         "late_after": late_after.strftime("%H:%M"),
         "scan_window": "%s–%s" % (times["start"].strftime("%H:%M"), times["end"].strftime("%H:%M")),
+        "live": tracking_state(cfg, day)["live"],
         "total": len(people),
         "totals": totals,
         "by_branch": [{"branch": b, "counts": c} for b, c in by_branch.items()],
@@ -557,30 +559,77 @@ def monthly_report_csv(report: Dict[str, Any]) -> str:
 # --- Fingerprint readiness -------------------------------------------------------
 
 
-def readiness(cfg: Config) -> Dict[str, Any]:
+_AWAY_ON_DUTY_SQL = (
+    "EXISTS (SELECT 1 FROM absence_records a JOIN absence_types t ON t.code = a.type_code "
+    " WHERE a.employee_id = h.employee_id AND a.status = 'RECORDED' AND t.counts_as = 'DUTY' "
+    " AND %s BETWEEN a.start_date AND a.end_date)"
+)
+_ENROLLED_SQL = (
+    "EXISTS (SELECT 1 FROM employee_device_mappings m WHERE m.employee_id = h.employee_id "
+    " AND m.mapping_status = 'VERIFIED' AND m.valid_to IS NULL)"
+)
+
+
+def readiness(cfg: Config, day: Optional[date] = None) -> Dict[str, Any]:
     """Per-section fingerprint readiness for the people held to scanning
-    (active, in scope). Exempt people are counted separately and never
-    'missing'."""
+    (active, in scope). Scan-exempt people, and people away on official
+    duty / secondment today (they cannot come to enroll), are counted
+    separately and never 'missing'. Conscripts (out of scope) are excluded."""
+    day = day or datetime.now(ZoneInfo("Asia/Bangkok")).date()
     with get_db_connection(cfg) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT COALESCE(h.branch, '—') AS branch, "
                 "COUNT(*) AS total, "
                 "COUNT(*) FILTER (WHERE h.scan_exempt) AS exempt, "
-                "COUNT(*) FILTER (WHERE NOT h.scan_exempt AND EXISTS ("
-                "  SELECT 1 FROM employee_device_mappings m WHERE m.employee_id = h.employee_id "
-                "  AND m.mapping_status = 'VERIFIED' AND m.valid_to IS NULL)) AS enrolled "
+                f"COUNT(*) FILTER (WHERE NOT h.scan_exempt AND NOT {_ENROLLED_SQL} AND {_AWAY_ON_DUTY_SQL}) AS away, "
+                f"COUNT(*) FILTER (WHERE NOT h.scan_exempt AND {_ENROLLED_SQL}) AS enrolled "
                 "FROM human_employees h WHERE h.active AND h.production_scope "
-                "GROUP BY 1 ORDER BY 1;"
+                "GROUP BY 1 ORDER BY 1;",
+                (day,),
             )
             rows = _rows(cur)
     out = []
     for r in rows:
-        required = r["total"] - r["exempt"]
+        required = r["total"] - r["exempt"] - r["away"]
         r["required"] = required
         r["missing"] = required - r["enrolled"]
         r["percent"] = round(100 * r["enrolled"] / required) if required else 100
         out.append(r)
-    total = {k: sum(r[k] for r in out) for k in ("total", "exempt", "enrolled", "required", "missing")}
+    total = {k: sum(r[k] for r in out) for k in ("total", "exempt", "away", "enrolled", "required", "missing")}
     total["percent"] = round(100 * total["enrolled"] / total["required"]) if total["required"] else 100
     return {"branches": out, "total": total}
+
+
+
+# --- Go-live switch -----------------------------------------------------------------
+
+TRACKING_MODES = ("auto", "on", "off")
+
+
+def tracking_state(cfg: Config, day: Optional[date] = None) -> Dict[str, Any]:
+    """Whether absences are 'real' yet. auto (default): live once every person
+    who must scan is enrolled (readiness missing == 0); on / off: forced by an
+    ADMIN. While not live, the roster still shows statuses but the Telegram
+    report is not sent and the UI marks absences as trial."""
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            mode = load_policy(cur).get("tracking_mode") or "auto"
+    r = readiness(cfg, day)["total"]
+    live = mode == "on" or (mode == "auto" and r["missing"] == 0 and r["required"] > 0)
+    return {"mode": mode, "live": live, "readiness": r}
+
+
+def set_tracking_mode(cfg: Config, operator: str, mode: str) -> Dict[str, Any]:
+    if mode not in TRACKING_MODES:
+        raise AbsenceError("mode must be one of %s" % ", ".join(TRACKING_MODES))
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE system_configurations SET value = value || %s::jsonb, updated_at = now() "
+                "WHERE key = 'attendance_policy';",
+                (json.dumps({"tracking_mode": mode}),),
+            )
+            conn.commit()
+    log_sync_event(cfg, "ATTENDANCE_TRACKING_MODE_SET", "mode=%s by=%s" % (mode, operator))
+    return tracking_state(cfg)

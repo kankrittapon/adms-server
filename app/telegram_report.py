@@ -98,6 +98,12 @@ def send_daily_report(cfg: Config, day: Optional[date] = None, force: bool = Fal
     text = build_message(roster)
     if text is None and not force:
         return {"sent": False, "reason": "non-working day", "text": None}
+    # Before go-live (fingerprints not complete) absences are not real:
+    # the timer stays silent; an ADMIN test send is marked as a trial.
+    if not roster.get("live", True):
+        if not force:
+            return {"sent": False, "reason": "not live (fingerprint enrollment incomplete)", "text": None}
+        text = "🧪 [ทดลอง — ยังไม่นับจริง]\n" + (text or "")
     if text is None:
         text = "📋 %s — วันหยุด ไม่มีรายงาน" % thai_date(day)
     send_text(text)

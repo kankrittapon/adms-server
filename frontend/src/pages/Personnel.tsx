@@ -919,6 +919,7 @@ function ReadinessCard({ onPickBranch }: { onPickBranch: (branch: string) => voi
               <th className="text-center">{t.leave.readinessRequired}</th>
               <th className="text-center">{t.leave.readinessEnrolled}</th>
               <th className="text-center">{t.leave.readinessMissing}</th>
+              <th className="text-center">{t.leave.readinessAway}</th>
               <th className="text-center">{t.workflow.scanExempt}</th>
               <th className="w-1/3" />
             </tr>
@@ -934,6 +935,7 @@ function ReadinessCard({ onPickBranch }: { onPickBranch: (branch: string) => voi
                 <td className="text-center">{b.required}</td>
                 <td className="text-center text-emerald-700">{b.enrolled}</td>
                 <td className={`text-center ${b.missing ? "font-bold text-amber-700" : "text-slate-300"}`}>{b.missing}</td>
+                <td className="text-center text-sky-700">{b.away || ""}</td>
                 <td className="text-center text-purple-700">{b.exempt || ""}</td>
                 <td>
                   <div className="h-2 rounded bg-slate-100">

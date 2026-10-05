@@ -215,3 +215,41 @@ class TestReadinessAndTelegram(unittest.TestCase):
 
         with self.assertRaises(TelegramNotConfigured):
             send_text("x", token="", chat_id="")
+
+
+class TestGoLive(unittest.TestCase):
+    def _roster(self, live):
+        return {"date": date(2026, 10, 6), "is_workday": True, "scan_window": "06:30–11:00", "live": live,
+                "people": [{"status": "ABSENT", "branch": "สส.", "rank": None, "display_name": "ก"}]}
+
+    def test_timer_silent_before_go_live(self):
+        from app import telegram_report
+
+        with patch("app.telegram_report.daily_roster", return_value=self._roster(False)), patch(
+            "app.telegram_report.send_text"
+        ) as send:
+            result = telegram_report.send_daily_report(None, date(2026, 10, 6))
+        self.assertFalse(result["sent"])
+        send.assert_not_called()
+
+    def test_admin_test_send_before_go_live_is_marked_trial(self):
+        from app import telegram_report
+
+        with patch("app.telegram_report.daily_roster", return_value=self._roster(False)), patch(
+            "app.telegram_report.send_text"
+        ) as send, patch("app.telegram_report.log_sync_event"):
+            telegram_report.send_daily_report(None, date(2026, 10, 6), force=True)
+        self.assertTrue(send.call_args.args[0].startswith("🧪 [ทดลอง"))
+
+    def test_sends_when_live(self):
+        from app import telegram_report
+
+        with patch("app.telegram_report.daily_roster", return_value=self._roster(True)), patch(
+            "app.telegram_report.send_text"
+        ) as send, patch("app.telegram_report.log_sync_event"):
+            self.assertTrue(telegram_report.send_daily_report(None, date(2026, 10, 6))["sent"])
+        self.assertNotIn("ทดลอง", send.call_args.args[0])
+
+    def test_invalid_mode_rejected(self):
+        with self.assertRaises(absences.AbsenceError):
+            absences.set_tracking_mode(None, "admin", "maybe")
