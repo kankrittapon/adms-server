@@ -6,7 +6,7 @@ import { useApi } from "../hooks/useApi";
 import { useTranslation } from "../i18n";
 import { formatThaiDate, todayLocal } from "./Absences";
 
-const STATUS_ORDER = ["PRESENT", "LATE", "LEAVE", "DUTY", "EXEMPT", "NOT_YET", "ABSENT", "OFF"] as const;
+const STATUS_ORDER = ["PRESENT", "LATE", "LEAVE", "DUTY", "EXEMPT", "NOT_YET", "ABSENT", "NOT_ENROLLED", "OFF"] as const;
 type RosterStatus = (typeof STATUS_ORDER)[number];
 
 const STATUS_TONE: Record<RosterStatus, string> = {
@@ -16,6 +16,7 @@ const STATUS_TONE: Record<RosterStatus, string> = {
   DUTY: "text-sky-800 bg-sky-50 border-sky-200",
   EXEMPT: "text-purple-700 bg-purple-50 border-purple-200",
   NOT_YET: "text-slate-600 bg-slate-50 border-slate-200",
+  NOT_ENROLLED: "text-slate-500 bg-white border-dashed border-slate-300",
   ABSENT: "text-rose-700 bg-rose-50 border-rose-200",
   OFF: "text-slate-500 bg-slate-50 border-slate-200",
 };

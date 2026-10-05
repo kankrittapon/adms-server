@@ -3294,6 +3294,69 @@
         "title": "ReactivateHumanRequest",
         "type": "object"
       },
+      "Readiness": {
+        "properties": {
+          "branches": {
+            "items": {
+              "$ref": "#/components/schemas/ReadinessRow"
+            },
+            "title": "Branches",
+            "type": "array"
+          },
+          "total": {
+            "$ref": "#/components/schemas/ReadinessRow"
+          }
+        },
+        "required": [
+          "branches",
+          "total"
+        ],
+        "title": "Readiness",
+        "type": "object"
+      },
+      "ReadinessRow": {
+        "properties": {
+          "branch": {
+            "default": "\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14",
+            "title": "Branch",
+            "type": "string"
+          },
+          "enrolled": {
+            "title": "Enrolled",
+            "type": "integer"
+          },
+          "exempt": {
+            "title": "Exempt",
+            "type": "integer"
+          },
+          "missing": {
+            "title": "Missing",
+            "type": "integer"
+          },
+          "percent": {
+            "title": "Percent",
+            "type": "integer"
+          },
+          "required": {
+            "title": "Required",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "exempt",
+          "enrolled",
+          "required",
+          "missing",
+          "percent"
+        ],
+        "title": "ReadinessRow",
+        "type": "object"
+      },
       "ReconcileScanEvidenceRequest": {
         "description": "ADMS-ControlledScan-EvidenceBinding-018-Deploy: narrow, ADMIN-only,\none-time correction of controlled_scan_time for enrollments recorded\nunder the pre-018 estimate-based architecture. See\napp.enrollment.reconcile_controlled_scan_evidence for the five\nre-verified evidence criteria this operation enforces before writing\nanything.",
         "properties": {
@@ -3555,6 +3618,19 @@
             "title": "Status",
             "type": "string"
           },
+          "tracked_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "first day held to scanning (day after enrollment); null = not enrolled",
+            "title": "Tracked From"
+          },
           "type_code": {
             "anyOf": [
               {
@@ -3712,6 +3788,41 @@
           "operator"
         ],
         "title": "StartFingerprintReenrollRequest",
+        "type": "object"
+      },
+      "TelegramReportResult": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "sent": {
+            "title": "Sent",
+            "type": "boolean"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "required": [
+          "sent"
+        ],
+        "title": "TelegramReportResult",
         "type": "object"
       },
       "TerminalInventoryItem": {
@@ -4856,6 +4967,27 @@
           }
         },
         "summary": "Get Monthly Report Csv",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/attendance/readiness": {
+      "get": {
+        "operationId": "get_readiness_api_v1_attendance_readiness_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Readiness",
         "tags": [
           "absences"
         ]
@@ -7324,6 +7456,108 @@
         "summary": "List Ranks",
         "tags": [
           "reference"
+        ]
+      }
+    },
+    "/api/v1/reports/telegram/preview": {
+      "get": {
+        "description": "What the daily Telegram message would say (nothing is sent).",
+        "operationId": "preview_telegram_report_api_v1_reports_telegram_preview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramReportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Telegram Report",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/reports/telegram/send": {
+      "post": {
+        "description": "ADMIN test send of the daily report (same message as the timer).",
+        "operationId": "send_telegram_report_api_v1_reports_telegram_send_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramReportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send Telegram Report",
+        "tags": [
+          "absences"
         ]
       }
     },

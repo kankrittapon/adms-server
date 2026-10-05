@@ -130,6 +130,20 @@ export interface Translations {
     mappingsHistoricalHint: string;
   };
   leave: {
+    st_NOT_ENROLLED: string;
+    readinessTitle: string;
+    readinessHint: string;
+    readinessRequired: string;
+    readinessEnrolled: string;
+    readinessMissing: string;
+    tgTitle: string;
+    tgHint: string;
+    tgPreview: string;
+    tgSend: string;
+    tgSent: string;
+    tgNotConfigured: string;
+    tgFailed: string;
+    tgNonWorkday: string;
     navMonthly: string;
     monthlyTitle: string;
     monthlySubtitle: string;

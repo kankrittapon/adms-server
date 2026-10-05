@@ -1,0 +1,9 @@
+[Unit]
+Description=ADMS daily absence report to Telegram (Mon-Fri 11:05, after the 06:30-11:00 scan window)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 11:05:00 Asia/Bangkok
+Persistent=false
+
+[Install]
+WantedBy=timers.target

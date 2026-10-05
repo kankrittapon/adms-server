@@ -377,6 +377,16 @@ export const api = {
         scan_exempt_reason: reason,
       } satisfies BodyOf<"bulk_scan_exempt_api_v1_humans_scan_exempt_post">),
     }),
+  readiness: (signal?: AbortSignal) =>
+    request<JsonResponse<"get_readiness_api_v1_attendance_readiness_get">>("/api/v1/attendance/readiness", signal),
+  telegramPreview: (signal?: AbortSignal) =>
+    request<JsonResponse<"preview_telegram_report_api_v1_reports_telegram_preview_get">>(
+      "/api/v1/reports/telegram/preview", signal
+    ),
+  telegramSend: () =>
+    request<JsonResponse<"send_telegram_report_api_v1_reports_telegram_send_post">>(
+      "/api/v1/reports/telegram/send", undefined, { method: "POST" }
+    ),
   humansSummary: (signal?: AbortSignal) =>
     request<JsonResponse<"humans_summary_api_v1_humans_summary_get">>("/api/v1/humans/summary", signal),
   humanTerminalAccounts: (employeeId: string, signal?: AbortSignal) =>

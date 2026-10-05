@@ -106,6 +106,7 @@ class RosterPerson(BaseModel):
     absence_start: Optional[date] = None
     absence_end: Optional[date] = None
     first_scan: Optional[datetime] = Field(None, description="first scan inside the scan window")
+    tracked_from: Optional[date] = Field(None, description="first day held to scanning (day after enrollment); null = not enrolled")
     scans_outside_window: int = 0
 
 
@@ -272,3 +273,52 @@ def get_monthly_report_csv(month: Optional[str] = Query(None), cfg: Config = Dep
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="attendance_{y:04d}-{m:02d}.csv"'},
     )
+
+
+class ReadinessRow(BaseModel):
+    branch: str = "ทั้งหมด"
+    total: int
+    exempt: int
+    enrolled: int
+    required: int
+    missing: int
+    percent: int
+
+
+class Readiness(BaseModel):
+    branches: List[ReadinessRow]
+    total: ReadinessRow
+
+
+@router.get("/api/v1/attendance/readiness", response_model=Readiness, dependencies=[Depends(read_roles)])
+def get_readiness(cfg: Config = Depends(get_cfg)):
+    return absences.readiness(cfg)
+
+
+class TelegramReportResult(BaseModel):
+    sent: bool
+    reason: Optional[str] = None
+    text: Optional[str] = None
+
+
+@router.get("/api/v1/reports/telegram/preview", response_model=TelegramReportResult, dependencies=[Depends(admin_only)])
+def preview_telegram_report(day: Optional[date] = Query(None, alias="date"), cfg: Config = Depends(get_cfg)):
+    """What the daily Telegram message would say (nothing is sent)."""
+    from app import telegram_report
+
+    d = day or datetime.now(ZoneInfo("Asia/Bangkok")).date()
+    text = telegram_report.build_message(absences.daily_roster(cfg, d))
+    return {"sent": False, "reason": None if text else "non-working day", "text": text}
+
+
+@router.post("/api/v1/reports/telegram/send", response_model=TelegramReportResult, dependencies=[Depends(admin_only)])
+def send_telegram_report(day: Optional[date] = Query(None, alias="date"), cfg: Config = Depends(get_cfg)):
+    """ADMIN test send of the daily report (same message as the timer)."""
+    from app import telegram_report
+
+    try:
+        return telegram_report.send_daily_report(cfg, day, force=True)
+    except telegram_report.TelegramNotConfigured:
+        raise ApiError(409, "TELEGRAM_NOT_CONFIGURED", "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID are not set")
+    except telegram_report.TelegramSendError as e:
+        raise ApiError(502, "TELEGRAM_SEND_FAILED", str(e))

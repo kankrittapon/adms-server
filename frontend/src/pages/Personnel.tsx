@@ -139,6 +139,15 @@ export function Personnel() {
         onAdd={() => setShowAddModal(true)}
       />
 
+      <ReadinessCard
+        onPickBranch={(b) => {
+          setScanStatus("needs_enrollment");
+          setActiveFilter("");
+          setBranch(b === "—" ? "" : b);
+          setPage(0);
+        }}
+      />
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex-1 min-w-[240px]">
@@ -880,6 +889,65 @@ function BulkExemptBar({ ids, onDone, onClear }: { ids: string[]; onDone: () => 
       </button>
       {!canEditRoster && <span className="w-full text-[11px] text-amber-800">{t.workflow.needsWriteWindow}</span>}
       {msg && <span className={`w-full font-semibold ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</span>}
+    </div>
+  );
+}
+
+/** How far each section is with fingerprint enrollment. Click a section to
+ * list who is still missing. */
+function ReadinessCard({ onPickBranch }: { onPickBranch: (branch: string) => void }) {
+  const { t } = useTranslation();
+  const r = useApi((s) => api.readiness(s), []);
+  if (!r.data) return null;
+  const rows = r.data.branches;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs space-y-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-bold text-slate-900">
+          {t.leave.readinessTitle}{" "}
+          <span className={r.data.total.percent === 100 ? "text-emerald-700" : "text-amber-700"}>
+            {r.data.total.percent}%
+          </span>
+        </h2>
+        <p className="text-[11px] text-slate-500">{t.leave.readinessHint}</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left text-xs table-dense">
+          <thead>
+            <tr>
+              <th>{t.leave.branch}</th>
+              <th className="text-center">{t.leave.readinessRequired}</th>
+              <th className="text-center">{t.leave.readinessEnrolled}</th>
+              <th className="text-center">{t.leave.readinessMissing}</th>
+              <th className="text-center">{t.workflow.scanExempt}</th>
+              <th className="w-1/3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((b) => (
+              <tr
+                key={b.branch}
+                onClick={() => b.missing > 0 && onPickBranch(b.branch)}
+                className={b.missing > 0 ? "cursor-pointer hover:bg-amber-50/60" : ""}
+              >
+                <td className="font-semibold text-slate-800">{b.branch}</td>
+                <td className="text-center">{b.required}</td>
+                <td className="text-center text-emerald-700">{b.enrolled}</td>
+                <td className={`text-center ${b.missing ? "font-bold text-amber-700" : "text-slate-300"}`}>{b.missing}</td>
+                <td className="text-center text-purple-700">{b.exempt || ""}</td>
+                <td>
+                  <div className="h-2 rounded bg-slate-100">
+                    <div
+                      className={`h-2 rounded ${b.percent === 100 ? "bg-emerald-500" : "bg-amber-400"}`}
+                      style={{ width: `${b.percent}%` }}
+                    />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

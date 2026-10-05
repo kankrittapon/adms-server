@@ -142,6 +142,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/attendance/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Readiness */
+        get: operations["get_readiness_api_v1_attendance_readiness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/attendance/unattributed": {
         parameters: {
             query?: never;
@@ -1000,6 +1017,46 @@ export interface paths {
         get: operations["list_ranks_api_v1_reference_ranks_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/telegram/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Telegram Report
+         * @description What the daily Telegram message would say (nothing is sent).
+         */
+        get: operations["preview_telegram_report_api_v1_reports_telegram_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/telegram/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Telegram Report
+         * @description ADMIN test send of the daily report (same message as the timer).
+         */
+        post: operations["send_telegram_report_api_v1_reports_telegram_send_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2432,6 +2489,32 @@ export interface components {
              */
             reason?: string | null;
         };
+        /** Readiness */
+        Readiness: {
+            /** Branches */
+            branches: components["schemas"]["ReadinessRow"][];
+            total: components["schemas"]["ReadinessRow"];
+        };
+        /** ReadinessRow */
+        ReadinessRow: {
+            /**
+             * Branch
+             * @default ทั้งหมด
+             */
+            branch: string;
+            /** Enrolled */
+            enrolled: number;
+            /** Exempt */
+            exempt: number;
+            /** Missing */
+            missing: number;
+            /** Percent */
+            percent: number;
+            /** Required */
+            required: number;
+            /** Total */
+            total: number;
+        };
         /**
          * ReconcileScanEvidenceRequest
          * @description ADMS-ControlledScan-EvidenceBinding-018-Deploy: narrow, ADMIN-only,
@@ -2557,6 +2640,11 @@ export interface components {
              * @description PRESENT | LATE | LEAVE | DUTY | EXEMPT | NOT_YET | ABSENT | OFF
              */
             status: string;
+            /**
+             * Tracked From
+             * @description first day held to scanning (day after enrollment); null = not enrolled
+             */
+            tracked_from?: string | null;
             /** Type Code */
             type_code?: string | null;
         };
@@ -2618,6 +2706,15 @@ export interface components {
              * @description explicit ADMIN identity performing the re-enrollment
              */
             operator: string;
+        };
+        /** TelegramReportResult */
+        TelegramReportResult: {
+            /** Reason */
+            reason?: string | null;
+            /** Sent */
+            sent: boolean;
+            /** Text */
+            text?: string | null;
         };
         /** TerminalInventoryItem */
         TerminalInventoryItem: {
@@ -3096,6 +3193,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_readiness_api_v1_attendance_readiness_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Readiness"];
                 };
             };
         };
@@ -4679,6 +4796,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RankReference"][];
+                };
+            };
+        };
+    };
+    preview_telegram_report_api_v1_reports_telegram_preview_get: {
+        parameters: {
+            query?: {
+                date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramReportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_telegram_report_api_v1_reports_telegram_send_post: {
+        parameters: {
+            query?: {
+                date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramReportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

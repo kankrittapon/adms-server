@@ -173,3 +173,45 @@ class TestWorkSessionSwitch(unittest.TestCase):
         ):
             with self.assertRaises(ApiError):
                 require_write_session(self._request(True))
+
+
+class TestReadinessAndTelegram(unittest.TestCase):
+    def test_not_enrolled_never_absent_or_late(self):
+        self.assertEqual(_c(tracked=False), "NOT_ENROLLED")
+        self.assertEqual(_c(tracked=False, first_scan_local=datetime(2026, 10, 5, 10, 30, tzinfo=BKK)), "NOT_ENROLLED")
+        self.assertEqual(_c(tracked=False, is_workday=False), "OFF")
+
+    def test_leave_and_exempt_still_win_before_enrollment(self):
+        self.assertEqual(_c(tracked=False, absence_counts_as="DUTY"), "DUTY")
+        self.assertEqual(_c(tracked=False, scan_exempt=True), "EXEMPT")
+
+    def _roster(self, people, workday=True):
+        return {"date": date(2026, 10, 5), "is_workday": workday, "scan_window": "06:30–11:00", "people": people}
+
+    def test_message_lists_only_absent_grouped_by_section(self):
+        from app.telegram_report import build_message
+
+        people = [
+            {"status": "ABSENT", "branch": "สส.", "rank": "จ.อ.", "display_name": "ก"},
+            {"status": "LEAVE", "branch": "สส.", "rank": "จ.อ.", "display_name": "ข"},
+            {"status": "NOT_ENROLLED", "branch": "สส.", "rank": None, "display_name": "ค"},
+            {"status": "ABSENT", "branch": "อล.", "rank": None, "display_name": "ง"},
+        ]
+        text = build_message(self._roster(people))
+        self.assertIn("ขาด 2 คน", text)
+        self.assertIn("• จ.อ. ก", text)
+        self.assertIn("• ง", text)
+        self.assertNotIn("ข\n", text + "\n")
+        self.assertNotIn("• ค", text)
+        self.assertLess(text.index("สส."), text.index("อล."))
+
+    def test_no_message_on_non_working_day(self):
+        from app.telegram_report import build_message
+
+        self.assertIsNone(build_message(self._roster([], workday=False)))
+
+    def test_send_requires_configuration(self):
+        from app.telegram_report import TelegramNotConfigured, send_text
+
+        with self.assertRaises(TelegramNotConfigured):
+            send_text("x", token="", chat_id="")

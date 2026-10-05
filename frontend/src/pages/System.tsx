@@ -38,6 +38,8 @@ export function System() {
         </div>
       )}
 
+      {isAdmin && <TelegramReportCard />}
+
       {/* System Telemetry Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
         {health.loading ? (
@@ -488,6 +490,79 @@ function OperatorAccountsManagement() {
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+}
+
+function TelegramReportCard() {
+  const { t } = useTranslation();
+  const [text, setText] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function explain(e: unknown): string {
+    if (e instanceof ApiClientError && e.code === "TELEGRAM_NOT_CONFIGURED") return t.leave.tgNotConfigured;
+    if (e instanceof ApiClientError && e.code === "TELEGRAM_SEND_FAILED") return `${t.leave.tgFailed}: ${e.message}`;
+    return friendlyApiError(e, t);
+  }
+
+  async function preview() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api.telegramPreview();
+      setText(r.text ?? t.leave.tgNonWorkday);
+    } catch (e) {
+      setMsg({ ok: false, text: explain(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function send() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api.telegramSend();
+      setText(r.text ?? null);
+      setMsg({ ok: true, text: t.leave.tgSent });
+    } catch (e) {
+      setMsg({ ok: false, text: explain(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs space-y-3">
+      <div>
+        <h2 className="text-sm font-bold text-slate-900">{t.leave.tgTitle}</h2>
+        <p className="mt-0.5 text-xs text-slate-500">{t.leave.tgHint}</p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={preview}
+          disabled={busy}
+          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {t.leave.tgPreview}
+        </button>
+        <button
+          type="button"
+          onClick={send}
+          disabled={busy}
+          className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-50"
+        >
+          {t.leave.tgSend}
+        </button>
+      </div>
+      {msg && <div className={`text-xs font-semibold ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</div>}
+      {text && (
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+          {text}
+        </pre>
       )}
     </div>
   );

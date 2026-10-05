@@ -50,7 +50,7 @@ def _window_bounds(day: date, tz: ZoneInfo, times: Dict[str, time]) -> tuple:
     return start, end
 
 # Daily roster statuses, in display order.
-ROSTER_STATUSES = ("PRESENT", "LATE", "LEAVE", "DUTY", "EXEMPT", "NOT_YET", "ABSENT", "OFF")
+ROSTER_STATUSES = ("PRESENT", "LATE", "LEAVE", "DUTY", "EXEMPT", "NOT_YET", "ABSENT", "NOT_ENROLLED", "OFF")
 
 
 class AbsenceError(Exception):
@@ -283,14 +283,21 @@ def classify_person(
     is_workday: bool,
     late_after: time,
     day_in_progress_before_cutoff: bool,
+    tracked: bool = True,
 ) -> str:
     """One person's status for one day. Order matters: a recorded absence
     wins over everything (they were told not to come), then scan-exempt,
-    then the scan itself."""
+    then fingerprint readiness, then the scan itself.
+
+    `tracked` is false until the day after the person's fingerprint is
+    enrolled and verified: before that they cannot scan, so they are
+    NOT_ENROLLED — never late or absent."""
     if absence_counts_as:
         return absence_counts_as  # 'LEAVE' or 'DUTY'
     if scan_exempt:
         return "EXEMPT"
+    if not tracked:
+        return "NOT_ENROLLED" if is_workday else "OFF"
     if first_scan_local is not None:
         if not is_workday:
             return "PRESENT"
@@ -302,6 +309,14 @@ def classify_person(
     return "ABSENT"
 
 
+# First day a person is held to scanning: the day after their current
+# (open, VERIFIED) fingerprint mapping began. NULL = not enrolled.
+_TRACKED_FROM_SQL = (
+    "(SELECT (MIN(m.valid_from) AT TIME ZONE %s)::date + 1 FROM employee_device_mappings m "
+    " WHERE m.employee_id = h.employee_id AND m.mapping_status = 'VERIFIED' AND m.valid_to IS NULL)"
+)
+
+
 def daily_roster(cfg: Config, day: date, now: Optional[datetime] = None) -> Dict[str, Any]:
     with get_db_connection(cfg) as conn:
         with conn.cursor() as cur:
@@ -310,6 +325,7 @@ def daily_roster(cfg: Config, day: date, now: Optional[datetime] = None) -> Dict
             times = policy_times(policy)
             late_after = times["late_after"]
             workdays = set(policy.get("workdays") or [1, 2, 3, 4, 5])
+            tz_name_daily = policy.get("timezone") or "Asia/Bangkok"
 
             cur.execute("SELECT name_th FROM holidays WHERE holiday_date = %s;", (day,))
             hrow = cur.fetchone()
@@ -321,7 +337,7 @@ def daily_roster(cfg: Config, day: date, now: Optional[datetime] = None) -> Dict
             win_start, win_end = _window_bounds(day, tz, times)
             cur.execute(
                 "SELECT h.employee_id::text AS employee_id, h.display_name, h.rank, h.branch, h.category, "
-                "h.scan_exempt, a.type_code, t.name_th AS absence_name_th, t.counts_as, a.order_ref, "
+                "h.scan_exempt, " + _TRACKED_FROM_SQL + " AS tracked_from, a.type_code, t.name_th AS absence_name_th, t.counts_as, a.order_ref, "
                 "a.start_date AS absence_start, a.end_date AS absence_end, "
                 "(SELECT MIN(l.scan_time) FROM attendance_logs l WHERE l.employee_id = h.employee_id "
                 "  AND l.scan_time >= %s AND l.scan_time < %s) AS first_scan, "
@@ -334,7 +350,7 @@ def daily_roster(cfg: Config, day: date, now: Optional[datetime] = None) -> Dict
                 "LEFT JOIN absence_types t ON t.code = a.type_code "
                 "WHERE h.active AND h.production_scope "
                 "ORDER BY h.branch NULLS LAST, h.display_name;",
-                (win_start, win_end, day_start, day_end, win_start, win_end, day),
+                (tz_name_daily, win_start, win_end, day_start, day_end, win_start, win_end, day),
             )
             people = _rows(cur)
 
@@ -356,6 +372,7 @@ def daily_roster(cfg: Config, day: date, now: Optional[datetime] = None) -> Dict
             is_workday=is_workday,
             late_after=late_after,
             day_in_progress_before_cutoff=before_cutoff,
+            tracked=p["tracked_from"] is not None and day >= p["tracked_from"],
         )
         p["status"] = status
         totals[status] += 1
@@ -387,6 +404,7 @@ STATUS_CODE_TH = {
     "EXEMPT": "ย",
     "NOT_YET": "",
     "ABSENT": "ข",
+    "NOT_ENROLLED": "น",
     "OFF": "-",
 }
 STATUS_LABEL_TH = {
@@ -397,6 +415,7 @@ STATUS_LABEL_TH = {
     "EXEMPT": "ไม่ต้องสแกน",
     "NOT_YET": "ยังไม่ถึง",
     "ABSENT": "ขาด",
+    "NOT_ENROLLED": "ยังไม่ลงนิ้ว",
     "OFF": "วันหยุด",
 }
 
@@ -425,11 +444,15 @@ def monthly_report(cfg: Config, year: int, month: int, now: Optional[datetime] =
             holidays = {r[0]: r[1] for r in cur.fetchall()}
 
             cur.execute(
-                "SELECT employee_id::text, display_name, rank, branch, scan_exempt FROM human_employees "
-                "WHERE active AND production_scope ORDER BY branch NULLS LAST, display_name;"
+                "SELECT h.employee_id::text, h.display_name, h.rank, h.branch, h.scan_exempt, "
+                + _TRACKED_FROM_SQL
+                + " FROM human_employees h WHERE h.active AND h.production_scope "
+                "ORDER BY h.branch NULLS LAST, h.display_name;",
+                (tz_name,),
             )
             people = [
-                {"employee_id": r[0], "display_name": r[1], "rank": r[2], "branch": r[3], "scan_exempt": r[4]}
+                {"employee_id": r[0], "display_name": r[1], "rank": r[2], "branch": r[3], "scan_exempt": r[4],
+                 "tracked_from": r[5]}
                 for r in cur.fetchall()
             ]
 
@@ -481,6 +504,7 @@ def monthly_report(cfg: Config, year: int, month: int, now: Optional[datetime] =
                 is_workday=m["is_workday"],
                 late_after=late_after,
                 day_in_progress_before_cutoff=m["pending"],
+                tracked=p["tracked_from"] is not None and d >= p["tracked_from"],
             )
             # Leave/duty/exempt on a non-working day is just a day off.
             if not m["is_workday"] and status in ("LEAVE", "DUTY", "EXEMPT"):
@@ -528,3 +552,35 @@ def monthly_report_csv(report: Dict[str, Any]) -> str:
             + [p["counts"][s] for s in totals_order]
         )
     return "﻿" + buf.getvalue()
+
+
+# --- Fingerprint readiness -------------------------------------------------------
+
+
+def readiness(cfg: Config) -> Dict[str, Any]:
+    """Per-section fingerprint readiness for the people held to scanning
+    (active, in scope). Exempt people are counted separately and never
+    'missing'."""
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COALESCE(h.branch, '—') AS branch, "
+                "COUNT(*) AS total, "
+                "COUNT(*) FILTER (WHERE h.scan_exempt) AS exempt, "
+                "COUNT(*) FILTER (WHERE NOT h.scan_exempt AND EXISTS ("
+                "  SELECT 1 FROM employee_device_mappings m WHERE m.employee_id = h.employee_id "
+                "  AND m.mapping_status = 'VERIFIED' AND m.valid_to IS NULL)) AS enrolled "
+                "FROM human_employees h WHERE h.active AND h.production_scope "
+                "GROUP BY 1 ORDER BY 1;"
+            )
+            rows = _rows(cur)
+    out = []
+    for r in rows:
+        required = r["total"] - r["exempt"]
+        r["required"] = required
+        r["missing"] = required - r["enrolled"]
+        r["percent"] = round(100 * r["enrolled"] / required) if required else 100
+        out.append(r)
+    total = {k: sum(r[k] for r in out) for k in ("total", "exempt", "enrolled", "required", "missing")}
+    total["percent"] = round(100 * total["enrolled"] / total["required"]) if total["required"] else 100
+    return {"branches": out, "total": total}

@@ -14,6 +14,7 @@ const CODES: Record<string, { code: string; cls: string }> = {
   DUTY: { code: "ร", cls: "bg-sky-100 text-sky-800" },
   EXEMPT: { code: "ย", cls: "text-purple-600" },
   NOT_YET: { code: "", cls: "" },
+  NOT_ENROLLED: { code: "น", cls: "text-slate-400" },
   ABSENT: { code: "ข", cls: "bg-rose-100 text-rose-700 font-bold" },
   OFF: { code: "", cls: "bg-slate-100" },
 };
