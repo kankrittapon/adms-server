@@ -2810,6 +2810,11 @@ export interface components {
             /** Live */
             live: boolean;
             /**
+             * Live Since
+             * @description auto mode: first day counting became real (latched)
+             */
+            live_since?: string | null;
+            /**
              * Mode
              * @description auto | on | off
              */

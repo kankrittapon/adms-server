@@ -608,16 +608,47 @@ TRACKING_MODES = ("auto", "on", "off")
 
 
 def tracking_state(cfg: Config, day: Optional[date] = None) -> Dict[str, Any]:
-    """Whether absences are 'real' yet. auto (default): live once every person
-    who must scan is enrolled (readiness missing == 0); on / off: forced by an
-    ADMIN. While not live, the roster still shows statuses but the Telegram
-    report is not sent and the UI marks absences as trial."""
+    """Whether absences are 'real' yet. auto (default): live from the first
+    day every person who must scan is enrolled (readiness missing == 0);
+    on / off: forced by an ADMIN. While not live, the roster still shows
+    statuses but the Telegram report is not sent and the UI marks absences
+    as trial.
+
+    Going live in auto mode is latched (attendance_policy.live_since): people
+    returning from duty / secondment later lower readiness again, but they
+    are NOT_ENROLLED (never absent) until they enroll, so tracking must not
+    fall back to trial for everyone else."""
+    today = datetime.now(ZoneInfo("Asia/Bangkok")).date()
+    day = day or today
     with get_db_connection(cfg) as conn:
         with conn.cursor() as cur:
-            mode = load_policy(cur).get("tracking_mode") or "auto"
-    r = readiness(cfg, day)["total"]
-    live = mode == "on" or (mode == "auto" and r["missing"] == 0 and r["required"] > 0)
-    return {"mode": mode, "live": live, "readiness": r}
+            policy = load_policy(cur)
+    mode = policy.get("tracking_mode") or "auto"
+    live_since = date.fromisoformat(policy["live_since"]) if policy.get("live_since") else None
+    r = readiness(cfg, today)["total"]
+    if mode == "auto" and live_since is None and r["missing"] == 0 and r["required"] > 0:
+        live_since = today
+        with get_db_connection(cfg) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE system_configurations SET value = value || %s::jsonb, updated_at = now() "
+                    "WHERE key = 'attendance_policy' AND NOT (value ? 'live_since');",
+                    (json.dumps({"live_since": today.isoformat()}),),
+                )
+                conn.commit()
+        log_sync_event(cfg, "ATTENDANCE_WENT_LIVE", "live_since=%s required=%s" % (today, r["required"]))
+    if mode == "on":
+        live = True
+    elif mode == "off":
+        live = False
+    else:
+        live = live_since is not None and day >= live_since
+    return {
+        "mode": mode,
+        "live": live,
+        "live_since": live_since.isoformat() if live_since else None,
+        "readiness": r,
+    }
 
 
 def set_tracking_mode(cfg: Config, operator: str, mode: str) -> Dict[str, Any]:
@@ -625,10 +656,12 @@ def set_tracking_mode(cfg: Config, operator: str, mode: str) -> Dict[str, Any]:
         raise AbsenceError("mode must be one of %s" % ", ".join(TRACKING_MODES))
     with get_db_connection(cfg) as conn:
         with conn.cursor() as cur:
+            # Forcing off resets the auto latch, so 'auto' afterwards waits for
+            # readiness again.
             cur.execute(
-                "UPDATE system_configurations SET value = value || %s::jsonb, updated_at = now() "
+                "UPDATE system_configurations SET value = (value || %s::jsonb) - %s, updated_at = now() "
                 "WHERE key = 'attendance_policy';",
-                (json.dumps({"tracking_mode": mode}),),
+                (json.dumps({"tracking_mode": mode}), "live_since" if mode == "off" else "__none__"),
             )
             conn.commit()
     log_sync_event(cfg, "ATTENDANCE_TRACKING_MODE_SET", "mode=%s by=%s" % (mode, operator))

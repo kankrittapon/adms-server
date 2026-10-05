@@ -329,6 +329,7 @@ def send_telegram_report(day: Optional[date] = Query(None, alias="date"), cfg: C
 class TrackingState(BaseModel):
     mode: str = Field(description="auto | on | off")
     live: bool
+    live_since: Optional[date] = Field(None, description="auto mode: first day counting became real (latched)")
     readiness: ReadinessRow
 
 

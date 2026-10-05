@@ -1,6 +1,7 @@
 """Absence records (record-only leave) and the daily roster classification."""
 
 import unittest
+import unittest.mock
 from datetime import date, datetime, time
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -253,3 +254,37 @@ class TestGoLive(unittest.TestCase):
     def test_invalid_mode_rejected(self):
         with self.assertRaises(absences.AbsenceError):
             absences.set_tracking_mode(None, "admin", "maybe")
+
+
+class TestGoLiveLatch(unittest.TestCase):
+    def _run(self, policy, missing):
+        cur = unittest.mock.MagicMock()
+        conn = unittest.mock.MagicMock()
+        conn.__enter__.return_value = conn
+        conn.cursor.return_value.__enter__.return_value = cur
+        with patch("app.absences.get_db_connection", return_value=conn), patch(
+            "app.absences.load_policy", return_value=policy
+        ), patch(
+            "app.absences.readiness",
+            return_value={"total": {"required": 10, "missing": missing, "enrolled": 10 - missing}},
+        ), patch("app.absences.log_sync_event") as log:
+            return absences.tracking_state(None, date(2026, 10, 20)), cur, log
+
+    def test_goes_live_and_latches_when_complete(self):
+        state, cur, log = self._run({"tracking_mode": "auto"}, missing=0)
+        self.assertTrue(state["live"])
+        self.assertIn("live_since", cur.execute.call_args.args[1][0])
+        log.assert_called_once()
+
+    def test_stays_live_when_returnees_lower_readiness(self):
+        state, cur, _ = self._run({"tracking_mode": "auto", "live_since": "2026-10-10"}, missing=3)
+        self.assertTrue(state["live"])
+        cur.execute.assert_not_called()
+
+    def test_not_live_before_complete(self):
+        state, _, _ = self._run({"tracking_mode": "auto"}, missing=3)
+        self.assertFalse(state["live"])
+
+    def test_off_wins_over_latch(self):
+        state, _, _ = self._run({"tracking_mode": "off", "live_since": "2026-10-10"}, missing=0)
+        self.assertFalse(state["live"])

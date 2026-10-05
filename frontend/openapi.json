@@ -4017,6 +4017,19 @@
             "title": "Live",
             "type": "boolean"
           },
+          "live_since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "auto mode: first day counting became real (latched)",
+            "title": "Live Since"
+          },
           "mode": {
             "description": "auto | on | off",
             "title": "Mode",
