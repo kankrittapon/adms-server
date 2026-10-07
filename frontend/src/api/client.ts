@@ -365,6 +365,10 @@ export const api = {
     if (!res.ok) throw new ApiClientError(res.status, "HTTP_" + res.status, res.statusText);
     return res.blob();
   },
+  syncTerminalName: (employeeId: string) =>
+    request<JsonResponse<"sync_terminal_name_api_v1_humans__employee_id__sync_terminal_name_post">>(
+      `/api/v1/humans/${employeeId}/sync-terminal-name`, undefined, { method: "POST" }
+    ),
   humanBranches: (signal?: AbortSignal) =>
     request<JsonResponse<"humans_branches_api_v1_humans_branches_get">>("/api/v1/humans/branches", signal),
   bulkScanExempt: (employeeIds: string[], scanExempt: boolean, reason: string | null) =>

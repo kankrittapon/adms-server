@@ -217,6 +217,15 @@ export interface Translations {
     allStatuses: string;
   };
   workflow: {
+    saveEnglishName: string;
+    saveEnglishNameHint: string;
+    terminalNameTitle: string;
+    terminalNameOnDevice: string;
+    terminalNameExpected: string;
+    terminalNameMismatch: string;
+    terminalNameSyncButton: string;
+    terminalNameSynced: string;
+    terminalNameNeedsEnglish: string;
     openPolicyTitle: string;
     openPolicyBody: string;
     outsideWindow: string;

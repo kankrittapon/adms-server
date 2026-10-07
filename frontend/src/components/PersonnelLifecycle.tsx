@@ -10,7 +10,9 @@ import { ConfirmModal } from "./ConfirmModal";
 
 // The two places whose staff may be exempt from scanning. Stored verbatim as
 // scan_exempt_reason (data, not UI copy), so they stay Thai in every locale.
-export const EXEMPT_REASON_PRESETS = ["การเงิน", "สำนักงานผู้บังคับบัญชา"] as const;
+// Long official duty / secondment can also be a standing exemption (instead
+// of a dated record in Leave / duty) when it runs for a long time.
+export const EXEMPT_REASON_PRESETS = ["การเงิน", "สำนักงานผู้บังคับบัญชา", "ไปราชการ", "ไปช่วยราชการ"] as const;
 
 function writeError(err: unknown, t: ReturnType<typeof useTranslation>["t"]): string {
   if (
@@ -319,5 +321,70 @@ export function EnrollLink({ human }: { human: Human }) {
     >
       {t.workflow.enrollButton}
     </Link>
+  );
+}
+
+/** Name on the scanner vs the name the roster says it should be. ADMIN can
+ * push the roster name to the device (read-back verified). */
+export function TerminalNameCard({ human }: { human: Human }) {
+  const { t } = useTranslation();
+  const { isAdmin, canMutate } = useAuth();
+  const accounts = useApi(
+    (s) => api.humanTerminalAccounts(human.employee_id, s),
+    [human.employee_id, human.english_name, human.rank]
+  );
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const list = accounts.data ?? [];
+  if (list.length === 0) return null;
+  const expected = list[0].expected_name ?? "";
+  const mismatch = list.some((a) => (a.device_display_name ?? "") !== expected);
+
+  async function sync() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api.syncTerminalName(human.employee_id);
+      setMsg({ ok: true, text: t.workflow.terminalNameSynced });
+      accounts.reload();
+    } catch (err) {
+      setMsg({
+        ok: false,
+        text:
+          err instanceof ApiClientError && err.code === "ENGLISH_NAME_REQUIRED"
+            ? t.workflow.terminalNameNeedsEnglish
+            : friendlyApiError(err, t),
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className={`rounded-lg border p-4 shadow-2xs space-y-2 ${
+        mismatch ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"
+      }`}
+    >
+      <div className="text-sm font-bold text-slate-900">{t.workflow.terminalNameTitle}</div>
+      <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-xs">
+        <dt className="text-slate-500">{t.workflow.terminalNameOnDevice}</dt>
+        <dd className="font-mono">{list.map((a) => `${a.device_user_id}: ${a.device_display_name ?? "—"}`).join(", ")}</dd>
+        <dt className="text-slate-500">{t.workflow.terminalNameExpected}</dt>
+        <dd className="font-mono">{expected || "—"}</dd>
+      </dl>
+      {mismatch && <p className="text-[11px] font-semibold text-amber-800">{t.workflow.terminalNameMismatch}</p>}
+      {isAdmin && mismatch && (
+        <button
+          type="button"
+          onClick={sync}
+          disabled={!canMutate || busy || !expected}
+          className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-40"
+        >
+          {busy ? t.common.saving : t.workflow.terminalNameSyncButton}
+        </button>
+      )}
+      {msg && <p className={`text-xs font-semibold ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</p>}
+    </div>
   );
 }

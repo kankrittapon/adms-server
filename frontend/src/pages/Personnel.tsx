@@ -4,7 +4,7 @@ import { api, ApiClientError } from "../api/client";
 import { useAuth } from "../auth";
 import { CsvImportModal } from "../components/CsvImportModal";
 import { AbsenceTable } from "./Absences";
-import { EXEMPT_REASON_PRESETS, EnrollLink, OffboardPanel, ScanPolicyCard } from "../components/PersonnelLifecycle";
+import { EXEMPT_REASON_PRESETS, EnrollLink, TerminalNameCard, OffboardPanel, ScanPolicyCard } from "../components/PersonnelLifecycle";
 import { PersonnelFormModal } from "../components/PersonnelFormModal";
 import { ErrorBanner, Loading, ScopeBadge } from "../components/Status";
 import { useApi } from "../hooks/useApi";
@@ -584,6 +584,8 @@ export function HumanDetail() {
       )}
 
       <ScanPolicyCard human={data} onChanged={reload} />
+
+      <TerminalNameCard human={data} />
 
       <PersonAbsences employeeId={data.employee_id} active={data.active} />
 

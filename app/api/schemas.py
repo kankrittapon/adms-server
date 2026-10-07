@@ -168,6 +168,13 @@ class HumanTerminalAccount(BaseModel):
     device_id: int
     device_user_id: str
     active: bool
+    device_display_name: Optional[str] = Field(None, description="name currently stored on the scanner (last read)")
+    expected_name: Optional[str] = Field(None, description="name derived from rank + English name")
+
+
+class SyncTerminalNameResponse(BaseModel):
+    expected_name: str
+    accounts: List[Dict[str, Any]]
 
 
 class PersonnelSummary(BaseModel):

@@ -325,3 +325,89 @@ def _log_terminal_event(
         "device_id=%s device_user_id=%s operator=%s %s"
         % (device_id, device_user_id, operator, extra),
     )
+
+
+# --- Terminal display name sync -------------------------------------------------
+
+def expected_terminal_name(english_name: Optional[str], rank_en_abbreviation: Optional[str]) -> str:
+    """The name a person should carry on the scanner, derived only from their
+    roster record (same rule as frontend/src/lib/terminalName.ts): canonical
+    rank abbreviation + English name, dropping the rank if it would not fit.
+    Empty when the person has no English name."""
+    from app.enrollment import MAX_TERMINAL_NAME_LENGTH
+
+    name = (english_name or "").strip()
+    if not name:
+        return ""
+    abbr = (rank_en_abbreviation or "").strip()
+    if abbr and len(abbr) + 1 + len(name) <= MAX_TERMINAL_NAME_LENGTH:
+        return "%s %s" % (abbr, name)
+    return name
+
+
+def rename_terminal_account(
+    cfg: Config,
+    device: Any,
+    device_id: int,
+    device_user_id: str,
+    name: str,
+    operator: str,
+) -> Dict[str, Any]:
+    """Owner-thread-only. Rewrites an existing account's display name with
+    set_user() on the same uid, keeping user_id, privilege, password, group
+    and card exactly as read from the device — fingerprint templates are
+    keyed by uid and are not touched. Read-back verified."""
+    from app.enrollment import validate_terminal_display_name
+
+    name = validate_terminal_display_name(name)
+    users = device.get_users() or []
+    matches = [u for u in users if str(u.user_id) == str(device_user_id)]
+    if not matches:
+        raise TerminalAccountNotFound("terminal account %s is not on the device" % device_user_id)
+    u = matches[0]
+    if (u.name or "") == name:
+        _store_display_name(cfg, device_id, device_user_id, name)
+        return {"device_user_id": device_user_id, "name": name, "changed": False}
+
+    device.set_user(
+        uid=u.uid,
+        name=name,
+        privilege=u.privilege,
+        password=u.password or "",
+        group_id=getattr(u, "group_id", "") or "",
+        user_id=str(u.user_id),
+        card=getattr(u, "card", 0) or 0,
+    )
+    try:
+        after = [x for x in (device.get_users() or []) if str(x.user_id) == str(device_user_id)]
+    except Exception as e:
+        raise TerminalManagementError(
+            "rename attempted but read-back failed: %s — outcome unconfirmed" % e,
+            "TERMINAL_ACCOUNT_UNCONFIRMED",
+        )
+    if not after or (after[0].name or "") != name:
+        raise TerminalManagementError(
+            "rename attempted but the device still shows %r" % (after[0].name if after else None),
+            "TERMINAL_ACCOUNT_UNCONFIRMED",
+        )
+    _store_display_name(cfg, device_id, device_user_id, name)
+    _log_terminal_event(
+        cfg,
+        "TERMINAL_ACCOUNT_RENAMED",
+        device_id=device_id,
+        device_user_id=device_user_id,
+        operator=operator,
+        extra="old=%s new=%s" % (u.name, name),
+    )
+    return {"device_user_id": device_user_id, "name": name, "changed": True}
+
+
+def _store_display_name(cfg: Config, device_id: int, device_user_id: str, name: str) -> None:
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE device_users SET device_display_name = %s, updated_at = now() "
+                "WHERE device_id = %s AND device_user_id = %s;",
+                (name, device_id, device_user_id),
+            )
+            conn.commit()

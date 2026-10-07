@@ -2235,6 +2235,18 @@
             "title": "Active",
             "type": "boolean"
           },
+          "device_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "name currently stored on the scanner (last read)",
+            "title": "Device Display Name"
+          },
           "device_id": {
             "title": "Device Id",
             "type": "integer"
@@ -2242,6 +2254,18 @@
           "device_user_id": {
             "title": "Device User Id",
             "type": "string"
+          },
+          "expected_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "name derived from rank + English name",
+            "title": "Expected Name"
           }
         },
         "required": [
@@ -3800,6 +3824,28 @@
           "operator"
         ],
         "title": "StartFingerprintReenrollRequest",
+        "type": "object"
+      },
+      "SyncTerminalNameResponse": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Accounts",
+            "type": "array"
+          },
+          "expected_name": {
+            "title": "Expected Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_name",
+          "accounts"
+        ],
+        "title": "SyncTerminalNameResponse",
         "type": "object"
       },
       "TelegramReportResult": {
@@ -7180,6 +7226,49 @@
           }
         },
         "summary": "Reactivate",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/{employee_id}/sync-terminal-name": {
+      "post": {
+        "description": "Push the roster-derived name (rank + English name) to every active\nscanner account of this person. Touches the device, so it keeps the\nWork Session gate (a no-op when the Work Session is disabled).",
+        "operationId": "sync_terminal_name_api_v1_humans__employee_id__sync_terminal_name_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "required": true,
+            "schema": {
+              "title": "Employee Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncTerminalNameResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Terminal Name",
         "tags": [
           "humans"
         ]

@@ -25,6 +25,7 @@ from app.api.dependencies import (
     get_cfg,
     pagination,
     require_roles,
+    require_write_session,
     require_writes,
 )
 from app.api.errors import ApiError, not_found
@@ -37,6 +38,7 @@ from app.api.schemas import (
     DeactivateHumanRequest,
     Human,
     HumanTerminalAccount,
+    SyncTerminalNameResponse,
     Page,
     PersonnelSummary,
     ReactivateHumanRequest,
@@ -194,7 +196,61 @@ def get_human_terminal_accounts(employee_id: str, cfg: Config = Depends(get_cfg)
     """Read-only: active terminal accounts linked to this person, used by
     the offboarding flow to remove them from the device."""
     _require_uuid(employee_id)
-    return repository.human_terminal_accounts(cfg, employee_id)
+    expected = _expected_name(cfg, employee_id)
+    rows = repository.human_terminal_accounts(cfg, employee_id)
+    for r in rows:
+        r["expected_name"] = expected
+    return rows
+
+
+def _expected_name(cfg: Config, employee_id: str) -> str:
+    from app.terminal_management import expected_terminal_name
+
+    human = repository.get_human(cfg, employee_id)
+    if human is None:
+        raise not_found("human", employee_id)
+    meta = human.get("rank_metadata") or {}
+    return expected_terminal_name(human.get("english_name"), meta.get("rank_en_abbreviation"))
+
+
+@router.post(
+    "/api/v1/humans/{employee_id}/sync-terminal-name",
+    response_model=SyncTerminalNameResponse,
+    dependencies=[
+        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
+)
+def sync_terminal_name(
+    employee_id: str,
+    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    cfg: Config = Depends(get_cfg),
+):
+    """Push the roster-derived name (rank + English name) to every active
+    scanner account of this person. Touches the device, so it keeps the
+    Work Session gate (a no-op when the Work Session is disabled)."""
+    from app.api.routers.terminal_management import _dispatch
+
+    _require_uuid(employee_id)
+    expected = _expected_name(cfg, employee_id)
+    if not expected:
+        raise ApiError(422, "ENGLISH_NAME_REQUIRED", "set the English name first")
+    results = []
+    for acc in repository.human_terminal_accounts(cfg, employee_id):
+        results.append(
+            _dispatch(
+                "RENAME_TERMINAL_ACCOUNT",
+                {
+                    "device_id": acc["device_id"],
+                    "device_user_id": acc["device_user_id"],
+                    "name": expected,
+                    "operator": ctx.username,
+                },
+                cfg,
+            )
+        )
+    return {"expected_name": expected, "accounts": results}
 
 
 @router.post(

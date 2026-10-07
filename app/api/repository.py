@@ -197,7 +197,7 @@ def human_terminal_accounts(cfg: Config, employee_id: str) -> List[Dict[str, Any
     remove."""
     return _fetch_all(
         cfg,
-        "SELECT DISTINCT du.device_id, du.device_user_id, du.active "
+        "SELECT DISTINCT du.device_id, du.device_user_id, du.active, du.device_display_name "
         "FROM employee_device_mappings m "
         "JOIN device_users du ON du.device_user_pk = m.device_user_pk "
         "WHERE m.employee_id = %s AND m.mapping_status = 'VERIFIED' AND du.active = true "

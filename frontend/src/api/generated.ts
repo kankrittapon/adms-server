@@ -908,6 +908,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/humans/{employee_id}/sync-terminal-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Terminal Name
+         * @description Push the roster-derived name (rank + English name) to every active
+         *     scanner account of this person. Touches the device, so it keeps the
+         *     Work Session gate (a no-op when the Work Session is disabled).
+         */
+        post: operations["sync_terminal_name_api_v1_humans__employee_id__sync_terminal_name_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/humans/{employee_id}/terminal-accounts": {
         parameters: {
             query?: never;
@@ -2138,10 +2160,20 @@ export interface components {
         HumanTerminalAccount: {
             /** Active */
             active: boolean;
+            /**
+             * Device Display Name
+             * @description name currently stored on the scanner (last read)
+             */
+            device_display_name?: string | null;
             /** Device Id */
             device_id: number;
             /** Device User Id */
             device_user_id: string;
+            /**
+             * Expected Name
+             * @description name derived from rank + English name
+             */
+            expected_name?: string | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -2736,6 +2768,15 @@ export interface components {
              * @description explicit ADMIN identity performing the re-enrollment
              */
             operator: string;
+        };
+        /** SyncTerminalNameResponse */
+        SyncTerminalNameResponse: {
+            /** Accounts */
+            accounts: {
+                [key: string]: unknown;
+            }[];
+            /** Expected Name */
+            expected_name: string;
         };
         /** TelegramReportResult */
         TelegramReportResult: {
@@ -4633,6 +4674,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Human"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_terminal_name_api_v1_humans__employee_id__sync_terminal_name_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncTerminalNameResponse"];
                 };
             };
             /** @description Validation Error */

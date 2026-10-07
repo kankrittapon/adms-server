@@ -64,6 +64,7 @@ SUPPORTED_DEVICE_COMMANDS = frozenset({
     "REMOVE_TERMINAL_FINGERPRINT",
     "REMOVE_TERMINAL_ACCOUNT",
     "START_FINGERPRINT_REENROLL",
+    "RENAME_TERMINAL_ACCOUNT",
 })
 
 class State(Enum):
@@ -319,6 +320,17 @@ class CollectorStateEngine:
             )
             self.perform_roster_lifecycle_check()
             return result
+        if action == "RENAME_TERMINAL_ACCOUNT":
+            from app.terminal_management import rename_terminal_account
+
+            return rename_terminal_account(
+                self.cfg,
+                device=self.connection,
+                device_id=int(params["device_id"]),
+                device_user_id=str(params["device_user_id"]),
+                name=str(params["name"]),
+                operator=str(params["operator"]),
+            )
         if action == "START_FINGERPRINT_REENROLL":
             # Deliberately does NOT call enroll_user() here — that call
             # blocks up to ~60-180s and would freeze drain_pending() (and
