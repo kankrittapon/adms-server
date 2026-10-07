@@ -216,6 +216,8 @@ export const en: Translations = {
     allStatuses: "All statuses",
   },
   workflow: {
+    scanWindowExpired: "The test-scan window has expired — reopen it and scan again",
+    scanWindowReopen: "Reopen test-scan window (5 min)",
     namesSyncedResult: "Updated {renamed} name(s) on the scanner ({failed} failed)",
     namesMismatchTitle: "{n} scanner account(s) with a name that differs from the roster",
     namesSyncAllButton: "Update all on scanner ({n})",

@@ -307,3 +307,11 @@ class TestFrontendErrorUX(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestReopenTestScanWindow(unittest.TestCase):
+    def test_expired_window_can_be_reopened_without_cancelling(self):
+        from app.enrollment import ALLOWED_TRANSITIONS
+
+        self.assertIn("CONTROLLED_SCAN_PENDING", ALLOWED_TRANSITIONS["CONTROLLED_SCAN_PENDING"])
+        self.assertIn("CONTROLLED_SCAN_CONFIRMED", ALLOWED_TRANSITIONS["CONTROLLED_SCAN_PENDING"])

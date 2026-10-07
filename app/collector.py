@@ -55,6 +55,9 @@ log = logging.getLogger(__name__)
 # throughput knob.
 DEVICE_COMMAND_QUEUE_MAXSIZE = 4
 
+# Terminal clock tolerance before it is reset to Bangkok time.
+CLOCK_MAX_DRIFT_SECONDS = 30
+
 # ADMS-TerminalManagement-020: every action a device command may request.
 # Each still goes through the exact same single-owner enqueue/drain path —
 # adding an action here never grants a new code path around DeviceOwner.
@@ -131,6 +134,11 @@ class CollectorStateEngine:
         self.last_roster_marked_inactive: Optional[int] = None
         self.last_roster_reappeared: Optional[int] = None
         self.last_roster_uid_anomalies: Optional[int] = None
+        # Terminal clock guard: the ZEM560 stamps scans with its own clock,
+        # which resets when the unit loses power.
+        self.last_clock_check_at: Optional[datetime] = None
+        self.last_clock_drift_seconds: Optional[float] = None
+        self.last_clock_corrected_at: Optional[datetime] = None
 
         # Device-owner queue telemetry (ADMS-ZEM560-SingleOwnerIO-014)
         self.last_command_queued_at: Optional[datetime] = None
@@ -410,6 +418,9 @@ class CollectorStateEngine:
                 "last_roster_marked_inactive": self.last_roster_marked_inactive,
                 "last_roster_reappeared": self.last_roster_reappeared,
                 "last_roster_uid_anomalies": self.last_roster_uid_anomalies,
+                "last_clock_check_at": self.last_clock_check_at.isoformat() if self.last_clock_check_at else None,
+                "last_clock_drift_seconds": self.last_clock_drift_seconds,
+                "last_clock_corrected_at": self.last_clock_corrected_at.isoformat() if self.last_clock_corrected_at else None,
                 # Device-owner / command-queue telemetry (ADMS-ZEM560-
                 # SingleOwnerIO-014). Deliberately distinct from
                 # device_connected: a live Python `self.connection` object
@@ -515,11 +526,59 @@ class CollectorStateEngine:
             self.device_connected = True
             self.last_connect_success = datetime.now()
             log.info("Connected to ZKTeco terminal successfully!")
+            self.sync_device_clock()
             self.transition_to(State.BACKFILLING)
         except Exception as e:
             self.last_connect_failure = datetime.now()
             log.error("Failed to connect to ZKTeco terminal: %s", e)
             self.transition_to(State.BACKOFF)
+
+    def sync_device_clock(self):
+        """Owner-thread only. Reads the terminal clock and, if it is more than
+        CLOCK_MAX_DRIFT_SECONDS away from Bangkok time, sets it. The terminal
+        stamps every scan with its own clock (naive local time), so a clock
+        reset after a power loss silently back-dates attendance and makes
+        enrollment test scans unmatchable. Never raises."""
+        if not self.connection:
+            return
+        try:
+            from app.timestamp_utils import BANGKOK_TZ
+
+            device_now = self.connection.get_time()
+            local_now = datetime.now(BANGKOK_TZ).replace(tzinfo=None)
+            drift = (device_now - local_now).total_seconds()
+            self.last_clock_check_at = datetime.now()
+            self.last_clock_drift_seconds = round(drift, 1)
+            if abs(drift) > CLOCK_MAX_DRIFT_SECONDS:
+                # The ZEM560 acknowledges CMD_SET_TIME but only applies it
+                # with the device disabled and after a data refresh; verify
+                # by reading the clock back.
+                try:
+                    self.connection.disable_device()
+                    self.connection.set_time(datetime.now(BANGKOK_TZ).replace(tzinfo=None))
+                    self.connection.refresh_data()
+                finally:
+                    self.connection.enable_device()
+                after = self.connection.get_time()
+                remaining = (after - datetime.now(BANGKOK_TZ).replace(tzinfo=None)).total_seconds()
+                self.last_clock_drift_seconds = round(remaining, 1)
+                if abs(remaining) <= CLOCK_MAX_DRIFT_SECONDS:
+                    self.last_clock_corrected_at = datetime.now()
+                    log.warning("Terminal clock was off by %.0fs (device %s) — corrected.", drift, device_now)
+                    log_sync_event(
+                        self.cfg,
+                        "DEVICE_CLOCK_CORRECTED",
+                        "drift_seconds=%.0f device_time=%s" % (drift, device_now.isoformat()),
+                    )
+                else:
+                    log.error("Terminal clock correction did not apply (still off by %.0fs).", remaining)
+                    log_sync_event(
+                        self.cfg,
+                        "DEVICE_CLOCK_CORRECTION_FAILED",
+                        "drift_seconds=%.0f after=%.0f" % (drift, remaining),
+                    )
+        except Exception as e:
+            log.warning("Terminal clock check failed: %s", e)
 
     def perform_roster_lifecycle_check(self):
         """
@@ -535,6 +594,7 @@ class CollectorStateEngine:
 
         self.last_roster_poll_at = datetime.now()
         self.write_health_status()
+        self.sync_device_clock()
 
         try:
             raw_users = self.connection.get_users()

@@ -903,6 +903,12 @@ function ActiveEnrollmentInspector({
               ให้ <strong>{enrollment.employee_name}</strong> ทำการทดสอบสแกนนิ้วที่เครื่อง ADMS-ZEM560 ทันที
             </p>
             <p className="text-[11px] font-semibold text-indigo-800">{t.workflow.autoScanHint}</p>
+            <ScanWindowReopen
+              until={enrollment.controlled_scan_window_until ?? null}
+              canMutate={canMutate}
+              busy={busyAction === "start-controlled-scan"}
+              onReopen={() => onRunAction("start-controlled-scan", {})}
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -1148,6 +1154,44 @@ function EnglishNameQuickSave({
       </div>
       <p className="text-[11px] text-amber-800">{t.workflow.saveEnglishNameHint}</p>
       {error && <p className="text-[11px] font-semibold text-rose-700">{error}</p>}
+    </div>
+  );
+}
+
+/** The test-scan window lasts a few minutes. Once it has passed, a scan can
+ * no longer be matched — offer to open a fresh window instead of cancelling
+ * the whole enrollment. */
+function ScanWindowReopen({
+  until,
+  canMutate,
+  busy,
+  onReopen,
+}: {
+  until: string | null;
+  canMutate: boolean;
+  busy: boolean;
+  onReopen: () => void;
+}) {
+  const { t } = useTranslation();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, []);
+  const expired = until ? new Date(until).getTime() < now : false;
+  return (
+    <div className="flex flex-wrap items-center gap-2 pt-1">
+      {expired && <span className="text-[11px] font-semibold text-rose-700">{t.workflow.scanWindowExpired}</span>}
+      <button
+        type="button"
+        onClick={onReopen}
+        disabled={!canMutate || busy}
+        className={`rounded-md px-3 py-1 text-[11px] font-bold disabled:opacity-40 ${
+          expired ? "bg-indigo-600 text-white hover:bg-indigo-700" : "border border-indigo-300 bg-white text-indigo-800 hover:bg-indigo-50"
+        }`}
+      >
+        {busy ? t.common.saving : t.workflow.scanWindowReopen}
+      </button>
     </div>
   );
 }

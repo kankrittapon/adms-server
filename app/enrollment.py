@@ -133,7 +133,10 @@ ALLOWED_TRANSITIONS: Dict[str, Set[str]] = {
     },
     "FINGERPRINT_ENROLLMENT_PENDING": {"FINGERPRINT_ENROLLED", "CANCELLED"},
     "FINGERPRINT_ENROLLED": {"CONTROLLED_SCAN_PENDING", "CANCELLED"},
-    "CONTROLLED_SCAN_PENDING": {"CONTROLLED_SCAN_CONFIRMED", "CANCELLED"},
+    # Self-transition re-opens an expired test-scan window (new window_start
+    # = updated_at, new controlled_scan_window_until) without cancelling the
+    # whole enrollment.
+    "CONTROLLED_SCAN_PENDING": {"CONTROLLED_SCAN_PENDING", "CONTROLLED_SCAN_CONFIRMED", "CANCELLED"},
     "CONTROLLED_SCAN_CONFIRMED": {"READY_FOR_MAPPING", "CANCELLED", "RETIRED"},
     "READY_FOR_MAPPING": {"RETIRED"},
     "CANCELLED": set(),

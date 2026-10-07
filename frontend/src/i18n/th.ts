@@ -216,6 +216,8 @@ export const th: Translations = {
     allStatuses: "ทุกสถานะ",
   },
   workflow: {
+    scanWindowExpired: "หมดเวลารอสแกนแล้ว — กดเปิดรอสแกนใหม่ แล้วให้สแกนอีกครั้ง",
+    scanWindowReopen: "เปิดรอสแกนใหม่ (5 นาที)",
     namesSyncedResult: "อัปเดตชื่อบนเครื่องสแกน {renamed} คน (ไม่สำเร็จ {failed})",
     namesMismatchTitle: "ชื่อบนเครื่องสแกนไม่ตรงกับข้อมูลบุคคล {n} บัญชี",
     namesSyncAllButton: "อัปเดตชื่อบนเครื่องทั้งหมด ({n})",

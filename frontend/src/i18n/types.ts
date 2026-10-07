@@ -217,6 +217,8 @@ export interface Translations {
     allStatuses: string;
   };
   workflow: {
+    scanWindowExpired: string;
+    scanWindowReopen: string;
     namesSyncedResult: string;
     namesMismatchTitle: string;
     namesSyncAllButton: string;
