@@ -33,6 +33,7 @@ export function PersonnelFormModal({ mode, human, onClose, onSaved }: Props) {
   const [personnelId, setPersonnelId] = useState(human?.personnel_id ?? "");
   const [branch, setBranch] = useState(human?.branch ?? "");
   const [category, setCategory] = useState(human?.category ?? "");
+  const [position, setPosition] = useState(human?.position ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justCreated, setJustCreated] = useState<Human | null>(null);
@@ -68,6 +69,7 @@ export function PersonnelFormModal({ mode, human, onClose, onSaved }: Props) {
           personnel_id: personnelId.trim() || undefined,
           branch: branch.trim() || undefined,
           category: category.trim() || undefined,
+          position: position.trim() || undefined,
         });
         setJustCreated(created);
         onSaved(created);
@@ -79,6 +81,7 @@ export function PersonnelFormModal({ mode, human, onClose, onSaved }: Props) {
           personnel_id: personnelId.trim() || null,
           branch: branch.trim() || null,
           category: category.trim() || null,
+          position: position.trim() || null,
         });
         onSaved(updated);
         onClose();
@@ -205,6 +208,18 @@ export function PersonnelFormModal({ mode, human, onClose, onSaved }: Props) {
               type="text"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              disabled={busy}
+              className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+              {t.workflow.positionCol}
+            </label>
+            <input
+              type="text"
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
               disabled={busy}
               className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
             />

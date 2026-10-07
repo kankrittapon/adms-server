@@ -374,12 +374,20 @@ export function TerminalNameCard({ human }: { human: Human }) {
         <dd className="font-mono">{expected || "—"}</dd>
       </dl>
       {mismatch && <p className="text-[11px] font-semibold text-amber-800">{t.workflow.terminalNameMismatch}</p>}
-      {isAdmin && mismatch && (
+      {mismatch && <p className="text-[11px] text-slate-600">{t.workflow.terminalNameAuto}</p>}
+      {/* Manual push is always available to ADMIN (automatic sync runs on
+          rank / English-name save); styled as the primary action only when
+          the names actually differ. */}
+      {isAdmin && (
         <button
           type="button"
           onClick={sync}
           disabled={!canMutate || busy || !expected}
-          className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-40"
+          className={`rounded-md px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${
+            mismatch
+              ? "bg-amber-600 text-white hover:bg-amber-700"
+              : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+          }`}
         >
           {busy ? t.common.saving : t.workflow.terminalNameSyncButton}
         </button>

@@ -216,6 +216,10 @@ export const en: Translations = {
     allStatuses: "All statuses",
   },
   workflow: {
+    namesSyncedResult: "Updated {renamed} name(s) on the scanner ({failed} failed)",
+    namesMismatchTitle: "{n} scanner account(s) with a name that differs from the roster",
+    namesSyncAllButton: "Update all on scanner ({n})",
+    terminalNameAuto: "Names update on the scanner automatically when rank or English name changes — use this if the scanner was offline at the time",
     saveEnglishName: "Save English name",
     saveEnglishNameHint: "No English name on file — saving here stores it on the person and the scanner name is built from it (rank + name)",
     terminalNameTitle: "Name on the scanner",

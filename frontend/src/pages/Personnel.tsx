@@ -139,6 +139,8 @@ export function Personnel() {
         onAdd={() => setShowAddModal(true)}
       />
 
+      {canManagePersonnel && <NameMismatchBar />}
+
       <ReadinessCard
         onPickBranch={(b) => {
           setScanStatus("needs_enrollment");
@@ -952,6 +954,69 @@ function ReadinessCard({ onPickBranch }: { onPickBranch: (branch: string) => voi
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/** Manual 'update every mismatched scanner name' (rank or English name
+ * changed while the scanner was offline, or before automatic sync existed). */
+function NameMismatchBar() {
+  const { t } = useTranslation();
+  const { canMutate } = useAuth();
+  const list = useApi((s) => api.terminalNameMismatches(s), []);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const items = list.data ?? [];
+  const fixable = items.filter((m) => m.expected_name);
+  if (items.length === 0 && !msg) return null;
+
+  async function syncAll() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api.syncAllTerminalNames();
+      setMsg({
+        ok: r.failed === 0,
+        text: t.workflow.namesSyncedResult.replace("{renamed}", String(r.renamed)).replace("{failed}", String(r.failed)),
+      });
+      list.reload();
+    } catch (err) {
+      setMsg({ ok: false, text: friendlyApiError(err, t) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs space-y-1.5">
+      {items.length > 0 && (
+        <>
+          <div className="font-bold text-amber-900">{t.workflow.namesMismatchTitle.replace("{n}", String(items.length))}</div>
+          <ul className="space-y-0.5 text-amber-900">
+            {items.map((m) => (
+              <li key={`${m.device_id}:${m.device_user_id}`}>
+                <Link to={`/personnel/${m.employee_id}`} className="font-semibold hover:underline">
+                  {m.display_name}
+                </Link>{" "}
+                <span className="font-mono">
+                  {m.device_display_name ?? "—"} → {m.expected_name || t.workflow.terminalNameNeedsEnglish}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {fixable.length > 0 && (
+            <button
+              type="button"
+              onClick={syncAll}
+              disabled={busy || !canMutate}
+              className="rounded-md bg-amber-600 px-3 py-1.5 font-bold text-white hover:bg-amber-700 disabled:opacity-40"
+            >
+              {busy ? t.common.saving : t.workflow.namesSyncAllButton.replace("{n}", String(fixable.length))}
+            </button>
+          )}
+        </>
+      )}
+      {msg && <div className={`font-semibold ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</div>}
     </div>
   );
 }

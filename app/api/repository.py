@@ -182,6 +182,24 @@ def personnel_summary(cfg: Config) -> Dict[str, Any]:
     return row or {"active": 0, "inactive": 0, "scan_exempt": 0, "needs_enrollment": 0, "left_with_terminal_account": 0}
 
 
+def terminal_name_rows(cfg: Config, employee_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Active scanner accounts behind an open VERIFIED mapping, with the
+    roster fields the scanner name is derived from."""
+    sql = (
+        "SELECT h.employee_id::text AS employee_id, h.display_name, h.english_name, h.rank, "
+        "du.device_id, du.device_user_id, du.device_display_name "
+        "FROM employee_device_mappings m "
+        "JOIN device_users du ON du.device_user_pk = m.device_user_pk AND du.active "
+        "JOIN human_employees h ON h.employee_id = m.employee_id "
+        "WHERE m.mapping_status = 'VERIFIED' AND m.valid_to IS NULL"
+    )
+    params: Tuple[Any, ...] = ()
+    if employee_id:
+        sql += " AND h.employee_id = %s"
+        params = (employee_id,)
+    return _fetch_all(cfg, sql + " ORDER BY h.display_name", params)
+
+
 def list_branches(cfg: Config) -> List[str]:
     rows = _fetch_all(
         cfg,

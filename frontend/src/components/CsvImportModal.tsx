@@ -17,7 +17,7 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
   const [preview, setPreview] = useState<CsvImportPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [committed, setCommitted] = useState<{ created: number; updated: number } | null>(null);
+  const [committed, setCommitted] = useState<{ created: number; updated: number; renamed: number; failed: number } | null>(null);
 
   async function handleFileChosen(f: File) {
     setFile(f);
@@ -44,7 +44,12 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
     setError(null);
     try {
       const result = await api.commitHumansImport(file);
-      setCommitted({ created: result.created, updated: result.updated });
+      setCommitted({
+        created: result.created,
+        updated: result.updated,
+        renamed: result.terminal_name_sync?.renamed ?? 0,
+        failed: result.terminal_name_sync?.failed ?? 0,
+      });
       onCommitted();
     } catch (err) {
       if (err instanceof ApiClientError && (err.code === "WRITE_DISABLED" || err.code === "WRITE_SESSION_REQUIRED" || err.code === "WRITE_SESSION_EXPIRED")) {
@@ -82,6 +87,17 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
                 .replace("{created}", String(committed.created))
                 .replace("{updated}", String(committed.updated))}
             </div>
+            {(committed.renamed > 0 || committed.failed > 0) && (
+              <div
+                className={`rounded-md border p-3 text-xs font-semibold ${
+                  committed.failed ? "border-amber-300 bg-amber-50 text-amber-900" : "border-emerald-300 bg-emerald-50 text-emerald-900"
+                }`}
+              >
+                {t.workflow.namesSyncedResult
+                  .replace("{renamed}", String(committed.renamed))
+                  .replace("{failed}", String(committed.failed))}
+              </div>
+            )}
             <button
               onClick={onClose}
               className="rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700"

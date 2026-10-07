@@ -39,6 +39,8 @@ from app.api.schemas import (
     Human,
     HumanTerminalAccount,
     SyncTerminalNameResponse,
+    TerminalNameMismatch,
+    TerminalNameSyncSummary,
     Page,
     PersonnelSummary,
     ReactivateHumanRequest,
@@ -175,6 +177,16 @@ def export_humans(
 
 
 @router.get(
+    "/api/v1/humans/terminal-name-mismatches",
+    response_model=list[TerminalNameMismatch],
+    dependencies=[Depends(require_roles(ROLES_ENROLLMENT_READ))],
+)
+def get_terminal_name_mismatches(cfg: Config = Depends(get_cfg)):
+    """Accounts whose scanner name differs from rank + English name."""
+    return terminal_name_mismatches(cfg)
+
+
+@router.get(
     "/api/v1/humans/{employee_id}",
     response_model=Human,
     dependencies=[Depends(require_roles(ROLES_ENROLLMENT_READ))],
@@ -211,6 +223,75 @@ def _expected_name(cfg: Config, employee_id: str) -> str:
         raise not_found("human", employee_id)
     meta = human.get("rank_metadata") or {}
     return expected_terminal_name(human.get("english_name"), meta.get("rank_en_abbreviation"))
+
+
+def terminal_name_mismatches(cfg: Config, employee_id: Optional[str] = None) -> list:
+    from app.terminal_management import expected_terminal_name
+    from app.rtn_ranks import normalize_rtn_rank
+
+    out = []
+    for r in repository.terminal_name_rows(cfg, employee_id):
+        meta = normalize_rtn_rank(r.get("rank") or "") or {}
+        expected = expected_terminal_name(r.get("english_name"), meta.get("rank_en_abbreviation"))
+        if (r.get("device_display_name") or "") != expected:
+            r["expected_name"] = expected
+            out.append(r)
+    return out
+
+
+def sync_terminal_names(cfg: Config, operator: str, employee_id: Optional[str] = None) -> dict:
+    """Best-effort push of roster-derived names to the scanner for accounts
+    whose name differs (one person, or everyone). Never raises: a device
+    that is offline leaves the mismatch visible for a manual retry."""
+    from app.api.routers.terminal_management import _dispatch
+
+    summary = {"attempted": 0, "renamed": 0, "failed": 0, "skipped_no_english_name": 0, "errors": []}
+    try:
+        mismatches = terminal_name_mismatches(cfg, employee_id)
+    except Exception as e:
+        summary["errors"].append("lookup: %s" % type(e).__name__)
+        return summary
+    for m in mismatches:
+        if not m["expected_name"]:
+            summary["skipped_no_english_name"] += 1
+            continue
+        summary["attempted"] += 1
+        try:
+            _dispatch(
+                "RENAME_TERMINAL_ACCOUNT",
+                {
+                    "device_id": m["device_id"],
+                    "device_user_id": m["device_user_id"],
+                    "name": m["expected_name"],
+                    "operator": operator,
+                },
+                cfg,
+            )
+            summary["renamed"] += 1
+        except ApiError as e:
+            summary["failed"] += 1
+            summary["errors"].append("%s: %s" % (m["device_user_id"], e.code))
+        except Exception as e:  # never fail the roster write because of the device
+            summary["failed"] += 1
+            summary["errors"].append("%s: %s" % (m["device_user_id"], type(e).__name__))
+    return summary
+
+
+@router.post(
+    "/api/v1/humans/sync-terminal-names",
+    response_model=TerminalNameSyncSummary,
+    dependencies=[
+        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_writes),
+        Depends(require_write_session),
+    ],
+)
+def post_sync_all_terminal_names(
+    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    cfg: Config = Depends(get_cfg),
+):
+    """Manual 'update all mismatched names on the scanner'."""
+    return sync_terminal_names(cfg, ctx.username)
 
 
 @router.post(
@@ -314,6 +395,8 @@ def update_human_endpoint(
     if updated is None:
         raise not_found("human", employee_id)
     row = repository.get_human(cfg, employee_id)
+    if "rank" in fields or "english_name" in fields:
+        row["terminal_name_sync"] = sync_terminal_names(cfg, ctx.username, employee_id=employee_id)
     return row
 
 
@@ -372,9 +455,13 @@ async def commit_import(
     except UnicodeDecodeError:
         raise ApiError(422, "VALIDATION_ERROR", "file is not valid UTF-8 text")
     try:
-        return commit_csv_rows(cfg, text, operator=ctx.username)
+        result = commit_csv_rows(cfg, text, operator=ctx.username)
     except PersonnelCsvError as e:
         raise ApiError(422, "CSV_MALFORMED", str(e))
+    if result.get("updated"):
+        # Excel rank / English-name updates reach the scanner too.
+        result["terminal_name_sync"] = sync_terminal_names(cfg, ctx.username)
+    return result
 
 
 @router.post(

@@ -1098,6 +1098,16 @@
             "title": "Errors",
             "type": "integer"
           },
+          "terminal_name_sync": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TerminalNameSyncSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "unchanged": {
             "title": "Unchanged",
             "type": "integer"
@@ -2210,6 +2220,17 @@
           "source": {
             "title": "Source",
             "type": "string"
+          },
+          "terminal_name_sync": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TerminalNameSyncSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "only on write responses: automatic scanner-name sync after a rank/English-name change"
           },
           "updated_at": {
             "format": "date-time",
@@ -4006,6 +4027,84 @@
           "already_absent"
         ],
         "title": "TerminalMutationResponse",
+        "type": "object"
+      },
+      "TerminalNameMismatch": {
+        "properties": {
+          "device_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Display Name"
+          },
+          "device_id": {
+            "title": "Device Id",
+            "type": "integer"
+          },
+          "device_user_id": {
+            "title": "Device User Id",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "employee_id": {
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "expected_name": {
+            "title": "Expected Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "employee_id",
+          "display_name",
+          "device_id",
+          "device_user_id",
+          "expected_name"
+        ],
+        "title": "TerminalNameMismatch",
+        "type": "object"
+      },
+      "TerminalNameSyncSummary": {
+        "description": "Result of pushing roster-derived names to the scanner.",
+        "properties": {
+          "attempted": {
+            "default": 0,
+            "title": "Attempted",
+            "type": "integer"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "renamed": {
+            "default": 0,
+            "title": "Renamed",
+            "type": "integer"
+          },
+          "skipped_no_english_name": {
+            "default": 0,
+            "title": "Skipped No English Name",
+            "type": "integer"
+          }
+        },
+        "title": "TerminalNameSyncSummary",
         "type": "object"
       },
       "ToggleActiveRequest": {
@@ -7030,6 +7129,54 @@
           }
         },
         "summary": "Humans Summary",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/sync-terminal-names": {
+      "post": {
+        "description": "Manual 'update all mismatched names on the scanner'.",
+        "operationId": "post_sync_all_terminal_names_api_v1_humans_sync_terminal_names_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalNameSyncSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Sync All Terminal Names",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/terminal-name-mismatches": {
+      "get": {
+        "description": "Accounts whose scanner name differs from rank + English name.",
+        "operationId": "get_terminal_name_mismatches_api_v1_humans_terminal_name_mismatches_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TerminalNameMismatch"
+                  },
+                  "title": "Response Get Terminal Name Mismatches Api V1 Humans Terminal Name Mismatches Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Terminal Name Mismatches",
         "tags": [
           "humans"
         ]

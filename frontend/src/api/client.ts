@@ -369,6 +369,14 @@ export const api = {
     request<JsonResponse<"sync_terminal_name_api_v1_humans__employee_id__sync_terminal_name_post">>(
       `/api/v1/humans/${employeeId}/sync-terminal-name`, undefined, { method: "POST" }
     ),
+  terminalNameMismatches: (signal?: AbortSignal) =>
+    request<JsonResponse<"get_terminal_name_mismatches_api_v1_humans_terminal_name_mismatches_get">>(
+      "/api/v1/humans/terminal-name-mismatches", signal
+    ),
+  syncAllTerminalNames: () =>
+    request<JsonResponse<"post_sync_all_terminal_names_api_v1_humans_sync_terminal_names_post">>(
+      "/api/v1/humans/sync-terminal-names", undefined, { method: "POST" }
+    ),
   humanBranches: (signal?: AbortSignal) =>
     request<JsonResponse<"humans_branches_api_v1_humans_branches_get">>("/api/v1/humans/branches", signal),
   bulkScanExempt: (employeeIds: string[], scanExempt: boolean, reason: string | null) =>

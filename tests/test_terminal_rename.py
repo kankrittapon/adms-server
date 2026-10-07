@@ -81,3 +81,37 @@ class TestRename(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAutoSync(unittest.TestCase):
+    ROWS = [
+        {"employee_id": "e1", "display_name": "ก", "english_name": "Krittapon M", "rank": "พ.จ.ท.",
+         "device_id": 1, "device_user_id": "1001", "device_display_name": "cpo3 Krittapon M"},
+        {"employee_id": "e2", "display_name": "ข", "english_name": "Pimai Khawsaad", "rank": "พ.จ.ต.",
+         "device_id": 1, "device_user_id": "1003", "device_display_name": "CPO3 Pimai Khawsaad"},
+        {"employee_id": "e3", "display_name": "ค", "english_name": None, "rank": "ร.ท.",
+         "device_id": 1, "device_user_id": "1006", "device_display_name": "thapakorn chalui"},
+    ]
+
+    def test_only_mismatched_accounts_are_renamed(self):
+        from app.api.routers import humans
+
+        with patch("app.api.repository.terminal_name_rows", return_value=[dict(r) for r in self.ROWS]), patch(
+            "app.api.routers.terminal_management._dispatch"
+        ) as dispatch:
+            summary = humans.sync_terminal_names(None, "admin")
+        self.assertEqual(dispatch.call_count, 1)
+        self.assertEqual(dispatch.call_args.args[1]["device_user_id"], "1001")
+        self.assertEqual(summary["renamed"], 1)
+        self.assertEqual(summary["skipped_no_english_name"], 1)
+
+    def test_device_failure_never_raises(self):
+        from app.api.errors import ApiError
+        from app.api.routers import humans
+
+        with patch("app.api.repository.terminal_name_rows", return_value=[dict(self.ROWS[0])]), patch(
+            "app.api.routers.terminal_management._dispatch", side_effect=ApiError(503, "DEVICE_UNAVAILABLE", "x")
+        ):
+            summary = humans.sync_terminal_names(None, "admin")
+        self.assertEqual(summary["failed"], 1)
+        self.assertIn("1001: DEVICE_UNAVAILABLE", summary["errors"])

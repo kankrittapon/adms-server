@@ -856,6 +856,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/humans/sync-terminal-names": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Sync All Terminal Names
+         * @description Manual 'update all mismatched names on the scanner'.
+         */
+        post: operations["post_sync_all_terminal_names_api_v1_humans_sync_terminal_names_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/humans/terminal-name-mismatches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Terminal Name Mismatches
+         * @description Accounts whose scanner name differs from rank + English name.
+         */
+        get: operations["get_terminal_name_mismatches_api_v1_humans_terminal_name_mismatches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/humans/{employee_id}": {
         parameters: {
             query?: never;
@@ -1717,6 +1757,7 @@ export interface components {
             created: number;
             /** Errors */
             errors: number;
+            terminal_name_sync?: components["schemas"]["TerminalNameSyncSummary"] | null;
             /** Unchanged */
             unchanged: number;
             /** Updated */
@@ -2150,6 +2191,8 @@ export interface components {
             scan_exempt_reason?: string | null;
             /** Source */
             source: string;
+            /** @description only on write responses: automatic scanner-name sync after a rank/English-name change */
+            terminal_name_sync?: components["schemas"]["TerminalNameSyncSummary"] | null;
             /**
              * Updated At
              * Format: date-time
@@ -2826,6 +2869,49 @@ export interface components {
             already_absent: boolean;
             /** Device User Id */
             device_user_id: string;
+        };
+        /** TerminalNameMismatch */
+        TerminalNameMismatch: {
+            /** Device Display Name */
+            device_display_name?: string | null;
+            /** Device Id */
+            device_id: number;
+            /** Device User Id */
+            device_user_id: string;
+            /** Display Name */
+            display_name: string;
+            /** Employee Id */
+            employee_id: string;
+            /** Expected Name */
+            expected_name: string;
+        };
+        /**
+         * TerminalNameSyncSummary
+         * @description Result of pushing roster-derived names to the scanner.
+         */
+        TerminalNameSyncSummary: {
+            /**
+             * Attempted
+             * @default 0
+             */
+            attempted: number;
+            /** Errors */
+            errors?: string[];
+            /**
+             * Failed
+             * @default 0
+             */
+            failed: number;
+            /**
+             * Renamed
+             * @default 0
+             */
+            renamed: number;
+            /**
+             * Skipped No English Name
+             * @default 0
+             */
+            skipped_no_english_name: number;
         };
         /** ToggleActiveRequest */
         ToggleActiveRequest: {
@@ -4547,6 +4633,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonnelSummary"];
+                };
+            };
+        };
+    };
+    post_sync_all_terminal_names_api_v1_humans_sync_terminal_names_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalNameSyncSummary"];
+                };
+            };
+        };
+    };
+    get_terminal_name_mismatches_api_v1_humans_terminal_name_mismatches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalNameMismatch"][];
                 };
             };
         };

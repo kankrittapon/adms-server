@@ -217,6 +217,10 @@ export interface Translations {
     allStatuses: string;
   };
   workflow: {
+    namesSyncedResult: string;
+    namesMismatchTitle: string;
+    namesSyncAllButton: string;
+    terminalNameAuto: string;
     saveEnglishName: string;
     saveEnglishNameHint: string;
     terminalNameTitle: string;

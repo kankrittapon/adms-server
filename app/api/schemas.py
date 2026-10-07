@@ -106,6 +106,9 @@ class Human(BaseModel):
     source: str
     created_at: datetime
     updated_at: datetime
+    terminal_name_sync: Optional["TerminalNameSyncSummary"] = Field(
+        None, description="only on write responses: automatic scanner-name sync after a rank/English-name change"
+    )
     has_active_terminal_account: Optional[bool] = Field(
         None,
         description="Server-derived (ADMS-UX-CrossLifecycleClosure-021B): whether this "
@@ -177,6 +180,24 @@ class SyncTerminalNameResponse(BaseModel):
     accounts: List[Dict[str, Any]]
 
 
+class TerminalNameMismatch(BaseModel):
+    employee_id: str
+    display_name: str
+    device_id: int
+    device_user_id: str
+    device_display_name: Optional[str] = None
+    expected_name: str
+
+
+class TerminalNameSyncSummary(BaseModel):
+    """Result of pushing roster-derived names to the scanner."""
+    attempted: int = 0
+    renamed: int = 0
+    failed: int = 0
+    skipped_no_english_name: int = 0
+    errors: List[str] = Field(default_factory=list)
+
+
 class PersonnelSummary(BaseModel):
     active: int
     inactive: int
@@ -220,6 +241,7 @@ class CsvImportCommitResponse(BaseModel):
     updated: int
     unchanged: int
     errors: int
+    terminal_name_sync: Optional["TerminalNameSyncSummary"] = None
 
 
 class DeactivateHumanRequest(BaseModel):
@@ -490,3 +512,7 @@ class WriteSessionStatus(BaseModel):
     expires_at: Optional[datetime] = None
     reason: Optional[str] = None
     closed_at: Optional[datetime] = None
+
+
+Human.model_rebuild()
+CsvImportCommitResponse.model_rebuild()
