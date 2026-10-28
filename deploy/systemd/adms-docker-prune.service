@@ -1,0 +1,12 @@
+[Unit]
+Description=ADMS weekly Docker build-cache / dangling-image prune
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=kanfullbuster
+# Build cache older than 7 days + dangling images only; never touches volumes
+# or running containers.
+ExecStart=/usr/bin/docker builder prune -f --filter until=168h
+ExecStart=/usr/bin/docker image prune -f
