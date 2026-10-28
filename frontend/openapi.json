@@ -166,6 +166,148 @@
         "title": "Absence",
         "type": "object"
       },
+      "AbsenceImportResult": {
+        "properties": {
+          "created": {
+            "default": 0,
+            "title": "Created",
+            "type": "integer"
+          },
+          "invalid": {
+            "title": "Invalid",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/AbsenceImportRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "valid",
+          "invalid"
+        ],
+        "title": "AbsenceImportResult",
+        "type": "object"
+      },
+      "AbsenceImportRow": {
+        "properties": {
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "line": {
+            "title": "Line",
+            "type": "integer"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "order_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Ref"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "type_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Code"
+          }
+        },
+        "required": [
+          "line",
+          "errors"
+        ],
+        "title": "AbsenceImportRow",
+        "type": "object"
+      },
       "AbsencePage": {
         "properties": {
           "items": {
@@ -576,6 +718,34 @@
           "file"
         ],
         "title": "Body_commit_import_api_v1_humans_import_commit_post",
+        "type": "object"
+      },
+      "Body_post_absence_import_commit_api_v1_absences_import_commit_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_post_absence_import_commit_api_v1_absences_import_commit_post",
+        "type": "object"
+      },
+      "Body_post_absence_import_preview_api_v1_absences_import_preview_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_post_absence_import_preview_api_v1_absences_import_preview_post",
         "type": "object"
       },
       "Body_preview_import_api_v1_humans_import_preview_post": {
@@ -4815,6 +4985,110 @@
           }
         },
         "summary": "Post Absence",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/absences/import-template": {
+      "get": {
+        "description": "The Excel-compatible CSV template kept on the server.",
+        "operationId": "get_absence_template_api_v1_absences_import_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Absence Template",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/absences/import/commit": {
+      "post": {
+        "description": "Record every row \u2014 only when the whole file validates (created=0 otherwise).",
+        "operationId": "post_absence_import_commit_api_v1_absences_import_commit_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_absence_import_commit_api_v1_absences_import_commit_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceImportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Absence Import Commit",
+        "tags": [
+          "absences"
+        ]
+      }
+    },
+    "/api/v1/absences/import/preview": {
+      "post": {
+        "description": "Validate an import file; nothing is written.",
+        "operationId": "post_absence_import_preview_api_v1_absences_import_preview_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_absence_import_preview_api_v1_absences_import_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceImportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Absence Import Preview",
         "tags": [
           "absences"
         ]

@@ -10,11 +10,11 @@ from datetime import date, datetime
 from typing import List, Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, Depends, Query, UploadFile
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
-from app import absences
+from app import absence_import, absences
 from app.api.auth import ROLES_ADMIN_ONLY, ROLES_GENERAL_READ, ROLES_OPERATOR_PLUS
 from app.api.dependencies import (
     OperatorContext,
@@ -193,6 +193,70 @@ def post_absence(payload: CreateAbsenceRequest, ctx: OperatorContext = Depends(r
         return absences.create_absence(cfg, ctx.username, **payload.model_dump())
     except absences.AbsenceError as e:
         raise _map_error(e)
+
+
+class AbsenceImportRow(BaseModel):
+    line: int
+    employee_id: Optional[str] = None
+    name: Optional[str] = None
+    type_code: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    order_ref: Optional[str] = None
+    destination: Optional[str] = None
+    note: Optional[str] = None
+    errors: List[str]
+
+
+class AbsenceImportResult(BaseModel):
+    rows: List[AbsenceImportRow]
+    valid: int
+    invalid: int
+    created: int = 0
+
+
+@router.get("/api/v1/absences/import-template", dependencies=[Depends(recorder)])
+def get_absence_template():
+    """The Excel-compatible CSV template kept on the server."""
+    return Response(
+        absence_import.template_bytes(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="absence_import_template.csv"'},
+    )
+
+
+async def _read_upload(file: UploadFile) -> str:
+    raw = await file.read()
+    if len(raw) > 2 * 1024 * 1024:
+        raise ApiError(413, "FILE_TOO_LARGE", "File exceeds 2 MB")
+    text = absence_import.decode(raw)
+    if text is None:
+        raise ApiError(422, "VALIDATION_ERROR", "File is not UTF-8 / Thai CSV")
+    return text
+
+
+@router.post("/api/v1/absences/import/preview", response_model=AbsenceImportResult, dependencies=[Depends(recorder)])
+async def post_absence_import_preview(file: UploadFile, cfg: Config = Depends(get_cfg)):
+    """Validate an import file; nothing is written."""
+    try:
+        return absence_import.validate(cfg, await _read_upload(file))
+    except ValueError as e:
+        raise ApiError(422, "VALIDATION_ERROR", str(e))
+
+
+@router.post(
+    "/api/v1/absences/import/commit",
+    response_model=AbsenceImportResult,
+    dependencies=[Depends(recorder), *WRITE_GATES],
+)
+async def post_absence_import_commit(
+    file: UploadFile, ctx: OperatorContext = Depends(recorder), cfg: Config = Depends(get_cfg)
+):
+    """Record every row — only when the whole file validates (created=0 otherwise)."""
+    try:
+        return absence_import.commit(cfg, ctx.username, await _read_upload(file))
+    except ValueError as e:
+        raise ApiError(422, "VALIDATION_ERROR", str(e))
 
 
 @router.post(

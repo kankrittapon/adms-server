@@ -39,6 +39,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/absences/import-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Absence Template
+         * @description The Excel-compatible CSV template kept on the server.
+         */
+        get: operations["get_absence_template_api_v1_absences_import_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/absences/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Absence Import Commit
+         * @description Record every row — only when the whole file validates (created=0 otherwise).
+         */
+        post: operations["post_absence_import_commit_api_v1_absences_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/absences/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Absence Import Preview
+         * @description Validate an import file; nothing is written.
+         */
+        post: operations["post_absence_import_preview_api_v1_absences_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/absences/{absence_id}/cancel": {
         parameters: {
             query?: never;
@@ -1420,6 +1480,43 @@ export interface components {
             /** Type Name Th */
             type_name_th: string;
         };
+        /** AbsenceImportResult */
+        AbsenceImportResult: {
+            /**
+             * Created
+             * @default 0
+             */
+            created: number;
+            /** Invalid */
+            invalid: number;
+            /** Rows */
+            rows: components["schemas"]["AbsenceImportRow"][];
+            /** Valid */
+            valid: number;
+        };
+        /** AbsenceImportRow */
+        AbsenceImportRow: {
+            /** Destination */
+            destination?: string | null;
+            /** Employee Id */
+            employee_id?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Errors */
+            errors: string[];
+            /** Line */
+            line: number;
+            /** Name */
+            name?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Order Ref */
+            order_ref?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** Type Code */
+            type_code?: string | null;
+        };
         /** AbsencePage */
         AbsencePage: {
             /** Items */
@@ -1559,6 +1656,16 @@ export interface components {
         };
         /** Body_commit_import_api_v1_humans_import_commit_post */
         Body_commit_import_api_v1_humans_import_commit_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_post_absence_import_commit_api_v1_absences_import_commit_post */
+        Body_post_absence_import_commit_api_v1_absences_import_commit_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_post_absence_import_preview_api_v1_absences_import_preview_post */
+        Body_post_absence_import_preview_api_v1_absences_import_preview_post: {
             /** File */
             file: string;
         };
@@ -3161,6 +3268,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Absence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_absence_template_api_v1_absences_import_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    post_absence_import_commit_api_v1_absences_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_post_absence_import_commit_api_v1_absences_import_commit_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceImportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_absence_import_preview_api_v1_absences_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_post_absence_import_preview_api_v1_absences_import_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceImportResult"];
                 };
             };
             /** @description Validation Error */

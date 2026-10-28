@@ -130,6 +130,7 @@ export function Absences() {
         )}
       </div>
 
+      {canRecordAbsence && <AbsenceImport onDone={() => list.reload()} />}
       {isAdmin && <HolidayManager />}
     </div>
   );
@@ -571,6 +572,129 @@ function HolidayManager() {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+type ImportResult = Awaited<ReturnType<typeof api.absenceImport>>;
+
+/** Excel template download + bulk import (preview first, then record all). */
+function AbsenceImport({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation();
+  const [file, setFile] = useState<File | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function download() {
+    try {
+      const url = URL.createObjectURL(await api.absenceTemplate());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "แบบฟอร์มนำเข้าการลา.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(friendlyApiError(err, t));
+    }
+  }
+
+  async function run(f: File, commit: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.absenceImport(f, commit);
+      setResult(r);
+      if (commit && r.created) {
+        setFile(null);
+        onDone();
+      }
+    } catch (err) {
+      setError(friendlyApiError(err, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs space-y-3">
+      <div>
+        <h2 className="text-sm font-bold text-slate-900">นำเข้าการลาจาก Excel</h2>
+        <p className="text-[11px] text-slate-500">
+          1) ดาวน์โหลดแบบฟอร์ม 2) กรอกใน Excel (แถวที่ขึ้นต้นด้วย # เป็นตัวอย่าง ระบบข้าม) แล้ว Save เป็น CSV UTF-8 3) อัปโหลดเพื่อตรวจ 4) กดบันทึก
+          · ประเภท: ลาป่วย, ลากิจ, ลาพักผ่อน, ลาคลอดบุตร, ลาอุปสมบท, ไปราชการ, ไปช่วยราชการ, ไปศึกษา / อบรม (ราชการ/ช่วยราชการ/ศึกษา ต้องมีเลขที่คำสั่ง)
+          · วันที่ใช้รูปแบบ 10/11/2569
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={download} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">
+          ⬇ ดาวน์โหลดแบบฟอร์ม
+        </button>
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          onChange={(e) => {
+            const f = e.target.files?.[0] ?? null;
+            setFile(f);
+            setResult(null);
+            if (f) run(f, false);
+          }}
+          className="text-xs"
+        />
+        {file && result && result.invalid === 0 && result.rows.length > 0 && !result.created && (
+          <button
+            type="button"
+            onClick={() => run(file, true)}
+            disabled={busy}
+            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+          >
+            บันทึก {result.valid} รายการ
+          </button>
+        )}
+      </div>
+      {error && <ErrorBanner message={error} />}
+      {result && (
+        <div className="space-y-2">
+          <div className="text-xs font-semibold">
+            {result.created
+              ? `✅ บันทึกแล้ว ${result.created} รายการ`
+              : result.rows.length === 0
+                ? "ไม่พบแถวข้อมูลในไฟล์"
+                : result.invalid
+                  ? `❌ มีข้อผิดพลาด ${result.invalid} แถว — แก้ในไฟล์แล้วอัปโหลดใหม่ (ยังไม่มีอะไรถูกบันทึก)`
+                  : `ตรวจผ่านทั้งหมด ${result.valid} แถว`}
+          </div>
+          <div className="max-h-72 overflow-auto rounded border border-slate-200">
+            <table className="w-full text-left text-[11px]">
+              <thead className="sticky top-0 bg-slate-50">
+                <tr>
+                  <th className="px-2 py-1">แถว</th>
+                  <th className="px-2 py-1">กำลังพล</th>
+                  <th className="px-2 py-1">ประเภท</th>
+                  <th className="px-2 py-1">ช่วงวัน</th>
+                  <th className="px-2 py-1">ผล</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {result.rows.map((r) => (
+                  <tr key={r.line} className={r.errors.length ? "bg-rose-50" : ""}>
+                    <td className="px-2 py-1">{r.line}</td>
+                    <td className="px-2 py-1">{r.name}</td>
+                    <td className="px-2 py-1">{r.type_code ?? "—"}</td>
+                    <td className="px-2 py-1">
+                      {r.start_date ? formatThaiDate(String(r.start_date)) : "—"}
+                      {r.end_date && r.end_date !== r.start_date ? ` – ${formatThaiDate(String(r.end_date))}` : ""}
+                    </td>
+                    <td className={`px-2 py-1 ${r.errors.length ? "font-semibold text-rose-700" : "text-emerald-700"}`}>
+                      {r.errors.length ? r.errors.join(" · ") : "✓"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );

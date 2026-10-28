@@ -357,6 +357,27 @@ export const api = {
     request<JsonResponse<"get_monthly_report_api_v1_attendance_monthly_get">>(
       `/api/v1/attendance/monthly?month=${month}`, signal
     ),
+  absenceTemplate: async (): Promise<Blob> => {
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/api/v1/absences/import-template`, { headers });
+    if (!res.ok) throw new ApiClientError(res.status, "HTTP_" + res.status, res.statusText);
+    return res.blob();
+  },
+  absenceImport: async (file: File, commit: boolean) => {
+    const form = new FormData();
+    form.append("file", file);
+    const headers: Record<string, string> = { Accept: "application/json" };
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/api/v1/absences/import/${commit ? "commit" : "preview"}`, { method: "POST", headers, body: form });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new ApiClientError(res.status, body?.error?.code ?? "HTTP_" + res.status, body?.error?.message ?? res.statusText);
+    }
+    return res.json() as Promise<JsonResponse<"post_absence_import_preview_api_v1_absences_import_preview_post">>;
+  },
   monthlyReportCsv: async (month: string): Promise<Blob> => {
     const headers: Record<string, string> = {};
     const token = getToken();
