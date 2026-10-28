@@ -147,6 +147,14 @@ export function Layout() {
                 </span>
               </div>
             </div>
+            <a
+              href="/manual/index.html"
+              target="_blank"
+              rel="noopener"
+              className="inline-flex h-7 items-center justify-center rounded border border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 shadow-2xs"
+            >
+              คู่มือ
+            </a>
             <button
               onClick={logout}
               title={t.nav.signOut}

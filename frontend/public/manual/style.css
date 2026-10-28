@@ -1,0 +1,13 @@
+:root{--fg:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--card:#fff;--accent:#2563eb;--warn:#fef3c7;--warnfg:#92400e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.7 "Sarabun","Noto Sans Thai",system-ui,sans-serif}
+main{max-width:820px;margin:0 auto;padding:24px 16px 64px}
+header{border-bottom:1px solid var(--line);margin-bottom:20px;padding-bottom:12px}
+h1{font-size:24px;margin:0}h2{font-size:18px;margin-top:32px;border-left:4px solid var(--accent);padding-left:10px}h3{font-size:15px;margin-top:20px}
+.sub{color:var(--muted);font-size:13px}a{color:var(--accent)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+.tip{background:var(--warn);color:var(--warnfg);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:14px}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--card)}th,td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}th{background:#f1f5f9}
+kbd{background:#e2e8f0;border-radius:4px;padding:1px 6px;font-size:13px}
+ol li,ul li{margin:4px 0}.nav{font-size:13px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.grid a{display:block;text-decoration:none;color:inherit}.grid a:hover .card{border-color:var(--accent)}
+@media print{.nav{display:none}body{background:#fff}}
