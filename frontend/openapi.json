@@ -1449,6 +1449,20 @@
         "title": "DeactivateHumanRequest",
         "type": "object"
       },
+      "DepartmentsRequest": {
+        "properties": {
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "title": "DepartmentsRequest",
+        "type": "object"
+      },
       "Device": {
         "properties": {
           "active": {
@@ -6940,6 +6954,50 @@
           }
         },
         "summary": "Humans Branches",
+        "tags": [
+          "humans"
+        ]
+      },
+      "put": {
+        "description": "Replace the managed department list (the order is the dropdown order).",
+        "operationId": "put_humans_branches_api_v1_humans_branches_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Put Humans Branches Api V1 Humans Branches Put",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Humans Branches",
         "tags": [
           "humans"
         ]

@@ -723,7 +723,11 @@ export interface paths {
         };
         /** Humans Branches */
         get: operations["humans_branches_api_v1_humans_branches_get"];
-        put?: never;
+        /**
+         * Put Humans Branches
+         * @description Replace the managed department list (the order is the dropdown order).
+         */
+        put: operations["put_humans_branches_api_v1_humans_branches_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1888,6 +1892,11 @@ export interface components {
              * @description explicit reason this person is being deactivated
              */
             reason: string;
+        };
+        /** DepartmentsRequest */
+        DepartmentsRequest: {
+            /** Names */
+            names?: string[];
         };
         /** Device */
         Device: {
@@ -4473,6 +4482,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+        };
+    };
+    put_humans_branches_api_v1_humans_branches_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -17,6 +17,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, UploadFile
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field
 
 from app.api import repository
 from app.api.auth import ROLES_ADMIN_ONLY, ROLES_ENROLLMENT_READ
@@ -116,6 +117,26 @@ def list_humans(
 )
 def humans_branches(cfg: Config = Depends(get_cfg)):
     return repository.list_branches(cfg)
+
+
+class DepartmentsRequest(BaseModel):
+    names: list[str] = Field(default_factory=list, max_length=100)
+
+
+@router.put(
+    "/api/v1/humans/branches",
+    response_model=list[str],
+    dependencies=[Depends(require_roles(ROLES_ADMIN_ONLY)), Depends(require_writes)],
+)
+def put_humans_branches(
+    payload: DepartmentsRequest,
+    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    cfg: Config = Depends(get_cfg),
+):
+    """Replace the managed department list (the order is the dropdown order)."""
+    if any(len(n.strip()) > 100 for n in payload.names):
+        raise ApiError(400, "DEPARTMENT_NAME_TOO_LONG", "Department name exceeds 100 characters")
+    return repository.set_departments(cfg, ctx.username, payload.names)
 
 
 @router.post(

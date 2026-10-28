@@ -39,6 +39,7 @@ export function System() {
       )}
 
       {isAdmin && <TrackingModeCard />}
+      {isAdmin && <DepartmentsCard />}
       {isAdmin && <TelegramReportCard />}
 
       {/* System Telemetry Cards */}
@@ -275,7 +276,7 @@ function OperatorAccountsManagement() {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("ENROLLMENT_OPERATOR");
+  const [role, setRole] = useState("OPERATOR");
   const [createBusy, setCreateBusy] = useState(false);
   const [createMsg, setCreateMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
@@ -387,7 +388,6 @@ function OperatorAccountsManagement() {
               disabled={createBusy}
               className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
             >
-              <option value="ENROLLMENT_OPERATOR">{t.roles.enrollmentOperator}</option>
               <option value="VIEWER">{t.roles.viewer}</option>
               <option value="OPERATOR">{t.roles.operator}</option>
               <option value="ADMIN">{t.roles.admin}</option>
@@ -649,6 +649,95 @@ function TrackingModeCard() {
         </p>
       )}
       {error && <div className="text-xs font-semibold text-rose-700">{error}</div>}
+    </div>
+  );
+}
+
+/** Managed department list — the Personnel form's แผนก dropdown. */
+function DepartmentsCard() {
+  const { t } = useTranslation();
+  const list = useApi((s) => api.humanBranches(s), []);
+  const [draft, setDraft] = useState<string[] | null>(null);
+  const [newName, setNewName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  const items = draft ?? list.data ?? [];
+
+  function edit(next: string[]) {
+    setDraft(next);
+    setMsg(null);
+  }
+  function move(i: number, d: number) {
+    const next = [...items];
+    const j = i + d;
+    if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j], next[i]];
+    edit(next);
+  }
+  function add() {
+    const n = newName.trim();
+    if (!n || items.includes(n)) return;
+    edit([...items, n]);
+    setNewName("");
+  }
+  async function save() {
+    setBusy(true);
+    try {
+      await api.setDepartments(items);
+      setDraft(null);
+      list.reload();
+      setMsg({ tone: "ok", text: "บันทึกรายชื่อแผนกแล้ว" });
+    } catch (err) {
+      setMsg({ tone: "err", text: friendlyApiError(err, t) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs space-y-3">
+      <div>
+        <h2 className="text-sm font-bold text-slate-900">รายชื่อแผนก</h2>
+        <p className="text-[11px] text-slate-500">
+          ใช้เป็นตัวเลือก "แผนก" ในฟอร์มกำลังพล และใช้จัดกลุ่มในรายงาน · ลบออกจากรายการแล้ว คนที่อยู่แผนกนั้นยังคงค่าเดิม
+        </p>
+      </div>
+      {list.error && <ErrorBanner message={list.error} />}
+      <ul className="divide-y divide-slate-100 text-xs">
+        {items.map((d, i) => (
+          <li key={d} className="flex items-center justify-between py-1.5">
+            <span className="font-semibold">{d}</span>
+            <span className="flex gap-2">
+              <button type="button" onClick={() => move(i, -1)} className="text-slate-500 hover:text-slate-900">▲</button>
+              <button type="button" onClick={() => move(i, 1)} className="text-slate-500 hover:text-slate-900">▼</button>
+              <button type="button" onClick={() => edit(items.filter((x) => x !== d))} className="font-semibold text-rose-600 hover:underline">
+                {t.common.delete}
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="ชื่อแผนกใหม่"
+          className="min-w-[180px] flex-1 rounded-md border border-slate-300 px-2.5 py-1.5 text-xs"
+        />
+        <button type="button" onClick={add} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">
+          เพิ่ม
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy || draft === null}
+          className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+        >
+          บันทึก
+        </button>
+      </div>
+      {msg && <div className={`text-xs font-semibold ${msg.tone === "ok" ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</div>}
     </div>
   );
 }

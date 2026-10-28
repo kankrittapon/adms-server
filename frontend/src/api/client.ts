@@ -379,6 +379,12 @@ export const api = {
     ),
   humanBranches: (signal?: AbortSignal) =>
     request<JsonResponse<"humans_branches_api_v1_humans_branches_get">>("/api/v1/humans/branches", signal),
+  setDepartments: (names: string[]) =>
+    request<JsonResponse<"put_humans_branches_api_v1_humans_branches_put">>("/api/v1/humans/branches", undefined, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names }),
+    }),
   bulkScanExempt: (employeeIds: string[], scanExempt: boolean, reason: string | null) =>
     request<JsonResponse<"bulk_scan_exempt_api_v1_humans_scan_exempt_post">>("/api/v1/humans/scan-exempt", undefined, {
       method: "POST",

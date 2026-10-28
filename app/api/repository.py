@@ -10,11 +10,12 @@ Write-side operations are delegated to the canonical modules
 (app/enrollment.py, app/mapping.py) — never reimplemented here.
 """
 
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import Config
-from app.db import get_db_connection, resolve_verified_employee_mapping
+from app.db import get_db_connection, log_sync_event, resolve_verified_employee_mapping
 from app.enrollment import (
     ENROLLMENT_LIFECYCLE_JOIN_SQL as _ENROLLMENT_LIFECYCLE_JOIN_SQL,
     ENROLLMENT_LIFECYCLE_SELECT_SQL as _ENROLLMENT_LIFECYCLE_SELECT_SQL,
@@ -200,13 +201,40 @@ def terminal_name_rows(cfg: Config, employee_id: Optional[str] = None) -> List[D
     return _fetch_all(cfg, sql + " ORDER BY h.display_name", params)
 
 
+def configured_departments(cfg: Config) -> List[str]:
+    row = _fetch_one(cfg, "SELECT value FROM system_configurations WHERE key = 'departments'")
+    value = row["value"] if row else None
+    return [str(v) for v in value] if isinstance(value, list) else []
+
+
+def set_departments(cfg: Config, operator: str, names: List[str]) -> List[str]:
+    clean: List[str] = []
+    for n in names:
+        n = n.strip()
+        if n and n not in clean:
+            clean.append(n)
+    with _connect(cfg) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO system_configurations (key, value) VALUES ('departments', %s::jsonb) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();",
+                (json.dumps(clean, ensure_ascii=False),),
+            )
+            conn.commit()
+    log_sync_event(cfg, "DEPARTMENTS_UPDATED", "%s set %d departments" % (operator, len(clean)))
+    return clean
+
+
 def list_branches(cfg: Config) -> List[str]:
+    """Configured departments first (in their set order), then any other value
+    still stored on active people, so nothing already recorded disappears."""
+    configured = configured_departments(cfg)
     rows = _fetch_all(
         cfg,
         "SELECT DISTINCT branch FROM human_employees WHERE production_scope AND active AND branch IS NOT NULL "
         "ORDER BY branch",
     )
-    return [r["branch"] for r in rows]
+    return configured + [r["branch"] for r in rows if r["branch"] not in configured]
 
 
 def human_terminal_accounts(cfg: Config, employee_id: str) -> List[Dict[str, Any]]:

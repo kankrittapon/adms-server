@@ -26,6 +26,7 @@ export function PersonnelFormModal({ mode, human, onClose, onSaved }: Props) {
   const navigate = useNavigate();
   const { canManagePersonnel } = useAuth();
   const ranks = useApi((s) => api.ranks(s), []);
+  const departments = useApi((s) => api.humanBranches(s), []);
 
   const [displayName, setDisplayName] = useState(human?.display_name ?? "");
   const [rank, setRank] = useState(human?.rank ?? "");
@@ -192,13 +193,19 @@ export function PersonnelFormModal({ mode, human, onClose, onSaved }: Props) {
             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
               {t.personnel.branch}
             </label>
-            <input
-              type="text"
+            <select
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
               disabled={busy}
               className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
-            />
+            >
+              <option value="">—</option>
+              {[...(departments.data ?? []), ...(branch && !departments.data?.includes(branch) ? [branch] : [])].map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
