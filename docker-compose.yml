@@ -89,6 +89,7 @@ services:
       HEALTH_FILE_PATH: ${HEALTH_FILE_PATH:-/var/run/adms/collector_health.json}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_ALERT_CHAT_ID: ${TELEGRAM_ALERT_CHAT_ID:-}
     volumes:
       - adms_collector_health:/var/run/adms:ro
     ports:

@@ -1,0 +1,9 @@
+[Unit]
+Description=ADMS scanner offline alert (every 5 minutes; alerts after 30 minutes offline)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

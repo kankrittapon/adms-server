@@ -393,11 +393,11 @@ export const api = {
     request<JsonResponse<"get_readiness_api_v1_attendance_readiness_get">>("/api/v1/attendance/readiness", signal),
   tracking: (signal?: AbortSignal) =>
     request<JsonResponse<"get_tracking_api_v1_attendance_tracking_get">>("/api/v1/attendance/tracking", signal),
-  setTracking: (mode: string) =>
+  setTracking: (mode: string, countingFrom?: string) =>
     request<JsonResponse<"post_tracking_api_v1_attendance_tracking_post">>("/api/v1/attendance/tracking", undefined, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode }),
+      body: JSON.stringify({ mode, counting_from: countingFrom ?? null }),
     }),
   telegramPreview: (signal?: AbortSignal) =>
     request<JsonResponse<"preview_telegram_report_api_v1_reports_telegram_preview_get">>(

@@ -2929,11 +2929,21 @@ export interface components {
         };
         /** TrackingModeRequest */
         TrackingModeRequest: {
+            /**
+             * Counting From
+             * @description required for mode 'date': first real day
+             */
+            counting_from?: string | null;
             /** Mode */
             mode: string;
         };
         /** TrackingState */
         TrackingState: {
+            /**
+             * Counting From
+             * @description date mode: fixed go-live date
+             */
+            counting_from?: string | null;
             /** Live */
             live: boolean;
             /**

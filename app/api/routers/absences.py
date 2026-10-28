@@ -330,11 +330,13 @@ class TrackingState(BaseModel):
     mode: str = Field(description="auto | on | off")
     live: bool
     live_since: Optional[date] = Field(None, description="auto mode: first day counting became real (latched)")
+    counting_from: Optional[date] = Field(None, description="date mode: fixed go-live date")
     readiness: ReadinessRow
 
 
 class TrackingModeRequest(BaseModel):
     mode: str
+    counting_from: Optional[date] = Field(None, description="required for mode 'date': first real day")
 
 
 @router.get("/api/v1/attendance/tracking", response_model=TrackingState, dependencies=[Depends(read_roles)])
@@ -345,6 +347,6 @@ def get_tracking(cfg: Config = Depends(get_cfg)):
 @router.post("/api/v1/attendance/tracking", response_model=TrackingState, dependencies=[Depends(admin_only), *WRITE_GATES])
 def post_tracking(payload: TrackingModeRequest, ctx: OperatorContext = Depends(admin_only), cfg: Config = Depends(get_cfg)):
     try:
-        return absences.set_tracking_mode(cfg, ctx.username, payload.mode)
+        return absences.set_tracking_mode(cfg, ctx.username, payload.mode, payload.counting_from)
     except absences.AbsenceError as e:
         raise _map_error(e)

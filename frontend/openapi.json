@@ -4145,6 +4145,19 @@
       },
       "TrackingModeRequest": {
         "properties": {
+          "counting_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "required for mode 'date': first real day",
+            "title": "Counting From"
+          },
           "mode": {
             "title": "Mode",
             "type": "string"
@@ -4158,6 +4171,19 @@
       },
       "TrackingState": {
         "properties": {
+          "counting_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "date mode: fixed go-live date",
+            "title": "Counting From"
+          },
           "live": {
             "title": "Live",
             "type": "boolean"

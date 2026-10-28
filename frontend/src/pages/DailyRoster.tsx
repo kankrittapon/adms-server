@@ -208,7 +208,16 @@ export function TrialBanner() {
     <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5">
       <div className="text-xs font-bold text-sky-900">🧪 {t.leave.trialTitle}</div>
       <div className="mt-0.5 text-[11px] text-sky-800">
-        {t.leave.trialBody.replace("{done}", String(r.enrolled)).replace("{req}", String(r.required))}
+        {tr.data.mode === "date" && tr.data.counting_from
+          ? t.leave.trialBodyDate.replace(
+              "{date}",
+              new Date(`${tr.data.counting_from}T00:00:00`).toLocaleDateString("th-TH", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })
+            )
+          : t.leave.trialBody.replace("{done}", String(r.enrolled)).replace("{req}", String(r.required))}
       </div>
     </div>
   );

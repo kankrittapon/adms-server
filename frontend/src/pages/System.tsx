@@ -575,12 +575,13 @@ function TrackingModeCard() {
   const tr = useApi((s) => api.tracking(s), []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState("");
 
   async function choose(mode: string) {
     setBusy(true);
     setError(null);
     try {
-      await api.setTracking(mode);
+      await api.setTracking(mode, mode === "date" ? startDate || tr.data?.counting_from || undefined : undefined);
       tr.reload();
     } catch (e) {
       setError(friendlyApiError(e, t));
@@ -620,6 +621,33 @@ function TrackingModeCard() {
           </button>
         ))}
       </div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+        <span className="text-xs font-semibold text-slate-700">{t.leave.trackDateLabel}</span>
+        <input
+          type="date"
+          value={startDate || d?.counting_from || ""}
+          onChange={(e) => setStartDate(e.target.value)}
+          className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+        />
+        <button
+          type="button"
+          disabled={busy || !canEditRoster || !(startDate || d?.counting_from)}
+          onClick={() => choose("date")}
+          className={`rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
+            d?.mode === "date" ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-300 bg-white text-slate-700"
+          }`}
+        >
+          {t.leave.trackDateButton}
+        </button>
+      </div>
+      {d?.mode === "date" && d.counting_from && (
+        <p className="text-[11px] text-slate-600">
+          {t.leave.trackDateActive.replace(
+            "{date}",
+            new Date(`${d.counting_from}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })
+          )}
+        </p>
+      )}
       {error && <div className="text-xs font-semibold text-rose-700">{error}</div>}
     </div>
   );

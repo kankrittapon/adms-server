@@ -130,6 +130,10 @@ export interface Translations {
     mappingsHistoricalHint: string;
   };
   leave: {
+    trialBodyDate: string;
+    trackDateLabel: string;
+    trackDateButton: string;
+    trackDateActive: string;
     trialTitle: string;
     trialBody: string;
     trialAbsent: string;

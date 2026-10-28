@@ -129,6 +129,10 @@ export const en: Translations = {
     mappingsHistoricalHint: "total incl. history",
   },
   leave: {
+    trialBodyDate: "Real counting and reports start on {date} — people not yet enrolled are never counted absent",
+    trackDateLabel: "Go-live date",
+    trackDateButton: "Set go-live date",
+    trackDateActive: "Counting for real from {date} — earlier days are trial, not counted and not reported · people not yet enrolled are never counted absent",
     trialTitle: "Trial mode — absences are not real yet",
     trialBody: "Real counting and the Telegram report start once everyone who must scan is enrolled (now {done}/{req}) — excluding scan-exempt, people on duty/secondment, and conscripts",
     trialAbsent: "Absent (trial)",

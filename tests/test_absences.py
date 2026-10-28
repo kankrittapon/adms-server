@@ -290,3 +290,21 @@ class TestGoLiveLatch(unittest.TestCase):
     def test_off_wins_over_latch(self):
         state, _, _ = self._run({"tracking_mode": "off", "live_since": "2026-10-10"}, missing=0)
         self.assertFalse(state["live"])
+
+
+class TestGoLiveDate(unittest.TestCase):
+    def test_date_mode_requires_a_date(self):
+        with self.assertRaises(absences.AbsenceError):
+            absences.set_tracking_mode(None, "admin", "date")
+
+    def _state(self, day):
+        conn = unittest.mock.MagicMock()
+        conn.__enter__.return_value = conn
+        with patch("app.absences.get_db_connection", return_value=conn), patch(
+            "app.absences.load_policy", return_value={"tracking_mode": "date", "counting_from": "2026-11-09"}
+        ), patch("app.absences.readiness", return_value={"total": {"required": 84, "missing": 80}}):
+            return absences.tracking_state(None, day)
+
+    def test_live_from_the_date_regardless_of_readiness(self):
+        self.assertFalse(self._state(date(2026, 11, 8))["live"])
+        self.assertTrue(self._state(date(2026, 11, 9))["live"])

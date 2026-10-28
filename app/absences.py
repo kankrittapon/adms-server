@@ -484,10 +484,14 @@ def monthly_report(cfg: Config, year: int, month: int, now: Optional[datetime] =
             first_scans = {(r[0], r[1]): r[2].astimezone(tz) for r in cur.fetchall()}
 
     now_local = (now or datetime.now(tz)).astimezone(tz)
+    start = counting_start(cfg)
     day_meta = []
     for d in days:
         is_workday = d.isoweekday() in workdays and d not in holidays
         pending = d > now_local.date() or (d == now_local.date() and now_local.time() <= times["end"])
+        # Days before the go-live date are not counted at all (trial period).
+        if start and d < start:
+            pending = True
         day_meta.append({"date": d, "is_workday": is_workday, "holiday_name": holidays.get(d), "pending": pending})
 
     by_branch: Dict[str, Dict[str, int]] = {}
@@ -604,7 +608,7 @@ def readiness(cfg: Config, day: Optional[date] = None) -> Dict[str, Any]:
 
 # --- Go-live switch -----------------------------------------------------------------
 
-TRACKING_MODES = ("auto", "on", "off")
+TRACKING_MODES = ("auto", "on", "off", "date")
 
 
 def tracking_state(cfg: Config, day: Optional[date] = None) -> Dict[str, Any]:
@@ -625,6 +629,7 @@ def tracking_state(cfg: Config, day: Optional[date] = None) -> Dict[str, Any]:
             policy = load_policy(cur)
     mode = policy.get("tracking_mode") or "auto"
     live_since = date.fromisoformat(policy["live_since"]) if policy.get("live_since") else None
+    counting_from = date.fromisoformat(policy["counting_from"]) if policy.get("counting_from") else None
     r = readiness(cfg, today)["total"]
     if mode == "auto" and live_since is None and r["missing"] == 0 and r["required"] > 0:
         live_since = today
@@ -641,19 +646,38 @@ def tracking_state(cfg: Config, day: Optional[date] = None) -> Dict[str, Any]:
         live = True
     elif mode == "off":
         live = False
+    elif mode == "date":
+        # Fixed go-live date: counting starts that day whatever readiness is;
+        # people not yet enrolled stay NOT_ENROLLED (never absent).
+        live = counting_from is not None and day >= counting_from
     else:
         live = live_since is not None and day >= live_since
     return {
         "mode": mode,
         "live": live,
         "live_since": live_since.isoformat() if live_since else None,
+        "counting_from": counting_from.isoformat() if counting_from else None,
         "readiness": r,
     }
 
 
-def set_tracking_mode(cfg: Config, operator: str, mode: str) -> Dict[str, Any]:
+def counting_start(cfg: Config) -> Optional[date]:
+    """First day attendance counts for real (date mode), else None."""
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            policy = load_policy(cur)
+    if (policy.get("tracking_mode") or "auto") == "date" and policy.get("counting_from"):
+        return date.fromisoformat(policy["counting_from"])
+    return None
+
+
+def set_tracking_mode(
+    cfg: Config, operator: str, mode: str, counting_from: Optional[date] = None
+) -> Dict[str, Any]:
     if mode not in TRACKING_MODES:
         raise AbsenceError("mode must be one of %s" % ", ".join(TRACKING_MODES))
+    if mode == "date" and counting_from is None:
+        raise AbsenceError("a start date is required for mode 'date'")
     with get_db_connection(cfg) as conn:
         with conn.cursor() as cur:
             # Forcing off resets the auto latch, so 'auto' afterwards waits for
@@ -661,8 +685,15 @@ def set_tracking_mode(cfg: Config, operator: str, mode: str) -> Dict[str, Any]:
             cur.execute(
                 "UPDATE system_configurations SET value = (value || %s::jsonb) - %s, updated_at = now() "
                 "WHERE key = 'attendance_policy';",
-                (json.dumps({"tracking_mode": mode}), "live_since" if mode == "off" else "__none__"),
+                (
+                    json.dumps(
+                        {"tracking_mode": mode, **({"counting_from": counting_from.isoformat()} if counting_from else {})}
+                    ),
+                    "live_since" if mode == "off" else "__none__",
+                ),
             )
             conn.commit()
-    log_sync_event(cfg, "ATTENDANCE_TRACKING_MODE_SET", "mode=%s by=%s" % (mode, operator))
+    log_sync_event(
+        cfg, "ATTENDANCE_TRACKING_MODE_SET", "mode=%s counting_from=%s by=%s" % (mode, counting_from, operator)
+    )
     return tracking_state(cfg)
