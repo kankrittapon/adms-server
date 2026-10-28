@@ -147,14 +147,16 @@ class TestOperatorCannotAccessAdminOnlyEndpoints(unittest.TestCase):
         self.assertGreaterEqual(admin_only_count, 3)
         self.assertFalse(_allowed(ROLES_ADMIN_ONLY, "OPERATOR"))
 
-    def test_personnel_lifecycle_endpoints_remain_admin_only(self):
+    def test_personnel_endpoints_belong_to_operator_plus(self):
+        # Owner decision 2026-10-28: the personnel section (OPERATOR) manages
+        # the whole roster lifecycle; VIEWER / ENROLLMENT_OPERATOR stay out.
         import app.api.routers.humans as humans_router
 
         source = inspect.getsource(humans_router)
-        # deactivate, reactivate, and english-name PATCH are all ADMIN-only.
-        admin_only_count = source.count("Depends(require_roles(ROLES_ADMIN_ONLY))")
-        self.assertGreaterEqual(admin_only_count, 3)
-        self.assertFalse(_allowed(ROLES_ADMIN_ONLY, "OPERATOR"))
+        self.assertNotIn("ROLES_ADMIN_ONLY", source)
+        self.assertGreaterEqual(source.count("Depends(require_roles(ROLES_OPERATOR_PLUS))"), 3)
+        self.assertTrue(_allowed(ROLES_OPERATOR_PLUS, "OPERATOR"))
+        self.assertFalse(_allowed(ROLES_OPERATOR_PLUS, "VIEWER"))
 
     def test_mapping_create_remains_admin_only(self):
         import app.api.routers.mappings as mappings_router
@@ -209,9 +211,12 @@ class TestFrontendCapabilityMatrixMatchesBackend(unittest.TestCase):
         self.assertGreater(idx, 0)
 
     def test_admin_only_capabilities_all_gated_on_isadmin(self):
-        for cap in ("canVerifyIdentity", "canManagePersonnel", "canManageTerminal", "canManageOperators"):
+        for cap in ("canVerifyIdentity", "canManageTerminal", "canManageOperators"):
             with self.subTest(capability=cap):
                 self.assertIn(f"{cap}: isAdmin", self.auth_tsx)
+
+    def test_manage_personnel_mirrors_operator_plus(self):
+        self.assertIn("canManagePersonnel: isOperatorOrAdmin", self.auth_tsx)
 
     def test_can_enroll_mirrors_write_capable_roles(self):
         self.assertIn("canEnroll: canWrite", self.auth_tsx)

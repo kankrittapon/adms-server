@@ -101,8 +101,8 @@ class TestBulkScanExempt(ApiTestBase):
         self.assertEqual(resp.json()["changed"], 2)
         self.assertEqual(m.call_args.args[2], self.IDS)
 
-    def test_operator_cannot_bulk_exempt(self):
-        client = self.make_write_client("OPERATOR")
+    def test_viewer_cannot_bulk_exempt(self):
+        client = self.make_write_client("VIEWER")
         resp = client.post("/api/v1/humans/scan-exempt", json={"employee_ids": self.IDS, "scan_exempt": False})
         self.assertEqual(resp.status_code, 403)
 

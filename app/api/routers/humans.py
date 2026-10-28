@@ -5,7 +5,8 @@ ADMS-Personnel-MasterData-024
 
 Frontend-safe Human fields only. Rank is metadata — never identity.
 All Personnel master-data writes (create, edit, CSV import commit,
-scan-exempt, deactivate and reactivate) are ADMIN-only and gated by
+scan-exempt, deactivate / reactivate, leave-unit scanner removal) belong to
+the personnel section: OPERATOR or ADMIN (owner decision 2026-10-28), gated by
 API_WRITE_ENABLED, but NOT by the Work Session: they are database-only and
 audited, and the Work Session exists to guard scanner-touching fingerprint
 work (enrollment, terminal management). CSV preview and export are
@@ -20,7 +21,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from app.api import repository
-from app.api.auth import ROLES_ADMIN_ONLY, ROLES_ENROLLMENT_READ
+from app.api.auth import ROLES_ENROLLMENT_READ, ROLES_OPERATOR_PLUS
 from app.api.dependencies import (
     OperatorContext,
     get_cfg,
@@ -126,11 +127,11 @@ class DepartmentsRequest(BaseModel):
 @router.put(
     "/api/v1/humans/branches",
     response_model=list[str],
-    dependencies=[Depends(require_roles(ROLES_ADMIN_ONLY)), Depends(require_writes)],
+    dependencies=[Depends(require_roles(ROLES_OPERATOR_PLUS)), Depends(require_writes)],
 )
 def put_humans_branches(
     payload: DepartmentsRequest,
-    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    ctx: OperatorContext = Depends(require_roles(ROLES_OPERATOR_PLUS)),
     cfg: Config = Depends(get_cfg),
 ):
     """Replace the managed department list (the order is the dropdown order)."""
@@ -143,13 +144,13 @@ def put_humans_branches(
     "/api/v1/humans/scan-exempt",
     response_model=BulkScanExemptResponse,
     dependencies=[
-        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_roles(ROLES_OPERATOR_PLUS)),
         Depends(require_writes),
     ],
 )
 def bulk_scan_exempt(
     payload: BulkScanExemptRequest,
-    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    ctx: OperatorContext = Depends(require_roles(ROLES_OPERATOR_PLUS)),
     cfg: Config = Depends(get_cfg),
 ):
     """Set or clear scan-exempt for many people at once (e.g. finance staff,
@@ -302,13 +303,13 @@ def sync_terminal_names(cfg: Config, operator: str, employee_id: Optional[str] =
     "/api/v1/humans/sync-terminal-names",
     response_model=TerminalNameSyncSummary,
     dependencies=[
-        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_roles(ROLES_OPERATOR_PLUS)),
         Depends(require_writes),
         Depends(require_write_session),
     ],
 )
 def post_sync_all_terminal_names(
-    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    ctx: OperatorContext = Depends(require_roles(ROLES_OPERATOR_PLUS)),
     cfg: Config = Depends(get_cfg),
 ):
     """Manual 'update all mismatched names on the scanner'."""
@@ -319,14 +320,14 @@ def post_sync_all_terminal_names(
     "/api/v1/humans/{employee_id}/sync-terminal-name",
     response_model=SyncTerminalNameResponse,
     dependencies=[
-        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_roles(ROLES_OPERATOR_PLUS)),
         Depends(require_writes),
         Depends(require_write_session),
     ],
 )
 def sync_terminal_name(
     employee_id: str,
-    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    ctx: OperatorContext = Depends(require_roles(ROLES_OPERATOR_PLUS)),
     cfg: Config = Depends(get_cfg),
 ):
     """Push the roster-derived name (rank + English name) to every active
@@ -360,13 +361,13 @@ def sync_terminal_name(
     response_model=Human,
     status_code=201,
     dependencies=[
-        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_roles(ROLES_OPERATOR_PLUS)),
         Depends(require_writes),
     ],
 )
 def create_human_endpoint(
     payload: CreateHumanRequest,
-    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    ctx: OperatorContext = Depends(require_roles(ROLES_OPERATOR_PLUS)),
     cfg: Config = Depends(get_cfg),
 ):
     try:
@@ -393,14 +394,14 @@ def create_human_endpoint(
     "/api/v1/humans/{employee_id}",
     response_model=Human,
     dependencies=[
-        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_roles(ROLES_OPERATOR_PLUS)),
         Depends(require_writes),
     ],
 )
 def update_human_endpoint(
     employee_id: str,
     payload: UpdateHumanRequest,
-    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    ctx: OperatorContext = Depends(require_roles(ROLES_OPERATOR_PLUS)),
     cfg: Config = Depends(get_cfg),
 ):
     _require_uuid(employee_id)
@@ -423,7 +424,7 @@ def update_human_endpoint(
 
 @router.get(
     "/api/v1/humans/import/template.csv",
-    dependencies=[Depends(require_roles(ROLES_ADMIN_ONLY))],
+    dependencies=[Depends(require_roles(ROLES_OPERATOR_PLUS))],
 )
 def download_import_template():
     return PlainTextResponse(
@@ -436,7 +437,7 @@ def download_import_template():
 @router.post(
     "/api/v1/humans/import/preview",
     response_model=CsvImportPreviewResponse,
-    dependencies=[Depends(require_roles(ROLES_ADMIN_ONLY))],
+    dependencies=[Depends(require_roles(ROLES_OPERATOR_PLUS))],
 )
 async def preview_import(
     file: UploadFile,
@@ -459,13 +460,13 @@ async def preview_import(
     "/api/v1/humans/import/commit",
     response_model=CsvImportCommitResponse,
     dependencies=[
-        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_roles(ROLES_OPERATOR_PLUS)),
         Depends(require_writes),
     ],
 )
 async def commit_import(
     file: UploadFile,
-    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    ctx: OperatorContext = Depends(require_roles(ROLES_OPERATOR_PLUS)),
     cfg: Config = Depends(get_cfg),
 ):
     """Re-validates the uploaded file itself (never trusts a client-held
@@ -489,14 +490,14 @@ async def commit_import(
     "/api/v1/humans/{employee_id}/deactivate",
     response_model=Human,
     dependencies=[
-        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_roles(ROLES_OPERATOR_PLUS)),
         Depends(require_writes),
     ],
 )
 def deactivate(
     employee_id: str,
     payload: DeactivateHumanRequest,
-    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    ctx: OperatorContext = Depends(require_roles(ROLES_OPERATOR_PLUS)),
     cfg: Config = Depends(get_cfg),
 ):
     _require_uuid(employee_id)
@@ -511,17 +512,57 @@ def deactivate(
 
 
 @router.post(
+    "/api/v1/humans/{employee_id}/remove-from-scanner",
+    response_model=dict,
+    dependencies=[
+        Depends(require_roles(ROLES_OPERATOR_PLUS)),
+        Depends(require_writes),
+    ],
+)
+def remove_from_scanner(
+    employee_id: str,
+    ctx: OperatorContext = Depends(require_roles(ROLES_OPERATOR_PLUS)),
+    cfg: Config = Depends(get_cfg),
+):
+    """Leave-unit step 2: remove every scanner account (and its fingerprints)
+    of a person who has already been closed. Scoped to that one person, so
+    the personnel section can do it without the general ADMIN-only
+    Terminal Management endpoints."""
+    from app.api.routers.terminal_management import _dispatch
+
+    employee_id = _require_uuid(employee_id)
+    human = repository.get_human(cfg, employee_id)
+    if human is None:
+        raise not_found("human", employee_id)
+    if human.get("active"):
+        raise ApiError(409, "HUMAN_STILL_ACTIVE", "Close the person (leave unit) before removing them from the scanner")
+    removed, failed = [], []
+    for a in repository.human_terminal_accounts(cfg, employee_id):
+        try:
+            _dispatch(
+                "REMOVE_TERMINAL_ACCOUNT",
+                {"device_id": a["device_id"], "device_user_id": a["device_user_id"],
+                 "operator": ctx.username, "acknowledge_active_human": False},
+                cfg,
+            )
+            removed.append(a["device_user_id"])
+        except Exception as e:  # report per account; the caller can retry
+            failed.append({"device_user_id": a["device_user_id"], "error": str(e)[:200]})
+    return {"removed": removed, "failed": failed}
+
+
+@router.post(
     "/api/v1/humans/{employee_id}/reactivate",
     response_model=Human,
     dependencies=[
-        Depends(require_roles(ROLES_ADMIN_ONLY)),
+        Depends(require_roles(ROLES_OPERATOR_PLUS)),
         Depends(require_writes),
     ],
 )
 def reactivate(
     employee_id: str,
     payload: ReactivateHumanRequest,
-    ctx: OperatorContext = Depends(require_roles(ROLES_ADMIN_ONLY)),
+    ctx: OperatorContext = Depends(require_roles(ROLES_OPERATOR_PLUS)),
     cfg: Config = Depends(get_cfg),
 ):
     _require_uuid(employee_id)

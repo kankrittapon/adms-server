@@ -317,7 +317,34 @@ def classify_csv_rows(cfg: Config, csv_text: str) -> Dict[str, Any]:
     summary = {"new": 0, "update": 0, "unchanged": 0, "error": 0}
     for r in results:
         summary[r["classification"].lower()] += 1
-    return {"summary": summary, "rows": results}
+    return {"summary": summary, "rows": results, "missing": _missing_from_file(cfg, text)}
+
+
+def _missing_from_file(cfg: Config, csv_text: str) -> List[Dict[str, Any]]:
+    """Active in-scope people whose employee_id is not in the file — leave
+    candidates for the operator to confirm, never acted on automatically.
+    Only meaningful for a file exported from ADMS (rows carry employee_id);
+    a file without any employee_id returns []."""
+    # Read ids straight from the file: an ERROR row (e.g. bad rank) is still
+    # that person's row and must not make them look like they left.
+    in_file = {
+        (row.get("employee_id") or "").strip()
+        for row in csv.DictReader(io.StringIO(csv_text.lstrip(UTF8_BOM)))
+    } - {""}
+    if not in_file:
+        return []
+    with get_db_connection(cfg) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT employee_id::text, display_name, rank, branch FROM human_employees "
+                "WHERE active AND production_scope ORDER BY branch NULLS LAST, display_name;"
+            )
+            rows = cur.fetchall()
+    return [
+        {"employee_id": e, "display_name": n, "rank": r, "branch": b}
+        for e, n, r, b in rows
+        if e not in in_file
+    ]
 
 
 def commit_csv_rows(cfg: Config, csv_text: str, operator: str) -> Dict[str, Any]:

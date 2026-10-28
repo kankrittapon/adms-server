@@ -17,11 +17,23 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
   const [preview, setPreview] = useState<CsvImportPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [committed, setCommitted] = useState<{ created: number; updated: number; renamed: number; failed: number } | null>(null);
+  const [committed, setCommitted] = useState<{
+    created: number;
+    updated: number;
+    renamed: number;
+    failed: number;
+    left: number;
+    leftFailed: string[];
+  } | null>(null);
+  // People in ADMS but not in an exported file: leave candidates the
+  // personnel officer ticks explicitly — never closed automatically.
+  const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  const [leaveReason, setLeaveReason] = useState("ย้ายออก");
 
   async function handleFileChosen(f: File) {
     setFile(f);
     setPreview(null);
+    setLeaving(new Set());
     setError(null);
     setBusy(true);
     try {
@@ -43,12 +55,29 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
     setBusy(true);
     setError(null);
     try {
-      const result = await api.commitHumansImport(file);
+      const hasRows = !!preview && (preview.summary.new > 0 || preview.summary.update > 0);
+      const result = hasRows ? await api.commitHumansImport(file) : null;
+      const leftFailed: string[] = [];
+      let left = 0;
+      for (const m of preview?.missing ?? []) {
+        if (!leaving.has(m.employee_id)) continue;
+        const name = `${m.rank ?? ""} ${m.display_name}`.trim();
+        try {
+          await api.deactivateHuman(m.employee_id, leaveReason.trim() || "ย้ายออก");
+          left++;
+          const r = await api.removeFromScanner(m.employee_id);
+          if (r.failed.length) leftFailed.push(name);
+        } catch {
+          leftFailed.push(name);
+        }
+      }
       setCommitted({
-        created: result.created,
-        updated: result.updated,
-        renamed: result.terminal_name_sync?.renamed ?? 0,
-        failed: result.terminal_name_sync?.failed ?? 0,
+        created: result?.created ?? 0,
+        updated: result?.updated ?? 0,
+        renamed: result?.terminal_name_sync?.renamed ?? 0,
+        failed: result?.terminal_name_sync?.failed ?? 0,
+        left,
+        leftFailed,
       });
       onCommitted();
     } catch (err) {
@@ -96,6 +125,17 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
                 {t.workflow.namesSyncedResult
                   .replace("{renamed}", String(committed.renamed))
                   .replace("{failed}", String(committed.failed))}
+              </div>
+            )}
+            {(committed.left > 0 || committed.leftFailed.length > 0) && (
+              <div
+                className={`rounded-md border p-3 text-xs font-semibold ${
+                  committed.leftFailed.length ? "border-amber-300 bg-amber-50 text-amber-900" : "border-emerald-300 bg-emerald-50 text-emerald-900"
+                }`}
+              >
+                ย้ายออกแล้ว {committed.left} คน
+                {committed.leftFailed.length > 0 &&
+                  ` · ยังลบจากเครื่องสแกนไม่สำเร็จ: ${committed.leftFailed.join(", ")} (เปิดหน้าคนนั้นแล้วกด "ลบออกจากเครื่องอีกครั้ง")`}
               </div>
             )}
             <button
@@ -162,6 +202,17 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
                   </div>
                 )}
 
+                {(preview.missing ?? []).length > 0 && (
+                  <MissingPeople
+                    missing={preview.missing ?? []}
+                    inFile={preview.rows.length}
+                    leaving={leaving}
+                    setLeaving={setLeaving}
+                    reason={leaveReason}
+                    setReason={setLeaveReason}
+                  />
+                )}
+
                 {warningRows.length > 0 && (
                   <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
                     {warningRows.map((r) => (
@@ -182,7 +233,7 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
                   <button
                     type="button"
                     onClick={handleCommit}
-                    disabled={busy || (preview.summary.new === 0 && preview.summary.update === 0)}
+                    disabled={busy || (preview.summary.new === 0 && preview.summary.update === 0 && leaving.size === 0)}
                     className="rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50"
                   >
                     {busy ? t.common.saving : t.personnel.confirmImportButton}
@@ -193,6 +244,64 @@ export function CsvImportModal({ onClose, onCommitted }: { onClose: () => void; 
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+type MissingPerson = { employee_id: string; display_name: string; rank?: string | null; branch?: string | null };
+
+function MissingPeople({
+  missing,
+  inFile,
+  leaving,
+  setLeaving,
+  reason,
+  setReason,
+}: {
+  missing: MissingPerson[];
+  inFile: number;
+  leaving: Set<string>;
+  setLeaving: (s: Set<string>) => void;
+  reason: string;
+  setReason: (s: string) => void;
+}) {
+  const suspicious = missing.length > 0.2 * (missing.length + inFile);
+  const toggle = (id: string) => {
+    const next = new Set(leaving);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setLeaving(next);
+  };
+  return (
+    <div className="rounded-md border border-slate-300 bg-slate-50 p-3 text-xs space-y-2">
+      <div className="font-bold text-slate-900">ไม่อยู่ในไฟล์ {missing.length} คน — ย้ายออกหรือไม่?</div>
+      <p className="text-[11px] text-slate-600">
+        ติ๊กเฉพาะคนที่ย้ายออก/พ้นหน่วยจริง ระบบจะปิดชื่อและลบลายนิ้วมือออกจากเครื่องสแกนเมื่อกดยืนยัน · คนที่ไม่ติ๊กจะไม่ถูกแตะ
+      </p>
+      {suspicious && (
+        <p className="rounded bg-amber-100 px-2 py-1 font-semibold text-amber-900">
+          ⚠️ หายจากไฟล์เกิน 20% — ไฟล์อาจไม่ครบ (เช่น ส่งออกเฉพาะบางแผนก) ตรวจให้แน่ใจก่อนติ๊ก
+        </p>
+      )}
+      <div className="max-h-48 overflow-auto rounded border border-slate-200 bg-white">
+        {missing.map((m) => (
+          <label key={m.employee_id} className="flex cursor-pointer items-center gap-2 border-b border-slate-100 px-2 py-1 last:border-0">
+            <input type="checkbox" checked={leaving.has(m.employee_id)} onChange={() => toggle(m.employee_id)} />
+            <span className="font-semibold">{`${m.rank ?? ""} ${m.display_name}`.trim()}</span>
+            <span className="text-slate-500">{m.branch ?? ""}</span>
+          </label>
+        ))}
+      </div>
+      {leaving.size > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-rose-700">ย้ายออก {leaving.size} คน · เหตุผล</span>
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="flex-1 rounded border border-slate-300 bg-white px-2 py-1"
+          />
+        </div>
+      )}
     </div>
   );
 }

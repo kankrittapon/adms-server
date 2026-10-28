@@ -582,8 +582,9 @@ class TestPersonnelEnglishName(unittest.TestCase):
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.json()["error"]["code"], "WRITE_DISABLED")
 
-    def test_operator_cannot_patch_english_name(self):
-        client, p = self._client(role="OPERATOR", write_enabled=True)
+    def test_viewer_cannot_patch_english_name(self):
+        # Personnel edits belong to OPERATOR+ since 2026-10-28; VIEWER stays out.
+        client, p = self._client(role="VIEWER", write_enabled=True)
         with p:
             resp = client.patch(
                 "/api/v1/humans/039c4486-b30f-4ce1-b780-783cd268858d",

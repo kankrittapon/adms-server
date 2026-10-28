@@ -581,8 +581,8 @@ class TestPersonnelMasterDataRBAC(unittest.TestCase):
         p = patch("app.api.dependencies._load_token_context", return_value=ctx)
         return client, p
 
-    def test_item2_non_admin_cannot_create_human(self):
-        for role in ("VIEWER", "ENROLLMENT_OPERATOR", "OPERATOR"):
+    def test_item2_non_personnel_role_cannot_create_human(self):
+        for role in ("VIEWER", "ENROLLMENT_OPERATOR"):
             with self.subTest(role=role):
                 client, p = self._client_with(role)
                 with p:
@@ -624,8 +624,8 @@ class TestPersonnelMasterDataRBAC(unittest.TestCase):
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.json()["error"]["code"], "PERSONNEL_DUPLICATE")
 
-    def test_item42_non_admin_cannot_commit_csv_import(self):
-        for role in ("VIEWER", "ENROLLMENT_OPERATOR", "OPERATOR"):
+    def test_item42_non_personnel_role_cannot_commit_csv_import(self):
+        for role in ("VIEWER", "ENROLLMENT_OPERATOR"):
             with self.subTest(role=role):
                 client, p = self._client_with(role)
                 with p:
@@ -659,8 +659,8 @@ class TestPersonnelMasterDataRBAC(unittest.TestCase):
             )
         self.assertEqual(resp.status_code, 200)
 
-    def test_preview_still_requires_admin(self):
-        client, p = self._client_with("OPERATOR")
+    def test_preview_requires_personnel_role(self):
+        client, p = self._client_with("VIEWER")
         with p:
             resp = client.post(
                 "/api/v1/humans/import/preview",
@@ -675,6 +675,38 @@ class TestPersonnelMasterDataRBAC(unittest.TestCase):
                 with p, patch("app.api.routers.humans.export_humans_csv", return_value="personnel_id\n"):
                     resp = client.get("/api/v1/humans/export.csv")
                 self.assertEqual(resp.status_code, 200)
+
+    def test_operator_can_preview_and_sees_missing_people(self):
+        client, p = self._client_with("OPERATOR")
+        preview = {"summary": {"new": 0, "update": 0, "unchanged": 1, "error": 0}, "rows": [],
+                   "missing": [{"employee_id": "e2", "display_name": "ย้ายแล้ว", "rank": None, "branch": "กพ"}]}
+        with p, patch("app.api.routers.humans.classify_csv_rows", return_value=preview):
+            resp = client.post("/api/v1/humans/import/preview", files={"file": ("p.csv", b"display_name\nfoo\n", "text/csv")})
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(resp.json()["missing"][0]["employee_id"], "e2")
+
+    def test_missing_list_needs_employee_ids_in_file(self):
+        from app.personnel_csv import _missing_from_file
+
+        # A hand-made file without employee_id must never flag the whole roster.
+        self.assertEqual(_missing_from_file(None, "display_name\nใหม่\n"), [])
+
+    def test_remove_from_scanner_requires_closed_person(self):
+        client, p = self._client_with("OPERATOR")
+        with p, patch("app.api.repository.get_human", return_value=dict(HUMAN_ROW, active=True)):
+            resp = client.post("/api/v1/humans/%s/remove-from-scanner" % HUMAN_ROW["employee_id"])
+        self.assertEqual(resp.status_code, 409)
+
+    def test_remove_from_scanner_removes_each_account(self):
+        client, p = self._client_with("OPERATOR")
+        accounts = [{"device_id": 1, "device_user_id": "1005"}, {"device_id": 1, "device_user_id": "1009"}]
+        with p, patch("app.api.repository.get_human", return_value=dict(HUMAN_ROW, active=False)), patch(
+            "app.api.repository.human_terminal_accounts", return_value=accounts
+        ), patch("app.api.routers.terminal_management._dispatch") as dispatch:
+            resp = client.post("/api/v1/humans/%s/remove-from-scanner" % HUMAN_ROW["employee_id"])
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(resp.json()["removed"], ["1005", "1009"])
+        self.assertEqual(dispatch.call_count, 2)
 
 
 if __name__ == "__main__":

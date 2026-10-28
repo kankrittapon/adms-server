@@ -133,7 +133,7 @@ export function ScanPolicyCard({ human, onChanged }: { human: Human; onChanged: 
  * scanner step fails, the person stays closed and a retry is offered. */
 export function OffboardPanel({ human, onChanged }: { human: Human; onChanged: () => void }) {
   const { t } = useTranslation();
-  const { me, canEditRoster, canMutate } = useAuth();
+  const { canEditRoster } = useAuth();
   const accounts = useApi((s) => api.humanTerminalAccounts(human.employee_id, s), [human.employee_id, human.active]);
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -142,18 +142,15 @@ export function OffboardPanel({ human, onChanged }: { human: Human; onChanged: (
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const accountList = accounts.data ?? [];
-  const operator = me?.username ?? "";
 
   async function removeAccounts(): Promise<boolean> {
-    let allOk = true;
-    for (const a of accountList) {
-      try {
-        await api.removeTerminalAccount(a.device_id, a.device_user_id, operator, true);
-      } catch {
-        allOk = false;
-      }
+    if (accountList.length === 0) return true;
+    try {
+      const r = await api.removeFromScanner(human.employee_id);
+      return r.failed.length === 0;
+    } catch {
+      return false;
     }
-    return allOk;
   }
 
   async function handleOffboard() {
@@ -174,12 +171,8 @@ export function OffboardPanel({ human, onChanged }: { human: Human; onChanged: (
     // Removing from the scanner is fingerprint work and needs the Work
     // Session; outside it the person is still closed and the removal waits
     // in "left, still on scanner".
-    if (accountList.length > 0 && !canMutate) {
-      setResult({ ok: false, text: t.workflow.offboardDeferred });
-    } else {
-      const removed = await removeAccounts();
-      setResult({ ok: removed, text: removed ? t.workflow.offboardDone : t.workflow.offboardPartial });
-    }
+    const removed = await removeAccounts();
+    setResult({ ok: removed, text: removed ? t.workflow.offboardDone : t.workflow.offboardPartial });
     setBusy(false);
     setOpen(false);
     setReason("");
@@ -241,14 +234,11 @@ export function OffboardPanel({ human, onChanged }: { human: Human; onChanged: (
             <button
               type="button"
               onClick={handleRetryRemove}
-              disabled={!canMutate || busy}
+              disabled={!canEditRoster || busy}
               className="w-full rounded-md bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {busy ? t.common.saving : `${t.workflow.retryRemoveButton} (${accountList.length})`}
             </button>
-          )}
-          {accountList.length > 0 && !canMutate && (
-            <p className="text-[11px] text-amber-800">{t.workflow.fingerprintWindowNeeded}</p>
           )}
           <p className="text-[11px] text-slate-600">{t.workflow.rejoinHint}</p>
           <button
@@ -328,7 +318,7 @@ export function EnrollLink({ human }: { human: Human }) {
  * push the roster name to the device (read-back verified). */
 export function TerminalNameCard({ human }: { human: Human }) {
   const { t } = useTranslation();
-  const { isAdmin, canMutate } = useAuth();
+  const { canManagePersonnel: isAdmin, canEditRoster: canMutate } = useAuth();
   const accounts = useApi(
     (s) => api.humanTerminalAccounts(human.employee_id, s),
     [human.employee_id, human.english_name, human.rank]

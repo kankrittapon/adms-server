@@ -1296,8 +1296,56 @@
         "title": "CsvImportCommitResponse",
         "type": "object"
       },
+      "CsvImportMissingPerson": {
+        "properties": {
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "employee_id": {
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          }
+        },
+        "required": [
+          "employee_id",
+          "display_name"
+        ],
+        "title": "CsvImportMissingPerson",
+        "type": "object"
+      },
       "CsvImportPreviewResponse": {
         "properties": {
+          "missing": {
+            "description": "active people not in the file (exported files only) \u2014 leave candidates, never auto-closed",
+            "items": {
+              "$ref": "#/components/schemas/CsvImportMissingPerson"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
           "rows": {
             "items": {
               "$ref": "#/components/schemas/CsvImportRowResult"
@@ -7731,6 +7779,51 @@
           }
         },
         "summary": "Reactivate",
+        "tags": [
+          "humans"
+        ]
+      }
+    },
+    "/api/v1/humans/{employee_id}/remove-from-scanner": {
+      "post": {
+        "description": "Leave-unit step 2: remove every scanner account (and its fingerprints)\nof a person who has already been closed. Scoped to that one person, so\nthe personnel section can do it without the general ADMIN-only\nTerminal Management endpoints.",
+        "operationId": "remove_from_scanner_api_v1_humans__employee_id__remove_from_scanner_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "required": true,
+            "schema": {
+              "title": "Employee Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Remove From Scanner Api V1 Humans  Employee Id  Remove From Scanner Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove From Scanner",
         "tags": [
           "humans"
         ]

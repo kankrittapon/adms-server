@@ -414,7 +414,7 @@ export function HumanDetail() {
   if (error) return <ErrorBanner message={error} />;
   if (!data) return <ErrorBanner message="Human not found" />;
 
-  const isAdmin = me?.role === "ADMIN";
+  const isAdmin = me?.role === "ADMIN" || me?.role === "OPERATOR";
 
   function startEdit() {
     setEnglishInput(data?.english_name ?? "");

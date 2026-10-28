@@ -1012,6 +1012,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/humans/{employee_id}/remove-from-scanner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove From Scanner
+         * @description Leave-unit step 2: remove every scanner account (and its fingerprints)
+         *     of a person who has already been closed. Scoped to that one person, so
+         *     the personnel section can do it without the general ADMIN-only
+         *     Terminal Management endpoints.
+         */
+        post: operations["remove_from_scanner_api_v1_humans__employee_id__remove_from_scanner_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/humans/{employee_id}/sync-terminal-name": {
         parameters: {
             query?: never;
@@ -1874,8 +1897,24 @@ export interface components {
             /** Updated */
             updated: number;
         };
+        /** CsvImportMissingPerson */
+        CsvImportMissingPerson: {
+            /** Branch */
+            branch?: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Employee Id */
+            employee_id: string;
+            /** Rank */
+            rank?: string | null;
+        };
         /** CsvImportPreviewResponse */
         CsvImportPreviewResponse: {
+            /**
+             * Missing
+             * @description active people not in the file (exported files only) — leave candidates, never auto-closed
+             */
+            missing?: components["schemas"]["CsvImportMissingPerson"][];
             /** Rows */
             rows: components["schemas"]["CsvImportRowResult"][];
             summary: components["schemas"]["CsvImportSummary"];
@@ -5045,6 +5084,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Human"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_from_scanner_api_v1_humans__employee_id__remove_from_scanner_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

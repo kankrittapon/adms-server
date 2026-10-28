@@ -148,7 +148,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // (mappings.py, humans.py, terminal_management.py, operators.py),
         // not assumed.
         canVerifyIdentity: isAdmin,
-        canManagePersonnel: isAdmin,
+        // Personnel section (OPERATOR) owns the roster lifecycle — mirrors humans.py.
+        canManagePersonnel: isOperatorOrAdmin,
         canManageTerminal: isAdmin,
         canManageOperators: isAdmin,
         reload: () => setTick((t) => t + 1),

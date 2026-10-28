@@ -231,9 +231,20 @@ class CsvImportSummary(BaseModel):
     error: int
 
 
+class CsvImportMissingPerson(BaseModel):
+    employee_id: str
+    display_name: str
+    rank: Optional[str] = None
+    branch: Optional[str] = None
+
+
 class CsvImportPreviewResponse(BaseModel):
     summary: CsvImportSummary
     rows: List[CsvImportRowResult]
+    missing: List[CsvImportMissingPerson] = Field(
+        default_factory=list,
+        description="active people not in the file (exported files only) — leave candidates, never auto-closed",
+    )
 
 
 class CsvImportCommitResponse(BaseModel):

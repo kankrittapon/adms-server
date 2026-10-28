@@ -236,7 +236,7 @@ class TestRBACAndWriteSession(unittest.TestCase):
         for route in ("/deactivate", "/reactivate"):
             idx = src.find(route)
             segment = src[idx:idx + 300]
-            self.assertIn("ROLES_ADMIN_ONLY", segment)
+            self.assertIn("ROLES_OPERATOR_PLUS", segment)
             self.assertIn("require_writes", segment)
             self.assertNotIn("require_write_session", segment)
 

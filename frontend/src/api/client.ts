@@ -449,6 +449,10 @@ export const api = {
         scan_exempt_reason: reason,
       } satisfies BodyOf<"update_human_endpoint_api_v1_humans__employee_id__patch">),
     }),
+  removeFromScanner: (employeeId: string) =>
+    request<{ removed: string[]; failed: { device_user_id: string; error: string }[] }>(
+      `/api/v1/humans/${employeeId}/remove-from-scanner`, undefined, { method: "POST" }
+    ),
   deactivateHuman: (employeeId: string, reason: string) =>
     request<Human>(`/api/v1/humans/${employeeId}/deactivate`, undefined, {
       method: "POST",
