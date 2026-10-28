@@ -13,7 +13,7 @@ const CODES: Record<string, { code: string; cls: string }> = {
   LATE: { code: "ส", cls: "bg-orange-100 text-orange-800 font-bold" },
   LEAVE: { code: "ล", cls: "bg-amber-100 text-amber-800" },
   DUTY: { code: "ร", cls: "bg-sky-100 text-sky-800" },
-  EXEMPT: { code: "ย", cls: "text-purple-600" },
+  EXEMPT: { code: "ป", cls: "text-teal-700" },
   NOT_YET: { code: "", cls: "" },
   NOT_ENROLLED: { code: "น", cls: "text-slate-400" },
   ABSENT: { code: "ข", cls: "bg-rose-100 text-rose-700 font-bold" },

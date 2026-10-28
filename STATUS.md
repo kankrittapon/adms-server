@@ -14,7 +14,16 @@
 - **Go-live date** (10-28): `tracking_mode=date`, `counting_from=2026-11-09` (9 พ.ย. 2569) — counting is real from that day whatever readiness is (not-enrolled = `NOT_ENROLLED`, never absent); earlier days are trial and blank in the monthly report.
 - **Scanner clock**: corrected automatically on reconnect (10-28: device was back at 2026-10-12 after a 16-day outage); tolerance 90s because the ZEM560 reports minute resolution.
 - **Scanner offline alert**: `app/device_alert.py` + `deploy/systemd/adms-device-alert.timer` (every 5 min) — Telegram after 30 min offline, recovery message when back; `TELEGRAM_ALERT_CHAT_ID` (dev chat) optional.
-- 893 tests passing. Listener rebuilt on 10-07 (new device command); collector LIVE.
+- **10-28 follow-ups** (`deffb50` → HEAD):
+  - **Holiday calendar** on the Leave page (click a weekday to add, a holiday to remove; one button fills the 14 fixed-date Thai holidays for the year — lunar and cabinet-announced days still added by hand).
+  - **Weekly Docker prune** timer `deploy/systemd/adms-docker-prune.{service,timer}` (Sun 03:30, build cache >7 days + dangling images; never volumes) — install with `sudo cp … && systemctl enable --now`.
+  - **Managed department list** (migration 018, `system_configurations['departments']`, `PUT /api/v1/humans/branches`, System-page card): the Personnel form's แผนก is now a dropdown; values already on people stay listed. Existing data still has dotted variants (`กง.` vs `กง`) to reconcile.
+  - **Enrollment Operator role** removed from account creation (API/DB still accept it; no account uses it). Roles in use: ADMIN (`headofcommu` battalion commander, `admin` developer), OPERATOR ×2.
+  - **Dashboard** is attendance-first: today's totals, 7-workday trend, readiness by section, per-department table; technical counters folded below.
+  - **Absence import**: CSV template on the server (`app/templates/absence_import_template.csv`, `GET /absences/import-template`), preview then all-or-nothing commit (`app/absence_import.py`).
+  - **Manuals** (Thai, static): `/manual/` — user / operator / admin, linked from the sidebar.
+  - **Exempt wording**: roster / monthly / personnel show scan-exempt people as **"ปฏิบัติหน้าที่"** (monthly code **ป**, was ย "ไม่ต้องสแกน"); the exemption controls are unchanged.
+- 898 tests passing. Listener rebuilt on 10-07 (new device command); collector LIVE. Web: http://192.168.1.248:8082 (LAN only).
 
 **Deployed (previous latest)**: `ADMS-PersonnelIdentity-AttendanceClosure-025` — closes two defects found in production after 024's deployment; see [docs/reports/ADMS-PersonnelIdentity-AttendanceClosure-025.md](docs/reports/ADMS-PersonnelIdentity-AttendanceClosure-025.md). **(A) Personnel identity correction**: `personnel_id` was never actually required by `create_human`/`update_human`/the Add/Edit form (024's backend and UI were already correct), but PromptID 024's CSV import mistakenly made `personnel_id` the CSV matching key AND required it on every row — meaning the 120 legacy Humans (0 with `personnel_id`) could never be updated via CSV, and even the downloadable template's own blank-`personnel_id` example row would have been rejected as an error. Fixed: CSV round-trip matching now uses `employee_id` (the system's own canonical UUID, included only in ADMS-generated exports) — `personnel_id` remains a fully optional business field, never required, never a matching key, never backfilled. New-person import rows (no `employee_id`) always classify NEW; a same-name match against an existing Human is a non-blocking advisory only, never an auto-update. **(B) Attendance `/unattributed` 500 fixed**: root cause was `app/api/repository.py` calling `resolve_verified_employee_mapping()` without importing it (`NameError`, confirmed via production traceback) — the bug escaped test coverage because the only prior tests mocked the whole function away. Also fixed a genuine (not merely apparent) CORS gap: Starlette routes any handler registered for the base `Exception` class into `ServerErrorMiddleware`, which sits outside `CORSMiddleware`, so a handled 500 previously carried no CORS header at all — the browser's "CORS error" was a real secondary symptom of the crash. Both fixed; 41 new/changed tests; 825 tests passing. No migration. Deployed (`adms_api`/`adms_web` rebuilt and recreated).
 
@@ -69,8 +78,8 @@ Full engineering detail: [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](do
 ## 3. Quality Baseline
 
 - **Repository HEAD**: see `git log -1` (this checkpoint's commits are recorded in the Phase F report)
-- **Database Migrations Applied to Production**: through `017_scan_window.sql` (014 schedule config, 015 scan-exempt, 016 absences/holidays/attendance_policy, 017 scan window — all additive).
-- **Automated Test Baseline**: **893 passed / 0 failed** (2026-10-28). Earlier baseline: 800 passed (`pytest tests/`, includes the write-session, terminal-account-idempotency, DeviceCommandBus timeout-margin, single-owner device I/O, mapping-evidence, full Step 1→6 E2E, controlled-scan evidence binding, Personnel lifecycle, Terminal Management, RBAC operational-roles, and Personnel Master Data create/edit/CSV-import matrices)
+- **Database Migrations Applied to Production**: through `018_departments.sql` (014 schedule config, 015 scan-exempt, 016 absences/holidays/attendance_policy, 017 scan window, 018 department list — all additive).
+- **Automated Test Baseline**: **898 passed / 0 failed** (2026-10-28). Earlier baseline: 800 passed (`pytest tests/`, includes the write-session, terminal-account-idempotency, DeviceCommandBus timeout-margin, single-owner device I/O, mapping-evidence, full Step 1→6 E2E, controlled-scan evidence binding, Personnel lifecycle, Terminal Management, RBAC operational-roles, and Personnel Master Data create/edit/CSV-import matrices)
 - **Frontend Typecheck & Build**: `tsc --noEmit` PASS (0 errors), `vite build` PASS
 - **OpenAPI Drift Guard**: PASS (`tests/test_openapi_contract.py`, covers the `/write-session` endpoints)
 - **Production write-control verification**: full two-layer matrix (Layer-1-only block, role enforcement, session open/close/idempotent-close, expiry-does-not-block-reopen, Layer-1-overrides-Layer-2) verified live against production via temporary, fully-cleaned-up test-fixture accounts — see the Phase F report.
@@ -131,8 +140,9 @@ Full engineering detail: [docs/reports/ADMS-FullSystem-P0P1-Hardening-007.md](do
 - **Enrollment #2 canonical recovery** — a real production data split-state (terminal account exists, DB row does not / vice versa, resulting from the original incident). Not recovered. Requires explicit owner approval before any real `set_user()`/`delete_user()` call on production hardware — see the PromptID-010 report's closing gate.
 
 ### READY FOR EXECUTION
-- **Real Personnel Enrollment**: 80 of 84 people still to enroll (or mark scan-exempt). No work session needed — start from Personnel → person → "ลงทะเบียนลายนิ้วมือ", or click a section in the readiness table. Attendance goes live automatically when readiness reaches 100%.
-- **Off-site backup copy**: not set up (owner declined for now).
+- **Before go-live 9 Nov 2569**: holidays for the year, English names + departments for everyone (OPERATOR staff), scan-exempt list, people currently on duty, remaining fingerprint enrollment (1007 needs its scan window reopened). Counting starts on the date whatever readiness is.
+- **Off-site backup copy**: not set up — recommended target another machine over Tailscale (rsync nightly).
+- **Waiting on owner**: n8n access (MCP or URL + API key) for LINE Flex report and dev Telegram; LINE leave request + approval flow (after go-live); install the docker-prune timer.
 
 ### DEFERRED
 - **Multi-Person Enrollment Validation**: verification across multiple distinct individuals.

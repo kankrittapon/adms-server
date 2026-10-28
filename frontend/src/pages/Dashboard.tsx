@@ -298,7 +298,7 @@ export function Dashboard() {
               <div className="flex items-end gap-2">
                 <span className="text-3xl font-bold text-slate-900">{rd.percent}%</span>
                 <span className="pb-1 text-xs text-slate-500">
-                  ลงแล้ว {rd.enrolled} / {rd.required} คน · เหลือ {rd.missing} · ไม่ต้องสแกน {rd.exempt}
+                  ลงแล้ว {rd.enrolled} / {rd.required} คน · เหลือ {rd.missing}
                 </span>
               </div>
               <div className="h-2.5 overflow-hidden rounded bg-slate-100">

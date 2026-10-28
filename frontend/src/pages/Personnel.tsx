@@ -648,7 +648,7 @@ function PersonnelHub({
   const counts: { key: ScanStatus | ""; label: string; value?: number; tone: string }[] = [
     { key: "", label: t.workflow.countActive, value: summary?.active, tone: "text-slate-900" },
     { key: "needs_enrollment", label: t.workflow.countNeedsEnroll, value: summary?.needs_enrollment, tone: "text-amber-700" },
-    { key: "exempt", label: t.workflow.countExempt, value: summary?.scan_exempt, tone: "text-purple-700" },
+    { key: "exempt", label: t.workflow.countExempt, value: summary?.scan_exempt, tone: "text-teal-700" },
     {
       key: "left_with_account",
       label: t.workflow.countLeftWithAccount,
@@ -741,9 +741,7 @@ function ScanStateBadge({ human }: { human: Human }) {
   }
   if (human.scan_exempt) {
     return (
-      <span className="font-semibold text-purple-700" title={human.scan_exempt_reason ?? undefined}>
-        {t.workflow.scanExempt}
-      </span>
+      <span className="text-slate-600">{human.scan_exempt_reason || human.position || "—"}</span>
     );
   }
   return human.has_active_terminal_account ? (
@@ -812,12 +810,12 @@ function QuickScanPolicy({ human, onChanged }: { human: Human; onChanged: () => 
         <option value="">{t.workflow.quickRequired}</option>
         {presets.map((r) => (
           <option key={r} value={r}>
-            {t.workflow.quickExemptPrefix} {r}
+            {t.workflow.quickExemptPrefix}{r}
           </option>
         ))}
         {current && !presets.includes(current) && (
           <option value={current}>
-            {t.workflow.quickExemptPrefix} {current}
+            {t.workflow.quickExemptPrefix}{current}
           </option>
         )}
       </select>

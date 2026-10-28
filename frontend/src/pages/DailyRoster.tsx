@@ -14,7 +14,7 @@ const STATUS_TONE: Record<RosterStatus, string> = {
   LATE: "text-orange-700 bg-orange-50 border-orange-200",
   LEAVE: "text-amber-800 bg-amber-50 border-amber-200",
   DUTY: "text-sky-800 bg-sky-50 border-sky-200",
-  EXEMPT: "text-purple-700 bg-purple-50 border-purple-200",
+  EXEMPT: "text-teal-700 bg-teal-50 border-teal-200",
   NOT_YET: "text-slate-600 bg-slate-50 border-slate-200",
   NOT_ENROLLED: "text-slate-500 bg-white border-dashed border-slate-300",
   ABSENT: "text-rose-700 bg-rose-50 border-rose-200",
