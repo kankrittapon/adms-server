@@ -845,7 +845,7 @@ function ActiveEnrollmentInspector({
               </span>
             </div>
             <ol className="list-inside list-decimal space-y-1.5 text-xs text-indigo-950 leading-relaxed">
-              <li>พาบุคคลไปยังเครื่องสแกน <strong>ADMS-ZEM560 (192.168.1.201)</strong></li>
+              <li>พาบุคคลไปยังเครื่องสแกน <strong>{enrollment.device_name ?? `#${enrollment.device_id}`}</strong></li>
               <li>กดปุ่ม <strong>Menu</strong> → เลือก <strong>User Mgt</strong> → <strong>Manage</strong></li>
               <li>ค้นหา User ID <strong className="font-mono text-indigo-950">{enrollment.reserved_device_user_id}</strong> และกด OK</li>
               <li>เลือก <strong>Enroll FP</strong> แล้ววางนิ้ว <strong>3 ครั้ง</strong> จนกว่าเครื่องจะแจ้งสำเร็จ</li>
@@ -900,7 +900,7 @@ function ActiveEnrollmentInspector({
               </span>
             </div>
             <p className="text-xs text-indigo-950 leading-relaxed">
-              ให้ <strong>{enrollment.employee_name}</strong> ทำการทดสอบสแกนนิ้วที่เครื่อง ADMS-ZEM560 ทันที
+              ให้ <strong>{enrollment.employee_name}</strong> ทำการทดสอบสแกนนิ้วที่เครื่อง {enrollment.device_name ?? `#${enrollment.device_id}`} ทันที
             </p>
             <p className="text-[11px] font-semibold text-indigo-800">{t.workflow.autoScanHint}</p>
             <ScanWindowReopen

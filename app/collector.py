@@ -55,8 +55,11 @@ log = logging.getLogger(__name__)
 # throughput knob.
 DEVICE_COMMAND_QUEUE_MAXSIZE = 4
 
-# Terminal clock tolerance before it is reset to Bangkok time.
-CLOCK_MAX_DRIFT_SECONDS = 30
+# Terminal clock tolerance before it is reset to Bangkok time. The ZEM560
+# reports its clock with minute resolution (seconds always :00), so a
+# perfectly set clock still reads 0-59s behind; 90s avoids correcting —
+# and briefly disabling the scanner — every poll for no reason.
+CLOCK_MAX_DRIFT_SECONDS = 90
 
 # ADMS-TerminalManagement-020: every action a device command may request.
 # Each still goes through the exact same single-owner enqueue/drain path —

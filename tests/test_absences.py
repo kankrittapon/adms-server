@@ -268,7 +268,9 @@ class TestGoLiveLatch(unittest.TestCase):
             "app.absences.readiness",
             return_value={"total": {"required": 10, "missing": missing, "enrolled": 10 - missing}},
         ), patch("app.absences.log_sync_event") as log:
-            return absences.tracking_state(None, date(2026, 10, 20)), cur, log
+            # Uses today: going live latches live_since = today, so a fixed
+            # past date would read as "before go-live" once the calendar moves on.
+            return absences.tracking_state(None, datetime.now(BKK).date()), cur, log
 
     def test_goes_live_and_latches_when_complete(self):
         state, cur, log = self._run({"tracking_mode": "auto"}, missing=0)
