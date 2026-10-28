@@ -52,7 +52,9 @@ class TestCanonicalRankSourceIsSingleAndUnaltered(unittest.TestCase):
 
     def test_all_canonical_ranks_returns_full_catalog(self):
         ranks = all_canonical_ranks()
-        self.assertEqual(len(ranks), len(RTN_RANK_CATALOG))
+        # Catalog + one acting (ว่าที่) form per officer rank.
+        officers = sum(1 for e in RTN_RANK_CATALOG.values() if e["rank_category"] == "OFFICER")
+        self.assertEqual(len(ranks), len(RTN_RANK_CATALOG) + officers)
         for r in ranks:
             self.assertIn("rank_th_abbreviation", r)
             self.assertIn("rank_en_abbreviation", r)

@@ -255,7 +255,9 @@ def normalize_rtn_rank(rank_text: str) -> Optional[Dict[str, str]]:
     if acting:
         result["acting"] = "true"
         result["rank_en"] = "%s %s" % (ACTING_PREFIX_EN, entry["rank_en"])
-        result["rank_en_abbreviation"] = "Act " + entry["rank_en_abbreviation"]
+        # Owner decision 2026-10-28: the scanner name of an acting officer
+        # uses the plain rank abbreviation (ว่าที่ ร.ต. -> "Sub Lt") — the
+        # 20-character device name has no room for an "Act" prefix.
     else:
         result["acting"] = "false"
     return result
@@ -286,9 +288,31 @@ def production_scope_allowed(rank_text: str) -> bool:
     return not is_plothan(cleaned)
 
 
+def acting_rank(abbr: str) -> str:
+    return "%s %s" % (ACTING_PREFIX_TH, abbr)
+
+
+def is_canonical_rank(rank_text: Optional[str]) -> bool:
+    """True for a stored rank value in canonical form: a catalog abbreviation,
+    or ``ว่าที่ <officer abbreviation>`` (acting officer)."""
+    if rank_text in RTN_RANK_CATALOG:
+        return True
+    for abbr, entry in RTN_RANK_CATALOG.items():
+        if entry["rank_category"] == "OFFICER" and rank_text == acting_rank(abbr):
+            return True
+    return False
+
+
 def all_canonical_ranks() -> List[Dict[str, str]]:
-    """Returns the full canonical catalog as a list (for docs/reporting)."""
-    return [
-        dict(RTN_RANK_CATALOG[abbr], rank_th_abbreviation=abbr)
-        for abbr in RTN_RANK_CATALOG
-    ]
+    """The full catalog as a list (docs / the rank dropdown); each officer
+    rank is followed by its acting (ว่าที่) form."""
+    out: List[Dict[str, str]] = []
+    for abbr, entry in RTN_RANK_CATALOG.items():
+        out.append(dict(entry, rank_th_abbreviation=abbr))
+        if entry["rank_category"] == "OFFICER":
+            acting = normalize_rtn_rank(acting_rank(abbr))
+            out.append({k: acting[k] for k in entry} | {
+                "rank_th_abbreviation": acting_rank(abbr),
+                "rank_th_full": "%s%s" % (ACTING_PREFIX_TH, entry["rank_th_full"]),
+            })
+    return out

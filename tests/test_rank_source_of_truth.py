@@ -50,7 +50,7 @@ class TestRankSourceOfTruth(unittest.TestCase):
             self.assertIsNotNone(match, "%s not found" % cls_name)
             self.assertIn("rank", match.group(0).lower())
         personnel_src = _read(REPO_ROOT / "app" / "personnel.py")
-        self.assertIn("RTN_RANK_CATALOG", personnel_src)
+        self.assertIn("is_canonical_rank", personnel_src)  # backed by RTN_RANK_CATALOG
         self.assertIn("_validate_rank", personnel_src)
 
     def test_item4_no_duplicate_rank_dictionary_in_frontend(self):

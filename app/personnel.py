@@ -36,7 +36,7 @@ from typing import Any, Dict, List, Optional
 
 from app.config import Config
 from app.db import get_db_connection, log_sync_event
-from app.rtn_ranks import RTN_RANK_CATALOG
+from app.rtn_ranks import is_canonical_rank
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class PersonnelDuplicateError(PersonnelError):
 def _validate_rank(rank: Optional[str]) -> None:
     if rank is None or rank == "":
         return
-    if rank not in RTN_RANK_CATALOG:
+    if not is_canonical_rank(rank):
         raise PersonnelError(
             "rank %r is not a recognized canonical rank abbreviation" % rank
         )

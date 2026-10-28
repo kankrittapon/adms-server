@@ -58,7 +58,8 @@ class TestCatalogIntegrity(unittest.TestCase):
             self.assertIn(entry["rank_category"], CATEGORY_LABELS)
 
     def test_all_canonical_ranks_helper_returns_catalog_size(self):
-        self.assertEqual(len(all_canonical_ranks()), len(RTN_RANK_CATALOG))
+        officers = sum(1 for e in RTN_RANK_CATALOG.values() if e["rank_category"] == "OFFICER")
+        self.assertEqual(len(all_canonical_ranks()), len(RTN_RANK_CATALOG) + officers)
 
 
 class TestNormalization(unittest.TestCase):
@@ -123,13 +124,24 @@ class TestActingPrefix(unittest.TestCase):
         info = normalize_rtn_rank("ว่าที่ น.ต.")
         self.assertEqual(info["acting"], "true")
         self.assertEqual(info["rank_en"], "Acting Lieutenant Commander")
-        self.assertIn("Act", info["rank_en_abbreviation"])
+        # Scanner name uses the plain abbreviation (owner decision 2026-10-28).
+        self.assertEqual(info["rank_en_abbreviation"], "Lt Cdr")
         self.assertEqual(info["rank_category"], "OFFICER")
 
     def test_acting_no_space(self):
         info = normalize_rtn_rank("ว่าที่นาวาตรี")
         self.assertEqual(info["acting"], "true")
         self.assertEqual(info["rank_en"], "Acting Lieutenant Commander")
+
+    def test_acting_officer_ranks_are_canonical(self):
+        from app.rtn_ranks import all_canonical_ranks, is_canonical_rank
+
+        self.assertTrue(is_canonical_rank("ว่าที่ ร.ต."))
+        self.assertTrue(is_canonical_rank("ว่าที่ น.ต."))
+        self.assertFalse(is_canonical_rank("ว่าที่ จ.ต."))  # acting applies to officers only
+        self.assertFalse(is_canonical_rank("ว่าที่ร.ต."))  # stored form keeps the space
+        listed = {r["rank_th_abbreviation"]: r for r in all_canonical_ranks()}
+        self.assertEqual(listed["ว่าที่ ร.ต."]["rank_en_abbreviation"], "Sub Lt")
 
     def test_non_acting_has_flag_false(self):
         self.assertEqual(normalize_rtn_rank("น.ต.")["acting"], "false")

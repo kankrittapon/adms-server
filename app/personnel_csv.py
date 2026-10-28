@@ -56,7 +56,7 @@ from typing import Any, Dict, List, Optional
 from app.config import Config
 from app.db import get_db_connection, log_sync_event
 from app.personnel import SOURCE_ADMS_MANUAL
-from app.rtn_ranks import RTN_RANK_CATALOG
+from app.rtn_ranks import is_canonical_rank
 
 log = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ def classify_csv_rows(cfg: Config, csv_text: str) -> Dict[str, Any]:
                 if not display_name:
                     results.append(_row_error(idx, "MISSING_DISPLAY_NAME", "ไม่มีชื่อ-นามสกุล"))
                     continue
-                if rank is not None and rank not in RTN_RANK_CATALOG:
+                if rank is not None and not is_canonical_rank(rank):
                     results.append(_row_error(idx, "UNKNOWN_RANK", "ไม่พบยศนี้"))
                     continue
 
